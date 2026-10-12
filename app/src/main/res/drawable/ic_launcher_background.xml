@@ -1,20 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 拟物 C · 背景：灰米桌面纵向渐变（背景层全幅出血，承担自适应图标的画布角色） -->
+<!-- 背景：纯色米白（取自前景位图边缘均色 #F3EDDF，遮罩过渡自然） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <path android:pathData="M0,0 H108 V108 H0 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="linear"
-                android:startX="54" android:startY="0"
-                android:endX="54" android:endY="108"
-                android:startColor="#B8AFA2"
-                android:endColor="#8F867A"/>
-        </aapt:attr>
-    </path>
+    <path
+        android:fillColor="#F3EDDF"
+        android:pathData="M0,0 H108 V108 H0 Z"/>
 </vector>
