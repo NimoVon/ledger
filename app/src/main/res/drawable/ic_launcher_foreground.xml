@@ -1,30 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v2 前景：粗壮圆润的 ¥ 字形即图标本身。极值点距中心 ≤33dp 安全区已验证 -->
+<!-- v3 前景：液态玻璃风 —— 玻璃透镜盘(半透明渐变) + 边缘镜面弧光 + 底部折射 + 内嵌粗 ¥ -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- V 形顶部（两斜笔一笔画，圆角连接） -->
+    <!-- 1. 玻璃盘本体：r=30 圆（贴 66dp 安全区），对角半透明白渐变 30% -> 8% -->
+    <path android:pathData="M24,54 A30,30 0 1 1 84,54 A30,30 0 1 1 24,54 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="36"
+                android:startY="36"
+                android:endX="72"
+                android:endY="72"
+                android:startColor="#4DFFFFFF"
+                android:endColor="#14FFFFFF"/>
+        </aapt:attr>
+    </path>
+
+    <!-- 2. 玻璃内圈边缘线（16% 白，勾勒玻璃厚度） -->
+    <path
+        android:pathData="M25,54 A29,29 0 1 1 83,54 A29,29 0 1 1 25,54"
+        android:strokeColor="#29FFFFFF"
+        android:strokeWidth="1"/>
+
+    <!-- 3. 底部折射光晕（宽笔淡青，光从玻璃下缘弯出） -->
+    <path
+        android:pathData="M31.9,69.5 A27,27 0 0 0 76.1,69.5"
+        android:strokeColor="#40CFFAF4"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"/>
+
+    <!-- 4. ¥ 字形（白色实心，玻璃蚀刻感） -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="10"
+        android:strokeWidth="7.5"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M37,32 L54,50 L71,32"/>
+        android:pathData="M41.3,37.5 L54,49.5 L66.8,37.5 M54,46.5 L54,73.5 M43.3,60.8 L64.8,60.8 M43.3,68.3 L64.8,68.3"/>
 
-    <!-- 垂直主干 -->
+    <!-- 5. 顶部镜面弧光：先柔光层再锐光层（液态玻璃签名高光） -->
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="10"
-        android:strokeLineCap="round"
-        android:pathData="M54,44 L54,78"/>
+        android:pathData="M28,47 A27,27 0 0 1 80,47"
+        android:strokeColor="#38FFFFFF"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M29.5,42.6 A27,27 0 0 1 78.5,42.6"
+        android:strokeColor="#EBFFFFFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"/>
 
-    <!-- 双横杠（账本横线的隐喻，融进字形） -->
+    <!-- 6. 高光斑点（玻璃上的一个小反光点） -->
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="10"
-        android:strokeLineCap="round"
-        android:pathData="M41,61 L67,61 M41,71 L67,71"/>
+        android:fillColor="#8CFFFFFF"
+        android:pathData="M41.5,36.4 a2.6,2.6 0 1 0 5.2,0 a2.6,2.6 0 1 0 -5.2,0 z"/>
 </vector>
