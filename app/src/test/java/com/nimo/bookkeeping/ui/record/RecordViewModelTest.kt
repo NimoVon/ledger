@@ -410,6 +410,51 @@ class RecordViewModelTest {
     }
 
     @Test
+    fun editMode_archivedAccount_isNamedSoTheUserKnowsWhatIsBeingEdited() = runTest {
+        seed()
+        val id = existingExpense()
+        repository.setAccountArchived(accountId, archived = true).getOrThrow()
+
+        val state = editingViewModel(id).awaitLoaded()
+
+        assertTrue(state.originalAccountUnavailable)
+        // 归档账户不在选择器里，但页面必须能说出这笔记在哪个账户上
+        assertEquals("现金", state.originalAccountName)
+        // "现金"是当时唯一的账户：accounts 为空，但编辑模式绝不能被"还没有可用账户"拦掉，
+        // 否则表单（连带"恢复账户并编辑"入口）永远不出现——真机验证时踩到过这个坑
+        assertTrue(state.accounts.isEmpty())
+        assertFalse(state.hasNoAccount)
+    }
+
+    @Test
+    fun editMode_restoreOriginalAccount_keepsTheRowWhereItWasAndUnblocksSaving() = runTest {
+        seed()
+        val id = existingExpense()
+        repository.setAccountArchived(accountId, archived = true).getOrThrow()
+        val vm = editingViewModel(id)
+        vm.awaitLoaded()
+
+        vm.setAmount("66.00")
+        vm.restoreOriginalAccount()
+
+        // 账户回到选择器并弹回原值选中、提示消失——不必把这一笔挪到别的账户
+        val restored = vm.awaitState {
+            !it.originalAccountUnavailable && it.accounts.any { account -> account.id == accountId }
+        }
+        assertEquals(accountId, restored.effectiveAccountId)
+        assertNull(restored.originalAccountName)
+        assertFalse(restored.isRestoringAccount)
+        assertFalse("账户本身要真的被恢复", db.accountDao().getById(accountId)!!.isArchived)
+
+        vm.save()
+        vm.awaitState { it.savedTransactionId != null }
+        val saved = db.transactionDao().getById(id)!!
+        assertEquals("归属不该被改掉", accountId, saved.accountId)
+        assertEquals(6_600L, saved.amount)
+        assertEquals(1, transactionCount())
+    }
+
+    @Test
     fun editMode_archivedCategory_isFlaggedForReselection() = runTest {
         seed()
         val id = existingExpense()

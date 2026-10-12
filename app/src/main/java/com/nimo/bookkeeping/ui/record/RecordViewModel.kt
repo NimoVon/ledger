@@ -54,12 +54,24 @@ data class RecordUiState(
     /** 原账户已归档 / 原分类已停用：它们按 M2 规则不在选择器里，得明确提示重选，别让用户存不进去还找不到原因 */
     val originalAccountUnavailable: Boolean = false,
     val originalCategoryUnavailable: Boolean = false,
+    /**
+     * 原账户已归档时它的名字，页面据此说清"这笔记在哪个账户上"。
+     * 取不到就为 null，页面退化成"请重新选择"文案。
+     */
+    val originalAccountName: String? = null,
+    /** 正在把原账户取消归档：按钮防连点 */
+    val isRestoringAccount: Boolean = false,
     /** 删除入口的一次性信号：非空表示用户要求删掉这一笔（真正的物理删除交给延迟删除策略，计划 9.2） */
     val deleteRequested: TransactionEntity? = null,
 ) {
-    /** 一个可用账户都没有：引导用户先去建账户，而不是给一张空白表单 */
+    /**
+     * 一个可用账户都没有：引导用户先去建账户，而不是给一张空白表单。
+     *
+     * **编辑模式例外**——这一笔可能记在唯一的已归档账户上，此时 accounts 为空但表单必须露出来，
+     * 否则用户既看不到"这笔记在哪个账户上"，也拿不到"恢复账户并编辑"的入口。
+     */
     val hasNoAccount: Boolean
-        get() = !isLoading && loadErrorMessage == null && accounts.isEmpty()
+        get() = !isEditing && !isLoading && loadErrorMessage == null && accounts.isEmpty()
 
     /**
      * 这一笔不在本页可编辑范围内：转账（F04）与余额调整（P1）有自己的入口，
@@ -75,6 +87,8 @@ private data class SubmitState(
     val errors: List<RecordFormError> = emptyList(),
     val saveErrorMessage: String? = null,
     val savedTransactionId: Long? = null,
+    /** 正在取消归档原账户（F03 编辑归档账户），跟保存共用一个"动作进行中"的闸门 */
+    val isRestoringAccount: Boolean = false,
 )
 
 /** 页面数据来源：外部列表 + 被编辑的整笔 + 读取错误，凑齐后才知道页面能不能画 */
@@ -110,6 +124,9 @@ class RecordViewModel(
     /** 编辑模式：被编辑的那一整笔（null = 还没加载完，或这一笔已不存在） */
     private val editingTransaction = MutableStateFlow<TransactionEntity?>(null)
 
+    /** 编辑模式：这一笔原本记在哪个账户（含已归档），提示里要说出它的名字 */
+    private val editingAccount = MutableStateFlow<AccountEntity?>(null)
+
     /** 编辑对象是否已读取完毕。非编辑模式没有东西要读，一开始就是 true */
     private val editingLoaded = MutableStateFlow(editingId == null)
 
@@ -126,6 +143,10 @@ class RecordViewModel(
             } else {
                 editingTransaction.value = entity
                 form.value = entity.toRecordForm()
+                // 账户可能已归档（不在选择器里），但提示里要报出名字
+                editingAccount.value = entity.accountId?.let { accountId ->
+                    runCatching { repository.getAccount(accountId) }.getOrNull()
+                }
             }
             editingLoaded.value = true
         }
@@ -174,10 +195,14 @@ class RecordViewModel(
         form,
         submit,
         deleteRequest,
-    ) { load, form, submit, deleteRequest ->
+        editingAccount,
+    ) { load, form, submit, deleteRequest, originalAccount ->
         val accountList = load.accounts.orEmpty()
         val categoryList = load.categories.orEmpty()
         val isEditing = editingId != null
+        // 选择器只给未归档/未停用的项（M2 验收），原值不在其中就提示重选，而不是静默丢掉
+        val originalAccountUnavailable = isEditing && form.accountId != null &&
+            accountList.none { it.id == form.accountId }
         RecordUiState(
             isLoading = load.accounts == null || load.categories == null || !load.editingLoaded,
             loadErrorMessage = load.errorMessage,
@@ -192,11 +217,11 @@ class RecordViewModel(
             },
             isEditing = isEditing,
             editingTransaction = load.editingTransaction,
-            // 选择器只给未归档/未停用的项（M2 验收），原值不在其中就提示重选，而不是静默丢掉
-            originalAccountUnavailable = isEditing && form.accountId != null &&
-                accountList.none { it.id == form.accountId },
+            originalAccountUnavailable = originalAccountUnavailable,
+            originalAccountName = if (originalAccountUnavailable) originalAccount?.name else null,
             originalCategoryUnavailable = isEditing && form.categoryId != null &&
                 categoryList.none { it.id == form.categoryId },
+            isRestoringAccount = submit.isRestoringAccount,
             formErrors = submit.errors,
             isSaving = submit.isSaving,
             saveErrorMessage = submit.saveErrorMessage,
@@ -274,6 +299,25 @@ class RecordViewModel(
     /** 页面完成返回后调用，避免保存成功信号在重建时重复触发导航 */
     fun consumeSaved() {
         submit.update { it.copy(savedTransactionId = null) }
+    }
+
+    // ---- 恢复原账户（仅编辑模式）----
+
+    /**
+     * 把这一笔的原账户取消归档，然后继续编辑。
+     *
+     * 归档账户不能再记新账（M2 验收），直接保存会被第二道防线拒绝。与其让用户把这一笔挪到别的
+     * 账户上——那会污染历史口径——不如就地恢复原账户：账户回到选择器，这一笔的归属一个字不动。
+     * [observeActiveAccounts] 是热流，恢复成功后账户自己会回到列表，这里不需要改表单。
+     */
+    fun restoreOriginalAccount() {
+        val accountId = form.value.accountId ?: return
+        if (submit.value.isRestoringAccount) return
+        submit.update { it.copy(isRestoringAccount = true, saveErrorMessage = null) }
+        viewModelScope.launch {
+            val failure = repository.setAccountArchived(accountId, archived = false).exceptionOrNull()
+            submit.update { it.copy(isRestoringAccount = false, saveErrorMessage = failure?.toRecordMessage()) }
+        }
     }
 
     // ---- 删除（仅编辑模式）----

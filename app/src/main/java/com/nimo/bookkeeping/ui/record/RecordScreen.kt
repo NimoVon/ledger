@@ -207,12 +207,28 @@ private fun RecordFormBody(
         }
 
         // 原账户/分类已归档或停用：选择器里按 M2 规则不会出现它们，得说清楚为什么没选中
+        val archivedAccountName = state.originalAccountName
         if (state.originalAccountUnavailable) {
-            Text(
-                text = "原账户已归档，不会再出现在选择器里，请重新选择账户。",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
+            if (archivedAccountName != null) {
+                // 就地恢复比"把这一笔挪到别的账户"干净：历史归属不动，账户回到选择器
+                Text(
+                    text = "这笔账记在已归档账户「$archivedAccountName」上，直接保存会被拒绝。",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(
+                    onClick = viewModel::restoreOriginalAccount,
+                    enabled = !state.isSaving && !state.isRestoringAccount,
+                ) {
+                    Text(if (state.isRestoringAccount) "恢复中…" else "恢复账户并编辑")
+                }
+            } else {
+                Text(
+                    text = "原账户已归档，不会再出现在选择器里，请重新选择账户。",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
         if (state.originalCategoryUnavailable) {
             Text(
@@ -275,16 +291,21 @@ private fun RecordFormBody(
         }
 
         FieldSection(title = "账户") {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                state.accounts.forEach { account ->
-                    FilterChip(
-                        selected = state.effectiveAccountId == account.id,
-                        onClick = { viewModel.setAccount(account.id) },
-                        label = { Text(account.name) },
-                    )
+            if (state.accounts.isEmpty()) {
+                // 只会出现在"编辑一笔记在唯一已归档账户上的流水"：上面已经给了恢复入口
+                Text(text = "没有其它可用账户", style = MaterialTheme.typography.bodySmall)
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    state.accounts.forEach { account ->
+                        FilterChip(
+                            selected = state.effectiveAccountId == account.id,
+                            onClick = { viewModel.setAccount(account.id) },
+                            label = { Text(account.name) },
+                        )
+                    }
                 }
             }
         }

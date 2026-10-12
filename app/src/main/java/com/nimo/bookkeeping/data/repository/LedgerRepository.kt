@@ -57,6 +57,14 @@ class LedgerRepository(private val db: AppDatabase) {
         txDao.getById(id)
     }
 
+    /**
+     * 读单个账户（含已归档）。编辑一笔历史流水时用它还原"这笔原本记在哪个账户"：
+     * 归档账户不在 [observeActiveAccounts] 里，但页面得能把名字说清楚（F03 编辑归档账户）。
+     */
+    suspend fun getAccount(id: Long): AccountEntity? = withContext(Dispatchers.IO) {
+        accountDao.getById(id)
+    }
+
     fun observeBudgets(month: String): Flow<List<BudgetEntity>> = budgetDao.observeByMonth(month)
 
     // ---- 账户写入（F01）。余额是推导值（铁律 2），这里只写账户基础信息 ----
