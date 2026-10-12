@@ -9,6 +9,32 @@ android {
     namespace = "com.app.ledger"
     compileSdk = 37
 
+    // Robolectric JVM 测试（计划 6.1：DAO/约束用真实 SQLite 语义测）
+    // JDK 17+ 模块系统要求 add-opens，否则 FileDescriptor 反射失败
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all { test ->
+                test.jvmArgs(
+                    "--add-opens=java.base/java.io=ALL-UNNAMED",
+                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                    "--add-opens=java.base/java.lang.annotation=ALL-UNNAMED",
+                    "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+                    "--add-opens=java.base/java.net=ALL-UNNAMED",
+                    "--add-opens=java.base/java.nio=ALL-UNNAMED",
+                    "--add-opens=java.base/java.text=ALL-UNNAMED",
+                    "--add-opens=java.base/java.time=ALL-UNNAMED",
+                    "--add-opens=java.base/java.util=ALL-UNNAMED",
+                    "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+                    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED",
+                    "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+                    "--add-opens=java.base/sun.security.jca=ALL-UNNAMED",
+                    "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED",
+                )
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "com.app.ledger"
         minSdk = 26
@@ -69,4 +95,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.room.testing)
 }

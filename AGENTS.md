@@ -25,6 +25,7 @@
 - 统计口径唯一实现在 `domain/stats/StatsCalculator.kt`，余额唯一算法在 `domain/stats/BalanceCalculator.kt`；任何页面不得另写一套算法。
 - 列表排序统一 `ORDER BY occurredOn DESC, id DESC`。
 - 月度/区间查询用日期范围比较（`>= from AND < to`），禁止 `substr` 截取。
+- **Room @Upsert 陷阱**：非主键约束冲突（触发器/部分索引）会被 Room 捕获转为按主键 UPDATE（0 行 = 静默无操作，不抛异常）。因此：验证数据库约束必须用 raw SQL 直插；写路径需要感知约束失败时用 `@Insert`/`@Update` 而非 `@Upsert`。
 
 ## 构建与验证命令（Windows）
 
