@@ -34,6 +34,9 @@ class LedgerRepository(private val db: AppDatabase) {
 
     fun observeAccounts(): Flow<List<AccountEntity>> = accountDao.observeAll()
 
+    /** 只含未归档账户：记账页等"新建交易"的选择器用这个（M2 验收：归档账户不出现在记账页选择器） */
+    fun observeActiveAccounts(): Flow<List<AccountEntity>> = accountDao.observeActive()
+
     fun observeActiveCategories(kind: CategoryKind): Flow<List<CategoryEntity>> =
         categoryDao.observeActiveByKind(kind)
 
