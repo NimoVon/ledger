@@ -1,28 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 自适应图标前景：白色账本 + 青绿书脊 + ¥ 符号（内容控制在 66dp 安全区内） -->
+<!-- v2 前景：粗壮圆润的 ¥ 字形即图标本身。极值点距中心 ≤33dp 安全区已验证 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 账本本体：圆角矩形 40x48，居中 -->
+    <!-- V 形顶部（两斜笔一笔画，圆角连接） -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M40,30 h28 a6,6 0 0 1 6,6 v36 a6,6 0 0 1 -6,6 h-28 a6,6 0 0 1 -6,-6 v-36 a6,6 0 0 1 6,-6 z"/>
-
-    <!-- 书脊 -->
-    <path
-        android:strokeColor="#00696D"
-        android:strokeWidth="3"
-        android:strokeLineCap="round"
-        android:pathData="M41.5,36 V72"/>
-
-    <!-- ¥ 符号（线稿，圆头） -->
-    <path
-        android:strokeColor="#00696D"
-        android:strokeWidth="3.4"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="10"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M51.5,42 L58,51 M64.5,42 L58,51 M58,48 V67 M51,55.5 H65 M51,62 H65"/>
+        android:pathData="M37,32 L54,50 L71,32"/>
+
+    <!-- 垂直主干 -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:pathData="M54,44 L54,78"/>
+
+    <!-- 双横杠（账本横线的隐喻，融进字形） -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:pathData="M41,61 L67,61 M41,71 L67,71"/>
 </vector>
