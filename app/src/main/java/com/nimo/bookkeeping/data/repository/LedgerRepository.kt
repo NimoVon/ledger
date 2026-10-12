@@ -40,6 +40,12 @@ class LedgerRepository(private val db: AppDatabase) {
     fun observeActiveCategories(kind: CategoryKind): Flow<List<CategoryEntity>> =
         categoryDao.observeActiveByKind(kind)
 
+    /**
+     * 分类全量（含已停用）。流水页用它解析历史流水的分类名与图标：
+     * 分类停用后历史流水必须照常显示，不能退化成"未分类"。
+     */
+    fun observeAllCategories(): Flow<List<CategoryEntity>> = categoryDao.observeAll()
+
     fun observeTransactions(from: String, to: String): Flow<List<TransactionEntity>> =
         txDao.observeBetween(from, to)
 

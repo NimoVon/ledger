@@ -92,7 +92,13 @@ fun LedgerApp(container: AppContainer) {
             startDestination = TopDestination.TRANSACTIONS.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(TopDestination.TRANSACTIONS.route) { TransactionsScreen() }
+            composable(TopDestination.TRANSACTIONS.route) {
+                TransactionsScreen(
+                    repository = container.repository,
+                    // F05 后续：单击流水进入编辑 / 删除 + 撤销。本轮只留入口，不实现。
+                    onTransactionClick = { },
+                )
+            }
             composable(TopDestination.REPORTS.route) { ReportsScreen() }
             composable(TopDestination.SETTINGS.route) {
                 SettingsScreen(

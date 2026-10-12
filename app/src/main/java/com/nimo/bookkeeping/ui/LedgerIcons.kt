@@ -59,6 +59,34 @@ object LedgerIcons {
         }
     }
 
+    /** 上个月：左尖括号（描边） */
+    val ChevronLeft: ImageVector = ledgerIcon("LedgerChevronLeft") {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2.2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(14.5f, 6f)
+            lineTo(9f, 12f)
+            lineTo(14.5f, 18f)
+        }
+    }
+
+    /** 下个月：右尖括号（描边） */
+    val ChevronRight: ImageVector = ledgerIcon("LedgerChevronRight") {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2.2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(9.5f, 6f)
+            lineTo(15f, 12f)
+            lineTo(9.5f, 18f)
+        }
+    }
+
     /** 新增：加号 */
     val Add: ImageVector = ledgerIcon("LedgerAdd") {
         path(fill = SolidColor(Color.Black)) {
