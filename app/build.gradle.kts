@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.app.ledger"
+    namespace = "com.nimo.bookkeeping"
     compileSdk = 37
 
     // Robolectric JVM 测试（计划 6.1：DAO/约束用真实 SQLite 语义测）
@@ -36,7 +36,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.app.ledger"
+        applicationId = "com.nimo.bookkeeping"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

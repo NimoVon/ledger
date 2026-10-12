@@ -1,0 +1,35 @@
+package com.nimo.bookkeeping.data.local.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Update
+import androidx.room.Upsert
+import com.nimo.bookkeeping.data.local.entity.AccountEntity
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface AccountDao {
+
+    @Query("SELECT * FROM accounts ORDER BY isArchived ASC, sortOrder ASC, id ASC")
+    fun observeAll(): Flow<List<AccountEntity>>
+
+    @Query("SELECT * FROM accounts WHERE isArchived = 0 ORDER BY sortOrder ASC, id ASC")
+    fun observeActive(): Flow<List<AccountEntity>>
+
+    @Query("SELECT * FROM accounts ORDER BY sortOrder ASC, id ASC")
+    suspend fun listAll(): List<AccountEntity>
+
+    @Query("SELECT * FROM accounts WHERE id = :id")
+    suspend fun getById(id: Long): AccountEntity?
+
+    @Upsert
+    suspend fun upsert(account: AccountEntity): Long
+
+    @Query("UPDATE accounts SET isArchived = :archived, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun setArchived(id: Long, archived: Boolean, updatedAt: Long)
+
+    @Query("SELECT COUNT(*) FROM accounts")
+    suspend fun count(): Int
+}
