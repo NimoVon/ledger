@@ -189,6 +189,29 @@ class TransactionsViewModelTest {
         assertEquals(3, state.groups.sumOf { it.rows.size })
     }
 
+    // ---- 脏数据防御：非法 occurredOn 不能让整页崩掉 ----
+
+    @Test
+    fun malformedDateRow_isShownButExcludedFromTotalsWithoutCrash() = runTest {
+        seed()
+        addExpense(1_000L, "2026-10-03")
+        // 绕过 TransactionValidator 直插非法日期：数据库触发器只校验金额与账户/分类，不校验日期格式。
+        // 备份导入（F08）等路径一旦出现缺口，就会产生这种行。
+        db.openHelper.writableDatabase.execSQL(
+            "INSERT INTO transactions (type, amount, accountId, toAccountId, categoryId, occurredOn, note, createdAt, updatedAt) " +
+                "VALUES ('EXPENSE', 9999, $cashAccountId, NULL, $expenseCategoryId, '2026-10-XX', NULL, 0, 0)",
+        )
+
+        val state = newViewModel().awaitLoaded()
+
+        // 页面照常渲染：非法行仍然可见（不能让用户的数据凭空消失）
+        assertEquals(2, state.groups.sumOf { it.rows.size })
+        // 但不计入任何合计，也不能把整个流水页拖崩
+        assertEquals(1_000L, state.summary.expenseCents)
+        assertEquals(0L, state.summary.incomeCents)
+        assertEquals(0L, state.groups.first { it.date == "2026-10-XX" }.expenseCents)
+    }
+
     // ---- 按月切换：区间来自 Dates.monthBounds ----
 
     @Test

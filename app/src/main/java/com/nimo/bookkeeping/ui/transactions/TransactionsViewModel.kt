@@ -8,7 +8,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.nimo.bookkeeping.data.local.entity.AccountEntity
 import com.nimo.bookkeeping.data.local.entity.CategoryEntity
 import com.nimo.bookkeeping.data.local.entity.TransactionEntity
-import com.nimo.bookkeeping.data.local.toRecord
 import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.stats.PeriodSummary
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
@@ -121,7 +120,7 @@ class TransactionsViewModel(
         if (rows != null && accounts != null && categories != null) {
             groups = TransactionTimeline.group(rows, categories, accounts, today())
             // 区间已由 observeTransactions(from, to) 限定在本月，这里不再重复一次边界判断
-            summary = StatsCalculator.summarize(rows.map { it.toRecord() })
+            summary = StatsCalculator.summarize(TransactionTimeline.toRecords(rows))
         } else {
             groups = emptyList()
             summary = PeriodSummary(incomeCents = 0, expenseCents = 0)

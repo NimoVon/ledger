@@ -160,6 +160,11 @@ object TransactionTimeline {
     private fun accountName(id: Long?, accounts: Map<Long, AccountEntity>): String =
         id?.let { accounts[it]?.name } ?: UNKNOWN_ACCOUNT
 
-    private fun toRecords(rows: List<TransactionEntity>): List<TransactionRecord> =
+    /**
+     * 实体 → 领域模型。非法 occurredOn（只可能来自绕过校验器的直插，例如备份导入）
+     * 会被丢弃而不是抛异常：这类行在时间线上照常显示，但不计入任何合计。
+     * 记为 internal 是为了让 ViewModel 的月度合计复用同一份保护，避免两处口径分叉。
+     */
+    internal fun toRecords(rows: List<TransactionEntity>): List<TransactionRecord> =
         rows.mapNotNull { runCatching { it.toRecord() }.getOrNull() }
 }
