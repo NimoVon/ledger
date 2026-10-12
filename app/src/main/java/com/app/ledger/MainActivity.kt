@@ -42,7 +42,14 @@ class MainActivity : ComponentActivity() {
 private fun M0SelfCheckScreen(container: AppContainer) {
     var lines by remember { mutableStateOf(listOf("自检运行中…")) }
     LaunchedEffect(Unit) {
-        lines = container.selfCheck()
+        lines = try {
+            container.selfCheck()
+        } catch (t: Throwable) {
+            listOf(
+                "自检失败 ✗",
+                t.javaClass.simpleName + ": " + (t.message ?: "未知错误"),
+            )
+        }
     }
     Column(
         modifier = Modifier

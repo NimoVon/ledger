@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class LedgerApplication : Application() {
 
@@ -40,14 +41,14 @@ class AppContainer(context: android.content.Context) {
         }
     }
 
-    /** M0 自检：验证 Room / KSP / 触发器 / 部分索引在真实运行时全部生效 */
-    suspend fun selfCheck(): List<String> {
+    /** M0 自检：验证 Room / KSP / 触发器 / 部分索引在真实运行时全部生效（IO 线程执行） */
+    suspend fun selfCheck(): List<String> = withContext(Dispatchers.IO) {
         fun scalar(sql: String): Int = database.query(SimpleSQLiteQuery(sql)).use { c ->
             if (c.moveToFirst()) c.getInt(0) else -1
         }
         val triggers = scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_%'")
         val partialIndex = scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_budget_month_total'")
-        return listOf(
+        listOf(
             "数据库 user_version: v${scalar("PRAGMA user_version")}",
             "约束触发器: $triggers/4 " + if (triggers == 4) "✓" else "✗ 缺失",
             "预算月度唯一索引: " + if (partialIndex == 1) "已生效 ✓" else "缺失 ✗",
