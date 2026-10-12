@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 无 INTERNET 权限：对"数据不上云"的物理保证（计划 4.5） -->
+    <!-- allowBackup=false：禁止系统自动把数据库备份到云 -->
+    <application
+        android:name=".LedgerApplication"
+        android:allowBackup="false"
+        android:label="记账本"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
