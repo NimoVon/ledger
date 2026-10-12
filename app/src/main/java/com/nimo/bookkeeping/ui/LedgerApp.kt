@@ -17,9 +17,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.nimo.bookkeeping.AppContainer
+import com.nimo.bookkeeping.ui.accounts.AccountsScreen
 import com.nimo.bookkeeping.ui.reports.ReportsScreen
 import com.nimo.bookkeeping.ui.settings.SettingsScreen
 import com.nimo.bookkeeping.ui.transactions.TransactionsScreen
+
+/** 账户管理：从设置页进入的二级页面，不在底部导航里 */
+private const val ACCOUNTS_ROUTE = "accounts"
 
 /** 顶层导航目的地：底部三个 Tab（明细 / 统计 / 设置） */
 private enum class TopDestination(
@@ -74,7 +78,18 @@ fun LedgerApp(container: AppContainer) {
         ) {
             composable(TopDestination.TRANSACTIONS.route) { TransactionsScreen() }
             composable(TopDestination.REPORTS.route) { ReportsScreen() }
-            composable(TopDestination.SETTINGS.route) { SettingsScreen(container) }
+            composable(TopDestination.SETTINGS.route) {
+                SettingsScreen(
+                    container = container,
+                    onOpenAccounts = { navController.navigate(ACCOUNTS_ROUTE) },
+                )
+            }
+            composable(ACCOUNTS_ROUTE) {
+                AccountsScreen(
+                    repository = container.repository,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }

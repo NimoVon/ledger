@@ -32,4 +32,8 @@ interface AccountDao {
 
     @Query("SELECT COUNT(*) FROM accounts")
     suspend fun count(): Int
+
+    /** 新建账户的排序位：当前最大 sortOrder + 1（空表为 0） */
+    @Query("SELECT COALESCE(MAX(sortOrder), -1) + 1 FROM accounts")
+    suspend fun nextSortOrder(): Int
 }

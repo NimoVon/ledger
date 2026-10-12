@@ -2,6 +2,8 @@ package com.nimo.bookkeeping.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
@@ -40,6 +42,28 @@ object LedgerIcons {
             slider(7f, 10f)
             slider(12f, 15f)
             slider(17f, 8f)
+        }
+    }
+
+    /** 返回：左尖括号（描边） */
+    val Back: ImageVector = ledgerIcon("LedgerBack") {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2.2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(14.5f, 5f)
+            lineTo(8f, 12f)
+            lineTo(14.5f, 19f)
+        }
+    }
+
+    /** 新增：加号 */
+    val Add: ImageVector = ledgerIcon("LedgerAdd") {
+        path(fill = SolidColor(Color.Black)) {
+            hBar(5f, 19f, 12f, 2.2f)
+            vBar(12f, 5f, 19f, 2.2f)
         }
     }
 }

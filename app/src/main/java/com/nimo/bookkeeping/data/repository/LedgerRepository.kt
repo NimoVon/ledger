@@ -7,9 +7,12 @@ import com.nimo.bookkeeping.data.local.entity.CategoryEntity
 import com.nimo.bookkeeping.data.local.entity.TransactionEntity
 import com.nimo.bookkeeping.data.local.toEntity
 import com.nimo.bookkeeping.domain.model.AccountRef
+import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.model.CategoryKind
 import com.nimo.bookkeeping.domain.model.CategoryRef
 import com.nimo.bookkeeping.domain.model.TransactionInput
+import com.nimo.bookkeeping.domain.validate.AccountValidationException
+import com.nimo.bookkeeping.domain.validate.AccountValidator
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.domain.validate.TxValidationException
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +41,74 @@ class LedgerRepository(private val db: AppDatabase) {
         txDao.observeBetween(from, to)
 
     fun observeBudgets(month: String): Flow<List<BudgetEntity>> = budgetDao.observeByMonth(month)
+
+    // ---- 账户写入（F01）。余额是推导值（铁律 2），这里只写账户基础信息 ----
+
+    /** 新建账户。名称/初始余额先过业务校验（UI 校验之外的第二道）。 */
+    suspend fun createAccount(
+        name: String,
+        type: AccountType,
+        initialBalanceCents: Long,
+        includeInTotal: Boolean = true,
+    ): Result<Long> = withContext(Dispatchers.IO) {
+        try {
+            val errors = AccountValidator.validate(name, initialBalanceCents)
+            if (errors.isNotEmpty()) throw AccountValidationException(errors)
+            val now = System.currentTimeMillis()
+            Result.success(
+                accountDao.upsert(
+                    AccountEntity(
+                        name = name.trim(),
+                        type = type,
+                        initialBalance = initialBalanceCents,
+                        includeInTotal = includeInTotal,
+                        sortOrder = accountDao.nextSortOrder(),
+                        createdAt = now,
+                        updatedAt = now,
+                    ),
+                ),
+            )
+        } catch (e: AccountValidationException) {
+            Result.failure(e)
+        }
+    }
+
+    /** 编辑账户基础信息：归档状态与排序位保持原样，createdAt 不变。 */
+    suspend fun updateAccount(
+        id: Long,
+        name: String,
+        type: AccountType,
+        initialBalanceCents: Long,
+        includeInTotal: Boolean,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val errors = AccountValidator.validate(name, initialBalanceCents)
+            if (errors.isNotEmpty()) throw AccountValidationException(errors)
+            val existing = accountDao.getById(id)
+                ?: return@withContext Result.failure(IllegalStateException("账户不存在"))
+            accountDao.upsert(
+                existing.copy(
+                    name = name.trim(),
+                    type = type,
+                    initialBalance = initialBalanceCents,
+                    includeInTotal = includeInTotal,
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
+            Result.success(Unit)
+        } catch (e: AccountValidationException) {
+            Result.failure(e)
+        }
+    }
+
+    /** 归档 / 恢复账户。只改 isArchived，不删除历史数据。 */
+    suspend fun setAccountArchived(id: Long, archived: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val existing = accountDao.getById(id)
+                ?: return@withContext Result.failure(IllegalStateException("账户不存在"))
+            accountDao.setArchived(existing.id, archived, System.currentTimeMillis())
+            Result.success(Unit)
+        }
 
     // ---- 交易写入：先校验后落库 ----
 
