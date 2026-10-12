@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nimo.bookkeeping.data.local.entity.TransactionEntity
 import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
@@ -52,11 +55,17 @@ import com.nimo.bookkeeping.ui.components.EmptyState
 import com.nimo.bookkeeping.util.Dates
 
 /**
- * 记一笔（F03，仅支出/收入）。
+ * 记一笔 / 改一笔（F03，仅支出/收入）。
  *
  * 从任意顶层页面（明细/统计/设置）的「记一笔」按钮唤起，冷启动到保存 ≤ 3 次点击：
  * 点按钮 → 输入金额 → 点保存（账户默认选中第一个可用账户）。
+ * 点流水行进来则是编辑模式：表单、校验与错误提示完全共用这一套，只是预填了整笔内容。
  * 转账（F04）与余额校准（P1）不走本页。
+ *
+ * @param editingId 非空 = 编辑这一笔
+ * @param onDeleted 用户要求删除这一笔。**本页不删数据**：整笔交给延迟物理删除策略
+ *   （[com.nimo.bookkeeping.ui.transactions.PendingTransactionDeletion]），
+ *   页面随即返回，撤销交给流水页的 Snackbar（计划 9.2）
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -64,8 +73,11 @@ fun RecordScreen(
     repository: LedgerRepository,
     onBack: () -> Unit,
     onSaved: (Long) -> Unit,
+    editingId: Long? = null,
+    onDeleted: suspend (TransactionEntity) -> Unit = {},
 ) {
-    val viewModel: RecordViewModel = viewModel(factory = RecordViewModel.factory(repository))
+    val viewModel: RecordViewModel =
+        viewModel(factory = RecordViewModel.factory(repository, editingId))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     var showDatePicker by remember { mutableStateOf(false) }
@@ -77,17 +89,26 @@ fun RecordScreen(
         onSaved(savedId)
     }
 
+    // 删除请求 → 把整笔交给延迟删除策略，然后返回流水页（撤销在那边提示）
+    LaunchedEffect(state.deleteRequested) {
+        val entity = state.deleteRequested ?: return@LaunchedEffect
+        viewModel.consumeDeleteRequest()
+        onDeleted(entity)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("记一笔") },
+                title = { Text(if (state.isEditing) "编辑" else "记一笔") },
                 navigationIcon = {
                     IconButton(onClick = onBack, enabled = !state.isSaving) {
                         Icon(imageVector = LedgerIcons.Back, contentDescription = "返回")
                     }
                 },
                 actions = {
-                    if (!state.isLoading && !state.hasNoAccount && state.loadErrorMessage == null) {
+                    if (!state.isLoading && !state.hasNoAccount && !state.isEditingUnsupportedType &&
+                        state.loadErrorMessage == null
+                    ) {
                         TextButton(onClick = { viewModel.save() }, enabled = !state.isSaving) {
                             Text(if (state.isSaving) "保存中…" else "保存")
                         }
@@ -106,6 +127,13 @@ fun RecordScreen(
             state.loadErrorMessage != null -> EmptyState(
                 title = "加载失败",
                 message = state.loadErrorMessage.orEmpty(),
+                modifier = contentModifier,
+            )
+
+            // 转账（F04）与余额调整（P1）有各自的入口：硬套收支表单会写出半截数据
+            state.isEditingUnsupportedType -> EmptyState(
+                title = "这一笔不能在这里改",
+                message = "转账与余额调整不进入收支统计，它们有各自的编辑入口。\n本页只处理支出与收入。",
                 modifier = contentModifier,
             )
 
@@ -157,8 +185,9 @@ private fun RecordFormBody(
     modifier: Modifier = Modifier,
 ) {
     val amountFocus = remember { FocusRequester() }
-    // 进页面就聚焦金额："记一笔"的主体就是输金额，省一次点击
-    LaunchedEffect(Unit) { amountFocus.requestFocus() }
+    // 新建时进页面就聚焦金额："记一笔"的主体就是输金额，省一次点击。
+    // 编辑时金额已经填好，弹键盘反而挡住要改的其它字段，不抢焦点。
+    LaunchedEffect(Unit) { if (!state.isEditing) amountFocus.requestFocus() }
 
     Column(
         modifier = modifier
@@ -174,6 +203,22 @@ private fun RecordFormBody(
                 text = message,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        // 原账户/分类已归档或停用：选择器里按 M2 规则不会出现它们，得说清楚为什么没选中
+        if (state.originalAccountUnavailable) {
+            Text(
+                text = "原账户已归档，不会再出现在选择器里，请重新选择账户。",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (state.originalCategoryUnavailable) {
+            Text(
+                text = "原分类已停用，不会再出现在选择器里，请重新选择分类。",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
             )
         }
 
@@ -272,6 +317,27 @@ private fun RecordFormBody(
             },
             modifier = Modifier.fillMaxWidth(),
         )
+
+        // 删除入口（仅编辑模式）。这里不做二次确认：延迟物理删除 + Snackbar 撤销
+        // 已经把"点错了"的补救成本降到一次点击，再加弹窗只会拖慢正常流程（计划 9.2）
+        if (state.isEditing) {
+            HorizontalDivider()
+            TextButton(
+                onClick = viewModel::requestDelete,
+                enabled = !state.isSaving,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("删除这一笔")
+            }
+            Text(
+                text = "删除后它会立刻从流水里消失，底部提示条里可以撤销。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

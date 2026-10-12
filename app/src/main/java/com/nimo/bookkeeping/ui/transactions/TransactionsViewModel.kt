@@ -13,12 +13,14 @@ import com.nimo.bookkeeping.domain.stats.PeriodSummary
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
 import com.nimo.bookkeeping.util.Dates
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -55,6 +57,11 @@ data class TransactionsUiState(
 class TransactionsViewModel(
     private val repository: LedgerRepository,
     private val today: () -> LocalDate = { LocalDate.now() },
+    /**
+     * UI 层延迟物理删除（计划 9.2）里正被暂存的那一笔 id：倒计时内它既不在列表也不在合计里。
+     * 默认值表示"没有待删除的暂存"，测试与旧调用点因此不必都接上。
+     */
+    private val pendingDeletionId: Flow<Long?> = flowOf(null),
 ) : ViewModel() {
 
     /** 当前查看的月份：切换只改这个值，查询区间与标签都由它派生 */
@@ -104,22 +111,53 @@ class TransactionsViewModel(
         }
     }
 
-    val uiState: StateFlow<TransactionsUiState> = combine(
+    /**
+     * 这一步只做"凑齐材料"，不涉及展示口径：把当前月份、该月的行、账户/分类字典与读取错误收在一起，
+     * 再与待删除 id 合成最终状态（combine 没有六路重载，所以拆成两层）。
+     */
+    private data class TimelineInput(
+        val month: YearMonth,
+        /** null = 这个月还没加载完成 */
+        val rows: List<TransactionEntity>?,
+        val accounts: Map<Long, AccountEntity>?,
+        val categories: Map<Long, CategoryEntity>?,
+        val errorMessage: String?,
+    )
+
+    private val timelineInput: Flow<TimelineInput> = combine(
         month,
         snapshot,
         accounts,
         categories,
         loadError,
     ) { month, snapshot, accounts, categories, loadError ->
+        TimelineInput(
+            month = month,
+            // 绑定月份是为了切换月份时不把上一个月的行挂在新的月份标题下
+            rows = snapshot?.takeIf { it.month == month }?.rows,
+            accounts = accounts,
+            categories = categories,
+            errorMessage = loadError,
+        )
+    }
+
+    val uiState: StateFlow<TransactionsUiState> = combine(
+        timelineInput,
+        pendingDeletionId,
+    ) { input, pendingDeletionId ->
+        // 待删除的那一笔在倒计时内先从界面消失；数据库里它其实还在（计划 9.2 延迟物理删除）
+        val rows = input.rows?.filter { it.id != pendingDeletionId }
+        val accounts = input.accounts
+        val categories = input.categories
         // 三样都到位才算"这个月加载完成"：
         // 否则会先闪一屏"未分类 / 未知账户"；切月时还可能把上个月的行与合计挂在新月份下。
-        val rows = snapshot?.takeIf { it.month == month }?.rows
         val ready = rows != null && accounts != null && categories != null
         val groups: List<TransactionDayGroup>
         val summary: PeriodSummary
         if (rows != null && accounts != null && categories != null) {
             groups = TransactionTimeline.group(rows, categories, accounts, today())
-            // 区间已由 observeTransactions(from, to) 限定在本月，这里不再重复一次边界判断
+            // 合计一律由 StatsCalculator 给出（口径唯一）；被暂存的那笔因此立刻退出合计。
+            // 区间已由 observeTransactions(from, to) 限定在本月，这里不再重复一次边界判断。
             summary = StatsCalculator.summarize(TransactionTimeline.toRecords(rows))
         } else {
             groups = emptyList()
@@ -127,8 +165,8 @@ class TransactionsViewModel(
         }
         TransactionsUiState(
             isLoading = !ready,
-            errorMessage = loadError,
-            month = month,
+            errorMessage = input.errorMessage,
+            month = input.month,
             groups = groups,
             summary = summary,
         )
@@ -145,8 +183,11 @@ class TransactionsViewModel(
     }
 
     companion object {
-        fun factory(repository: LedgerRepository): ViewModelProvider.Factory = viewModelFactory {
-            initializer { TransactionsViewModel(repository) }
+        fun factory(
+            repository: LedgerRepository,
+            pendingDeletionId: Flow<Long?> = flowOf(null),
+        ): ViewModelProvider.Factory = viewModelFactory {
+            initializer { TransactionsViewModel(repository, pendingDeletionId = pendingDeletionId) }
         }
     }
 }

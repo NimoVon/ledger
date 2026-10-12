@@ -1,5 +1,6 @@
 package com.nimo.bookkeeping.ui.record
 
+import com.nimo.bookkeeping.data.local.entity.TransactionEntity
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.util.Dates
@@ -250,6 +251,57 @@ class RecordFormTest {
             ),
             errors,
         )
+    }
+
+    // ---- 编辑入口预填：整笔 → 表单，再回到整数分 ----
+
+    @Test
+    fun toRecordForm_roundTripsCentsWithoutFloatingPoint() {
+        val entity = TransactionEntity(
+            id = 7L,
+            type = TransactionType.EXPENSE,
+            amount = 9_999_999_999L,
+            accountId = 1L,
+            categoryId = 2L,
+            occurredOn = "2026-10-12",
+            note = null,
+            createdAt = 0L,
+            updatedAt = 0L,
+        )
+
+        val form = entity.toRecordForm()
+
+        assertEquals("99999999.99", form.amountText)
+        assertEquals("", form.note)
+        // 元文本再解析回来必须一分不差（金额全程只有整数运算）
+        val input = (form.toOutcome() as RecordFormOutcome.Valid).input
+        assertEquals(9_999_999_999L, input.amountCents)
+        assertNull(input.note)
+    }
+
+    @Test
+    fun toRecordForm_keepsSmallAmountTypeDateAndNote() {
+        val entity = TransactionEntity(
+            id = 1L,
+            type = TransactionType.INCOME,
+            amount = 5L,
+            accountId = 3L,
+            categoryId = 4L,
+            occurredOn = "2028-02-29",
+            note = "报销",
+            createdAt = 0L,
+            updatedAt = 0L,
+        )
+
+        val form = entity.toRecordForm()
+
+        assertEquals("0.05", form.amountText)
+        assertEquals(TransactionType.INCOME, form.type)
+        assertEquals(3L, form.accountId)
+        assertEquals(4L, form.categoryId)
+        assertEquals("2028-02-29", form.occurredOn)
+        assertEquals("报销", form.note)
+        assertEquals(5L, (form.toOutcome() as RecordFormOutcome.Valid).input.amountCents)
     }
 
     @Test

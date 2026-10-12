@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.bookkeeping.data.repository.LedgerRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.stats.PeriodSummary
 import com.nimo.bookkeeping.ui.LedgerIcons
@@ -43,15 +45,19 @@ import com.nimo.bookkeeping.util.Money
  * 顶部按月切换（月份边界来自 [com.nimo.bookkeeping.util.Dates.monthBounds]），
  * 合计来自 [com.nimo.bookkeeping.domain.stats.StatsCalculator]（转账/余额调整不计入）。
  *
- * 行点击是给后续「编辑 / 删除 + 撤销」预留的入口，本轮只留结构、不做编辑删除。
+ * 点某一行进入「记一笔」的编辑模式（F03 修改）；删除入口也在那一页，
+ * 删除后这一行会立刻消失、合计立刻回退，底部提示条里可撤销（计划 9.2 延迟物理删除）。
+ *
+ * @param pendingDeletionId 正被暂存待删除的那一笔 id：倒计时内它不在列表也不在合计里
  */
 @Composable
 fun TransactionsScreen(
     repository: LedgerRepository,
     onTransactionClick: (Long) -> Unit = {},
+    pendingDeletionId: Flow<Long?> = flowOf(null),
 ) {
     val viewModel: TransactionsViewModel =
-        viewModel(factory = TransactionsViewModel.factory(repository))
+        viewModel(factory = TransactionsViewModel.factory(repository, pendingDeletionId))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -217,7 +223,7 @@ private fun TransactionRowItem(row: TransactionRow, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            // 后续「编辑 / 删除 + 撤销」的入口（本轮只留结构）
+            // 编辑 / 删除 + 撤销的入口（F03 修改）
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

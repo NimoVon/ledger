@@ -6,30 +6,49 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.nimo.bookkeeping.AppContainer
 import com.nimo.bookkeeping.ui.accounts.AccountsScreen
 import com.nimo.bookkeeping.ui.record.RecordScreen
 import com.nimo.bookkeeping.ui.reports.ReportsScreen
 import com.nimo.bookkeeping.ui.settings.SettingsScreen
 import com.nimo.bookkeeping.ui.transactions.TransactionsScreen
+import com.nimo.bookkeeping.util.Money
 
 /** 账户管理：从设置页进入的二级页面，不在底部导航里 */
 private const val ACCOUNTS_ROUTE = "accounts"
 
 /** 记一笔（F03）：全屏表单，由顶层页面的「记一笔」按钮唤起（计划 F03「从任意页面可唤起」） */
 private const val RECORD_ROUTE = "record"
+
+/** 编辑哪一笔。挂在同一个目的地上作为可选参数：表单、校验、返回逻辑全部复用一套 */
+private const val RECORD_TX_ID_ARG = "txId"
+
+/**
+ * 带可选参数的路由模式：导航到 "record" 是新建，导航到 "record?txId=12" 是编辑第 12 笔。
+ * 缺省的查询参数由 Navigation 补成 null。
+ */
+private const val RECORD_ROUTE_PATTERN = "$RECORD_ROUTE?$RECORD_TX_ID_ARG={$RECORD_TX_ID_ARG}"
 
 /** 顶层导航目的地：底部三个 Tab（明细 / 统计 / 设置） */
 private enum class TopDestination(
@@ -56,9 +75,27 @@ fun LedgerApp(container: AppContainer) {
         currentDestination?.hierarchy?.any { it.route == dest.route } == true
     }
     // 记账页是沉浸式表单：收起底部导航，避免误切页丢掉已填内容
-    val isRecordPage = currentDestination?.hierarchy?.any { it.route == RECORD_ROUTE } == true
+    val isRecordPage = currentDestination?.hierarchy?.any { it.route == RECORD_ROUTE_PATTERN } == true
+
+    // 延迟物理删除（计划 9.2）：删除后立刻从流水消失，「撤销」提示条挂在这里，
+    // 倒计时跑在 Application 级作用域上，切页/返回都不会打断它。
+    val pendingDeletion = container.pendingTransactionDeletion
+    val pendingDeletionEntity by pendingDeletion.pending.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(pendingDeletionEntity?.id) {
+        val entity = pendingDeletionEntity ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "已删除 " + Money.formatCurrency(entity.amount),
+            actionLabel = "撤销",
+            duration = SnackbarDuration.Long,
+        )
+        // 点了撤销就撤销；提示条自己消失则只是不再可撤销（物理删除仍按倒计时进行）
+        if (result == SnackbarResult.ActionPerformed) pendingDeletion.undo() else pendingDeletion.dismiss()
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             // 记账页是沉浸式表单：收起底部导航，避免误切页丢掉已填内容
             if (!isRecordPage) {
@@ -95,8 +132,13 @@ fun LedgerApp(container: AppContainer) {
             composable(TopDestination.TRANSACTIONS.route) {
                 TransactionsScreen(
                     repository = container.repository,
-                    // F05 后续：单击流水进入编辑 / 删除 + 撤销。本轮只留入口，不实现。
-                    onTransactionClick = { },
+                    // 点某一行 → 进编辑页（删除入口也在那页）。保存/删除后返回，列表同源自动刷新
+                    onTransactionClick = { id ->
+                        navController.navigate("$RECORD_ROUTE?$RECORD_TX_ID_ARG=$id") {
+                            launchSingleTop = true
+                        }
+                    },
+                    pendingDeletionId = pendingDeletion.pendingId,
                 )
             }
             composable(TopDestination.REPORTS.route) { ReportsScreen() }
@@ -112,12 +154,28 @@ fun LedgerApp(container: AppContainer) {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(RECORD_ROUTE) {
+            composable(
+                route = RECORD_ROUTE_PATTERN,
+                arguments = listOf(
+                    navArgument(RECORD_TX_ID_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) { entry ->
                 RecordScreen(
                     repository = container.repository,
+                    // 缺省（新建）时是 null；形如 "12" 时是编辑第 12 笔
+                    editingId = entry.arguments?.getString(RECORD_TX_ID_ARG)?.toLongOrNull(),
                     onBack = { navController.popBackStack() },
-                    // 保存成功即返回；流水页观察的是同一份 Room Flow，会自动看到新记录
+                    // 保存成功即返回；流水页观察的是同一份 Room Flow，会自动看到新记录 / 改动
                     onSaved = { navController.popBackStack() },
+                    onDeleted = { entity ->
+                        // 先暂存（流水页立刻看不到它），再返回；倒计时内可撤销
+                        pendingDeletion.schedule(entity)
+                        navController.popBackStack()
+                    },
                 )
             }
         }

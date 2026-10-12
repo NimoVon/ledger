@@ -10,6 +10,7 @@ import com.nimo.bookkeeping.data.local.entity.CategoryEntity
 import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.model.CategoryKind
+import com.nimo.bookkeeping.domain.model.TransactionInput
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.util.Dates
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -312,4 +314,201 @@ class RecordViewModelTest {
         val state = vm.awaitState { it.form.note.length == TransactionValidator.MAX_NOTE_LENGTH }
         assertEquals(TransactionValidator.MAX_NOTE_LENGTH, state.form.note.length)
     }
+
+    // ---- 编辑模式（点流水行进来）：预填整笔、整行替换、删除入口 ----
+
+    private suspend fun existingExpense(
+        amount: Long = 1_250L,
+        date: String = "2026-10-05",
+        note: String? = "午餐",
+        account: Long = accountId,
+    ): Long = repository.addTransaction(
+        TransactionInput(
+            type = TransactionType.EXPENSE,
+            amountCents = amount,
+            accountId = account,
+            categoryId = expenseCategoryId,
+            occurredOn = date,
+            note = note,
+        ),
+    ).getOrThrow()
+
+    private fun editingViewModel(id: Long) = RecordViewModel(repository, id)
+
+    @Test
+    fun editMode_prefillsEveryFieldFromTheExistingRow() = runTest {
+        seed()
+        val id = existingExpense()
+
+        val state = editingViewModel(id).awaitLoaded()
+
+        assertTrue(state.isEditing)
+        assertEquals(id, state.editingTransaction?.id)
+        assertEquals(TransactionType.EXPENSE, state.form.type)
+        // 分 → 元文本：整数运算，不经过 Float/Double
+        assertEquals("12.50", state.form.amountText)
+        assertEquals(accountId, state.form.accountId)
+        assertEquals(expenseCategoryId, state.form.categoryId)
+        assertEquals("2026-10-05", state.form.occurredOn)
+        assertEquals("午餐", state.form.note)
+        assertEquals(accountId, state.effectiveAccountId)
+        assertFalse(state.originalAccountUnavailable)
+        assertFalse(state.originalCategoryUnavailable)
+    }
+
+    @Test
+    fun editMode_save_replacesTheRowKeepingIdAndCreatedAt() = runTest {
+        seed()
+        val id = existingExpense()
+        val original = db.transactionDao().getById(id)!!
+        val vm = editingViewModel(id)
+        vm.awaitLoaded()
+
+        vm.setAmount("99.99")
+        vm.setNote("改过了")
+        vm.save()
+
+        val state = vm.awaitState { it.savedTransactionId != null }
+        assertEquals("编辑不该多出一条记录", 1, transactionCount())
+        assertEquals(id, state.savedTransactionId)
+        assertEquals(id, state.editingTransaction?.id)
+
+        val updated = db.transactionDao().getById(id)!!
+        assertEquals(9_999L, updated.amount)
+        assertEquals("改过了", updated.note)
+        assertEquals(original.createdAt, updated.createdAt)
+        assertEquals(original.occurredOn, updated.occurredOn)
+        assertEquals(original.type, updated.type)
+    }
+
+    @Test
+    fun editMode_doesNotSilentlyMoveTheRowToAnotherAccount() = runTest {
+        seed()
+        val other = repository.createAccount("招行卡", AccountType.DEBIT, 0L).getOrThrow()
+        val id = existingExpense()
+        // 记录还在，但它的账户被归档了：历史照常显示，该账户不再出现在选择器里（M2 验收）
+        repository.setAccountArchived(accountId, archived = true).getOrThrow()
+
+        val vm = editingViewModel(id)
+        val state = vm.awaitLoaded()
+        assertEquals(accountId, state.form.accountId)
+        assertEquals(accountId, state.effectiveAccountId)
+        assertFalse("归档账户不能出现在记账页选择器", state.accounts.any { it.id == accountId })
+        assertTrue("原账户不可用要明确提示，别让用户存不进去还找不到原因", state.originalAccountUnavailable)
+
+        // 直接保存被第二道防线挡住，且不会"顺手"改到别的账户上
+        vm.save()
+        val blocked = vm.awaitState { it.saveErrorMessage != null }
+        assertEquals("该账户已归档，不能再记新账", blocked.saveErrorMessage)
+        assertEquals(accountId, db.transactionDao().getById(id)!!.accountId)
+
+        // 重新选一个可用账户就能存下去：不是死胡同
+        vm.setAccount(other)
+        vm.save()
+        vm.awaitState { it.savedTransactionId != null }
+        assertEquals(other, db.transactionDao().getById(id)!!.accountId)
+    }
+
+    @Test
+    fun editMode_archivedCategory_isFlaggedForReselection() = runTest {
+        seed()
+        val id = existingExpense()
+        val otherCategory = db.categoryDao()
+            .upsert(CategoryEntity(name = "交通", kind = CategoryKind.EXPENSE, sortOrder = 1))
+        db.categoryDao().archiveWithChildren(expenseCategoryId)
+
+        val vm = editingViewModel(id)
+        val state = vm.awaitState { it.originalCategoryUnavailable }
+        assertEquals(expenseCategoryId, state.form.categoryId)
+        assertFalse(state.categories.any { it.id == expenseCategoryId })
+
+        vm.save()
+        val blocked = vm.awaitState { it.saveErrorMessage != null }
+        assertEquals("该分类已停用，请重新选择", blocked.saveErrorMessage)
+
+        vm.setCategory(otherCategory)
+        vm.save()
+        vm.awaitState { it.savedTransactionId != null }
+        assertEquals(otherCategory, db.transactionDao().getById(id)!!.categoryId)
+    }
+
+    @Test
+    fun editMode_deleteRequest_carriesTheWholeRowAndWritesNothing() = runTest {
+        seed()
+        val id = existingExpense(note = "午餐")
+        val vm = editingViewModel(id)
+        vm.awaitLoaded()
+
+        vm.requestDelete()
+
+        val state = vm.awaitState { it.deleteRequested != null }
+        // 整笔都要交出去：延迟删除超时后要按这一份原样落库
+        assertEquals(id, state.deleteRequested?.id)
+        assertEquals(TransactionType.EXPENSE, state.deleteRequested?.type)
+        assertEquals(1_250L, state.deleteRequested?.amount)
+        assertEquals(accountId, state.deleteRequested?.accountId)
+        assertEquals(expenseCategoryId, state.deleteRequested?.categoryId)
+        assertEquals("2026-10-05", state.deleteRequested?.occurredOn)
+        assertEquals("午餐", state.deleteRequested?.note)
+        // 页面只交出去，不自己删：物理删除交给 PendingTransactionDeletion（计划 9.2）
+        assertEquals(1, transactionCount())
+
+        vm.consumeDeleteRequest()
+        assertNull(vm.awaitState { it.deleteRequested == null }.deleteRequested)
+    }
+
+    @Test
+    fun newRecordMode_offersNoDeleteEntryAndDoesNothingOnRequest() = runTest {
+        seed()
+        val vm = newViewModel()
+        val state = vm.awaitLoaded()
+
+        assertFalse(state.isEditing)
+        assertNull(state.editingTransaction)
+        assertNull(state.deleteRequested)
+
+        // 没有编辑对象时点删除是空操作，不会误删任何东西
+        vm.requestDelete()
+        assertNull(vm.awaitState { !it.isLoading }.deleteRequested)
+        assertEquals(0, transactionCount())
+    }
+
+    @Test
+    fun editMode_missingRow_reportsAReadableError() = runTest {
+        seed()
+
+        val state = editingViewModel(999_999L).awaitLoaded()
+
+        assertEquals("这笔记录不存在，可能已被删除", state.loadErrorMessage)
+        assertNull(state.editingTransaction)
+        assertFalse(state.isEditingUnsupportedType)
+    }
+
+    @Test
+    fun editMode_transferAndBalanceAdjust_areNotEditableOnThisPage() = runTest {
+        seed()
+        val cardId = repository.createAccount("招行卡", AccountType.DEBIT, 0L).getOrThrow()
+        val transferId = repository.addTransaction(
+            TransactionInput(
+                type = TransactionType.TRANSFER,
+                amountCents = 10_000L,
+                accountId = accountId,
+                toAccountId = cardId,
+                occurredOn = "2026-10-05",
+            ),
+        ).getOrThrow()
+        val adjustId = repository.addTransaction(
+            TransactionInput(
+                type = TransactionType.BALANCE_ADJUST,
+                amountCents = -500L,
+                accountId = accountId,
+                occurredOn = "2026-10-05",
+            ),
+        ).getOrThrow()
+
+        // 转账（F04）与余额调整（P1）有各自入口：硬套收支表单会写出半截数据
+        assertTrue(editingViewModel(transferId).awaitLoaded().isEditingUnsupportedType)
+        assertTrue(editingViewModel(adjustId).awaitLoaded().isEditingUnsupportedType)
+    }
 }
+

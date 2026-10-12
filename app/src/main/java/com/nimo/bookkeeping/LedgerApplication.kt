@@ -4,6 +4,7 @@ import android.app.Application
 import com.nimo.bookkeeping.data.local.AppDatabase
 import com.nimo.bookkeeping.data.local.DefaultCategories
 import com.nimo.bookkeeping.data.repository.LedgerRepository
+import com.nimo.bookkeeping.ui.transactions.PendingTransactionDeletion
 import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,12 +17,10 @@ class LedgerApplication : Application() {
     lateinit var container: AppContainer
         private set
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        appScope.launch { container.seedDefaultCategoriesIfEmpty() }
+        container.appScope.launch { container.seedDefaultCategoriesIfEmpty() }
     }
 }
 
@@ -30,6 +29,16 @@ class AppContainer(context: android.content.Context) {
 
     val database: AppDatabase = AppDatabase.build(context)
     val repository: LedgerRepository = LedgerRepository(database)
+
+    /** 页面销毁不该打断的活儿放这里：预置分类、删除倒计时（计划 9.2） */
+    val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * 删除 + 撤销：延迟物理删除（计划 9.2 / V2.2 补遗 7）。
+     * 挂在 Application 级，从编辑页返回流水页、甚至切到别的 Tab 都不影响倒计时。
+     */
+    val pendingTransactionDeletion: PendingTransactionDeletion =
+        PendingTransactionDeletion(repository, appScope)
 
     /** 首次启动播种预置分类；分类表非空（如恢复备份后）则跳过 */
     suspend fun seedDefaultCategoriesIfEmpty() {

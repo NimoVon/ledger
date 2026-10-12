@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -239,6 +240,86 @@ class LedgerRepositoryTransactionTest {
             ),
         )
         assertEquals(0, db.transactionDao().count())
+    }
+
+    // ---- 编辑 / 删除 / 撤销（F03 的修改与删除入口）----
+
+    @Test
+    fun getTransaction_readsOneRowAndIsNullWhenMissing() = runTest {
+        val accountId = newAccount()
+        val id = repository.addTransaction(
+            input(accountId = accountId, categoryId = expenseCategoryId, note = "午餐"),
+        ).getOrThrow()
+
+        assertEquals(id, repository.getTransaction(id)?.id)
+        assertNull(repository.getTransaction(id + 1))
+    }
+
+    @Test
+    fun updateTransaction_replacesTheRowKeepingIdAndCreatedAt() = runTest {
+        val accountId = newAccount()
+        val id = repository.addTransaction(
+            input(accountId = accountId, categoryId = expenseCategoryId, note = "午餐"),
+        ).getOrThrow()
+        val original = db.transactionDao().getById(id)!!
+
+        repository.updateTransaction(
+            id,
+            input(amountCents = 9_900L, accountId = accountId, categoryId = expenseCategoryId, note = "改过了"),
+        ).getOrThrow()
+
+        val updated = db.transactionDao().getById(id)!!
+        assertEquals(id, updated.id)
+        assertEquals(9_900L, updated.amount)
+        assertEquals("改过了", updated.note)
+        // 整行替换：id 与 createdAt 保持原样，顺序因此不跳动
+        assertEquals(original.createdAt, updated.createdAt)
+        assertEquals(1, db.transactionDao().count())
+    }
+
+    @Test
+    fun updateTransaction_onMissingRow_failsWithoutInserting() = runTest {
+        val accountId = newAccount()
+
+        val result = repository.updateTransaction(
+            424_242L,
+            input(accountId = accountId, categoryId = expenseCategoryId),
+        )
+
+        assertTrue(result.isFailure)
+        assertEquals(0, db.transactionDao().count())
+    }
+
+    @Test
+    fun updateTransaction_rejectedByValidator_keepsTheOldRowUntouched() = runTest {
+        val accountId = newAccount()
+        val id = repository.addTransaction(
+            input(accountId = accountId, categoryId = expenseCategoryId),
+        ).getOrThrow()
+
+        val result = repository.updateTransaction(
+            id,
+            input(amountCents = 0L, accountId = accountId, categoryId = expenseCategoryId),
+        )
+
+        assertTrue(result.isFailure)
+        assertEquals(1_250L, db.transactionDao().getById(id)!!.amount)
+    }
+
+    @Test
+    fun deleteThenRestore_roundTripsTheSameRow() = runTest {
+        val accountId = newAccount()
+        val id = repository.addTransaction(
+            input(accountId = accountId, categoryId = expenseCategoryId, note = "午餐"),
+        ).getOrThrow()
+        val original = db.transactionDao().getById(id)!!
+
+        repository.deleteTransaction(original)
+        assertNull(db.transactionDao().getById(id))
+
+        // 撤销删除：按原 id 整笔恢复（含 createdAt/updatedAt）
+        assertEquals(id, repository.restoreTransaction(original))
+        assertEquals(original, db.transactionDao().getById(id))
     }
 
     // ---- 选择器数据源（M2 验收：归档的不出现）----

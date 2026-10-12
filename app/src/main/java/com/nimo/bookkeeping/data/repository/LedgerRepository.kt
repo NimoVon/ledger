@@ -49,6 +49,14 @@ class LedgerRepository(private val db: AppDatabase) {
     fun observeTransactions(from: String, to: String): Flow<List<TransactionEntity>> =
         txDao.observeBetween(from, to)
 
+    /**
+     * 读单笔（编辑页预填用）。UI 不直接访问 DAO，读取同样经 Repository（计划 4.3）。
+     * 返回 null 表示这一笔已不存在（例如别处已删除）。
+     */
+    suspend fun getTransaction(id: Long): TransactionEntity? = withContext(Dispatchers.IO) {
+        txDao.getById(id)
+    }
+
     fun observeBudgets(month: String): Flow<List<BudgetEntity>> = budgetDao.observeByMonth(month)
 
     // ---- 账户写入（F01）。余额是推导值（铁律 2），这里只写账户基础信息 ----
