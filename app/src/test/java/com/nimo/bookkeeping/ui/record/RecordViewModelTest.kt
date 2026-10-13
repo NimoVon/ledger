@@ -455,6 +455,45 @@ class RecordViewModelTest {
     }
 
     @Test
+    fun editMode_archivedCategory_isNamedSoTheUserKnowsWhichOneIsOut() = runTest {
+        seed()
+        val id = existingExpense()
+        db.categoryDao().archiveWithChildren(expenseCategoryId)
+
+        val state = editingViewModel(id).awaitLoaded()
+
+        assertTrue(state.originalCategoryUnavailable)
+        // 停用分类不在选择器里，但页面得说得出这一笔原本用的是哪个分类
+        assertEquals("餐饮", state.originalCategoryName)
+    }
+
+    @Test
+    fun editMode_restoreOriginalCategory_keepsTheRowWhereItWasAndUnblocksSaving() = runTest {
+        seed()
+        val id = existingExpense()
+        db.categoryDao().archiveWithChildren(expenseCategoryId)
+        val vm = editingViewModel(id)
+        vm.awaitLoaded()
+
+        vm.restoreOriginalCategory()
+
+        // 分类回到选择器、原值重新选中、提示消失——不必把这一笔挪到别的分类上
+        val restored = vm.awaitState {
+            !it.originalCategoryUnavailable && it.categories.any { c -> c.id == expenseCategoryId }
+        }
+        assertEquals(expenseCategoryId, restored.form.categoryId)
+        assertNull(restored.originalCategoryName)
+        assertFalse(restored.isRestoringCategory)
+        assertFalse("分类要真的被写回未停用", db.categoryDao().getById(expenseCategoryId)!!.isArchived)
+
+        vm.save()
+        vm.awaitState { it.savedTransactionId != null }
+        val saved = db.transactionDao().getById(id)!!
+        assertEquals("分类不该被改掉", expenseCategoryId, saved.categoryId)
+        assertEquals(1, transactionCount())
+    }
+
+    @Test
     fun editMode_archivedCategory_isFlaggedForReselection() = runTest {
         seed()
         val id = existingExpense()

@@ -31,6 +31,13 @@ interface CategoryDao {
     @Query("UPDATE categories SET isArchived = 1 WHERE id = :id OR parentId = :id")
     suspend fun archiveWithChildren(id: Long)
 
+    /**
+     * 只恢复这一个分类，不动子分类。向上恢复父链由 [LedgerRepository.restoreCategory] 逐级完成：
+     * 向下级联会替用户打开他单独停用过的子分类，而向上不恢复又会留下「父已停用、子仍可选」的悬空状态。
+     */
+    @Query("UPDATE categories SET isArchived = 0 WHERE id = :id")
+    suspend fun unarchive(id: Long)
+
     @Query("SELECT COUNT(*) FROM categories")
     suspend fun count(): Int
 }

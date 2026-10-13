@@ -231,11 +231,27 @@ private fun RecordFormBody(
             }
         }
         if (state.originalCategoryUnavailable) {
-            Text(
-                text = "原分类已停用，不会再出现在选择器里，请重新选择分类。",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
+            val archivedCategoryName = state.originalCategoryName
+            if (archivedCategoryName != null) {
+                // 同账户：就地恢复比「把这一笔挪到别的分类」干净，历史统计口径不动
+                Text(
+                    text = "这一笔用的分类「$archivedCategoryName」已停用，直接保存会被拒绝。",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(
+                    onClick = viewModel::restoreOriginalCategory,
+                    enabled = !state.isSaving && !state.isRestoringCategory,
+                ) {
+                    Text(if (state.isRestoringCategory) "恢复中…" else "恢复分类并编辑")
+                }
+            } else {
+                Text(
+                    text = "原分类已停用，不会再出现在选择器里，请重新选择分类。",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
 
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {

@@ -65,6 +65,11 @@ class LedgerRepository(private val db: AppDatabase) {
         accountDao.getById(id)
     }
 
+    /** 读单个分类（含已停用）。用途同 [getAccount]：编辑历史流水时要报出原本用的分类叫什么 */
+    suspend fun getCategory(id: Long): CategoryEntity? = withContext(Dispatchers.IO) {
+        categoryDao.getById(id)
+    }
+
     fun observeBudgets(month: String): Flow<List<BudgetEntity>> = budgetDao.observeByMonth(month)
 
     // ---- 账户写入（F01）。余额是推导值（铁律 2），这里只写账户基础信息 ----
@@ -134,6 +139,27 @@ class LedgerRepository(private val db: AppDatabase) {
             accountDao.setArchived(existing.id, archived, System.currentTimeMillis())
             Result.success(Unit)
         }
+
+    /**
+     * 恢复被停用的分类，连同它的祖先链。
+     *
+     * 与 [setAccountArchived] 对称，但方向不对称是有意的：停用是自上而下的级联
+     * （[CategoryDao.archiveWithChildren]），恢复只向上走——向下恢复会把用户单独停用过的子分类
+     * 一起打开，那是替用户做决定。
+     */
+    suspend fun restoreCategory(id: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        val existing = categoryDao.getById(id)
+            ?: return@withContext Result.failure(IllegalStateException("分类不存在"))
+        categoryDao.unarchive(existing.id)
+        var parentId = existing.parentId
+        while (parentId != null) {
+            val parent = categoryDao.getById(parentId) ?: break
+            if (!parent.isArchived) break
+            categoryDao.unarchive(parent.id)
+            parentId = parent.parentId
+        }
+        Result.success(Unit)
+    }
 
     // ---- 交易写入：先校验后落库 ----
 

@@ -59,8 +59,12 @@ data class RecordUiState(
      * 取不到就为 null，页面退化成"请重新选择"文案。
      */
     val originalAccountName: String? = null,
+    /** 原分类已停用时它的名字。取不到就为 null，页面退化成「请重新选择分类」文案 */
+    val originalCategoryName: String? = null,
     /** 正在把原账户取消归档：按钮防连点 */
     val isRestoringAccount: Boolean = false,
+    /** 正在把原分类取消停用：按钮防连点 */
+    val isRestoringCategory: Boolean = false,
     /** 删除入口的一次性信号：非空表示用户要求删掉这一笔（真正的物理删除交给延迟删除策略，计划 9.2） */
     val deleteRequested: TransactionEntity? = null,
 ) {
@@ -89,6 +93,8 @@ private data class SubmitState(
     val savedTransactionId: Long? = null,
     /** 正在取消归档原账户（F03 编辑归档账户），跟保存共用一个"动作进行中"的闸门 */
     val isRestoringAccount: Boolean = false,
+    /** 正在把原分类取消停用：按钮防连点 */
+    val isRestoringCategory: Boolean = false,
 )
 
 /** 页面数据来源：外部列表 + 被编辑的整笔 + 读取错误，凑齐后才知道页面能不能画 */
@@ -98,6 +104,15 @@ private data class LoadState(
     val editingTransaction: TransactionEntity?,
     val editingLoaded: Boolean,
     val errorMessage: String?,
+)
+
+/**
+ * 编辑模式：被编辑那一笔原本挂着的账户/分类（含已归档、已停用）。
+ * 选择器里不会出现它们，提示却必须报得出名字——两个一起读，页面组合流就不用再加参数。
+ */
+private data class EditingOriginals(
+    val account: AccountEntity? = null,
+    val category: CategoryEntity? = null,
 )
 
 /**
@@ -124,8 +139,8 @@ class RecordViewModel(
     /** 编辑模式：被编辑的那一整笔（null = 还没加载完，或这一笔已不存在） */
     private val editingTransaction = MutableStateFlow<TransactionEntity?>(null)
 
-    /** 编辑模式：这一笔原本记在哪个账户（含已归档），提示里要说出它的名字 */
-    private val editingAccount = MutableStateFlow<AccountEntity?>(null)
+    /** 编辑模式：这一笔原本记在哪个账户/分类（含已归档、已停用），提示里要说出它们的名字 */
+    private val editingOriginals = MutableStateFlow(EditingOriginals())
 
     /** 编辑对象是否已读取完毕。非编辑模式没有东西要读，一开始就是 true */
     private val editingLoaded = MutableStateFlow(editingId == null)
@@ -143,10 +158,15 @@ class RecordViewModel(
             } else {
                 editingTransaction.value = entity
                 form.value = entity.toRecordForm()
-                // 账户可能已归档（不在选择器里），但提示里要报出名字
-                editingAccount.value = entity.accountId?.let { accountId ->
-                    runCatching { repository.getAccount(accountId) }.getOrNull()
-                }
+                // 账户/分类可能已归档、已停用（不在选择器里），但提示里要报出名字
+                editingOriginals.value = EditingOriginals(
+                    account = entity.accountId?.let { accountId ->
+                        runCatching { repository.getAccount(accountId) }.getOrNull()
+                    },
+                    category = entity.categoryId?.let { categoryId ->
+                        runCatching { repository.getCategory(categoryId) }.getOrNull()
+                    },
+                )
             }
             editingLoaded.value = true
         }
@@ -195,14 +215,16 @@ class RecordViewModel(
         form,
         submit,
         deleteRequest,
-        editingAccount,
-    ) { load, form, submit, deleteRequest, originalAccount ->
+        editingOriginals,
+    ) { load, form, submit, deleteRequest, originals ->
         val accountList = load.accounts.orEmpty()
         val categoryList = load.categories.orEmpty()
         val isEditing = editingId != null
         // 选择器只给未归档/未停用的项（M2 验收），原值不在其中就提示重选，而不是静默丢掉
         val originalAccountUnavailable = isEditing && form.accountId != null &&
             accountList.none { it.id == form.accountId }
+        val originalCategoryUnavailable = isEditing && form.categoryId != null &&
+            categoryList.none { it.id == form.categoryId }
         RecordUiState(
             isLoading = load.accounts == null || load.categories == null || !load.editingLoaded,
             loadErrorMessage = load.errorMessage,
@@ -218,10 +240,11 @@ class RecordViewModel(
             isEditing = isEditing,
             editingTransaction = load.editingTransaction,
             originalAccountUnavailable = originalAccountUnavailable,
-            originalAccountName = if (originalAccountUnavailable) originalAccount?.name else null,
-            originalCategoryUnavailable = isEditing && form.categoryId != null &&
-                categoryList.none { it.id == form.categoryId },
+            originalAccountName = if (originalAccountUnavailable) originals.account?.name else null,
+            originalCategoryUnavailable = originalCategoryUnavailable,
+            originalCategoryName = if (originalCategoryUnavailable) originals.category?.name else null,
             isRestoringAccount = submit.isRestoringAccount,
+            isRestoringCategory = submit.isRestoringCategory,
             formErrors = submit.errors,
             isSaving = submit.isSaving,
             saveErrorMessage = submit.saveErrorMessage,
@@ -317,6 +340,21 @@ class RecordViewModel(
         viewModelScope.launch {
             val failure = repository.setAccountArchived(accountId, archived = false).exceptionOrNull()
             submit.update { it.copy(isRestoringAccount = false, saveErrorMessage = failure?.toRecordMessage()) }
+        }
+    }
+
+    /**
+     * 把这一笔的原分类取消停用，然后继续编辑。理由同 [restoreOriginalAccount]：
+     * 停用分类不能再记新账，重选分类会把这一笔挪到别的分类上、改动历史口径，就地恢复更干净。
+     * [observeActiveCategories] 是热流，恢复成功后分类自己会回到列表。
+     */
+    fun restoreOriginalCategory() {
+        val categoryId = form.value.categoryId ?: return
+        if (submit.value.isRestoringCategory) return
+        submit.update { it.copy(isRestoringCategory = true, saveErrorMessage = null) }
+        viewModelScope.launch {
+            val failure = repository.restoreCategory(categoryId).exceptionOrNull()
+            submit.update { it.copy(isRestoringCategory = false, saveErrorMessage = failure?.toRecordMessage()) }
         }
     }
 
