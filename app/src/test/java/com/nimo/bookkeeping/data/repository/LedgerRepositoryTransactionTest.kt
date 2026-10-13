@@ -307,7 +307,7 @@ class LedgerRepositoryTransactionTest {
     }
 
     @Test
-    fun deleteThenRestore_roundTripsTheSameRow() = runTest {
+    fun delete_physicallyRemovesTheRow() = runTest {
         val accountId = newAccount()
         val id = repository.addTransaction(
             input(accountId = accountId, categoryId = expenseCategoryId, note = "午餐"),
@@ -315,11 +315,8 @@ class LedgerRepositoryTransactionTest {
         val original = db.transactionDao().getById(id)!!
 
         repository.deleteTransaction(original)
-        assertNull(db.transactionDao().getById(id))
 
-        // 撤销删除：按原 id 整笔恢复（含 createdAt/updatedAt）
-        assertEquals(id, repository.restoreTransaction(original))
-        assertEquals(original, db.transactionDao().getById(id))
+        assertNull(db.transactionDao().getById(id))
     }
 
     // ---- 选择器数据源（M2 验收：归档的不出现）----

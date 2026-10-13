@@ -204,14 +204,12 @@ class LedgerRepository(private val db: AppDatabase) {
             }
         }
 
-    /** 删除（物理）。撤销删除由 UI 层延迟物理删除策略控制（计划 9.2），超时前不会走到这里 */
+    /**
+     * 删除（物理）。撤销删除由 UI 层延迟物理删除策略控制（计划 9.2）：
+     * 倒计时内只是把该行挡在页面之外，超时才真正调用这里，因此不需要"恢复"入口。
+     */
     suspend fun deleteTransaction(entity: TransactionEntity): Unit = withContext(Dispatchers.IO) {
         txDao.delete(entity)
-    }
-
-    /** 撤销删除：按原 id 恢复整笔（autoGenerate 主键显式指定即可复用） */
-    suspend fun restoreTransaction(entity: TransactionEntity): Long = withContext(Dispatchers.IO) {
-        txDao.insert(entity)
     }
 
     // ---- 预算 ----
