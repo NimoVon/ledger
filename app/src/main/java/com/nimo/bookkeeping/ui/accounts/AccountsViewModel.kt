@@ -28,7 +28,10 @@ data class AccountsUiState(
      * 撤销窗口内那一笔已经剔除，因此与流水页的合计口径一致。
      */
     val balances: Map<Long, Long> = emptyMap(),
-    /** 净资产 = Σ(计入净资产账户的当前余额)，信用卡欠款为负（计划 3.4） */
+    /**
+     * 净资产 = Σ(未归档、且计入净资产的账户的当前余额)，信用卡欠款以负余额体现（计划 3.4）。
+     * 归档账户不计入合计（用户 2026-10-13 确认）：归档等于"这个账户我看够了、收起来"。
+     */
     val netWorthCents: Long = 0L,
     val errorMessage: String? = null,
 ) {
@@ -68,11 +71,13 @@ class AccountsViewModel(
             .mapNotNull { it.toRecordOrNull() }
         val inputs = accounts.map { it.toBalanceInput() }
         val balances = BalanceCalculator.computeBalances(inputs, records)
+        // 归档账户仍留在列表里显示自己的余额，但不再计入净资产合计
+        val netWorthInputs = accounts.filterNot { it.isArchived }.map { it.toBalanceInput() }
         AccountsUiState(
             isLoading = false,
             accounts = accounts,
             balances = balances,
-            netWorthCents = BalanceCalculator.netWorthCents(balances, inputs),
+            netWorthCents = BalanceCalculator.netWorthCents(balances, netWorthInputs),
         )
     }
         .catch { emit(AccountsUiState(isLoading = false, errorMessage = "读取账户失败，请返回重试")) }

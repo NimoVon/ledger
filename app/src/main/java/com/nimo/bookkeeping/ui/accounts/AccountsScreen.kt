@@ -161,7 +161,7 @@ fun AccountsScreen(
     }
 }
 
-/** 净资产合计：只统计"计入净资产"的账户（信用卡欠款以负余额体现，计划 3.4） */
+/** 净资产合计：只统计"未归档且计入净资产"的账户（信用卡欠款以负余额体现，计划 3.4） */
 @Composable
 private fun NetWorthRow(netWorthCents: Long) {
     Row(

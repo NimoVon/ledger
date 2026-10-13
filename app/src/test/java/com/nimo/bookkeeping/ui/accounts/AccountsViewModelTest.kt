@@ -148,16 +148,20 @@ class AccountsViewModelTest {
     }
 
     @Test
-    fun archivedAccount_keepsAppearingWithItsDerivedBalance() = runTest {
+    fun archivedAccount_staysInTheListWithItsBalance_butDropsOutOfNetWorth() = runTest {
         val accountId = repository.createAccount("CMB", AccountType.CASH, 123_400L).getOrThrow()
         addExpense(accountId, 60_000L)
+        assertEquals(63_400L, newViewModel().awaitLoaded().netWorthCents)
+
         repository.setAccountArchived(accountId, archived = true).getOrThrow()
 
         val state = newViewModel().awaitLoaded()
 
-        // 归档只影响"能不能用来记新账"，历史与余额照常显示
+        // 归档只影响两件事：能不能用来记新账、算不算净资产。历史、自己的余额照常显示
         assertTrue(state.accounts.single().isArchived)
         assertEquals(63_400L, state.balances[accountId])
+        assertEquals(63_400L, state.balanceOf(state.accounts.single()))
+        assertEquals(0L, state.netWorthCents)
     }
 
     @Test
