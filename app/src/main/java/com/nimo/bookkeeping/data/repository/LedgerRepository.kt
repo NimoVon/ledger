@@ -1,5 +1,6 @@
 package com.nimo.bookkeeping.data.repository
 
+import androidx.room.withTransaction
 import com.nimo.bookkeeping.data.local.AppDatabase
 import com.nimo.bookkeeping.data.local.entity.AccountEntity
 import com.nimo.bookkeeping.data.local.entity.BudgetEntity
@@ -10,9 +11,13 @@ import com.nimo.bookkeeping.domain.model.AccountRef
 import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.model.CategoryKind
 import com.nimo.bookkeeping.domain.model.CategoryRef
+import com.nimo.bookkeeping.domain.model.MoveDirection
 import com.nimo.bookkeeping.domain.model.TransactionInput
 import com.nimo.bookkeeping.domain.validate.AccountValidationException
 import com.nimo.bookkeeping.domain.validate.AccountValidator
+import com.nimo.bookkeeping.domain.validate.CategorySnapshot
+import com.nimo.bookkeeping.domain.validate.CategoryValidationException
+import com.nimo.bookkeeping.domain.validate.CategoryValidator
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.domain.validate.TxValidationException
 import kotlinx.coroutines.Dispatchers
@@ -166,6 +171,109 @@ class LedgerRepository(private val db: AppDatabase) {
         }
         Result.success(Unit)
     }
+
+    /**
+     * 新建分类（F02）。名称、单层父子、同层重名都在 [CategoryValidator] 里判，
+     * 排序排到同级末尾——新建的分类出现在列表最后一行，符合"刚加的东西在末尾"的直觉。
+     */
+    suspend fun createCategory(
+        name: String,
+        kind: CategoryKind,
+        parentId: Long? = null,
+    ): Result<Long> = withContext(Dispatchers.IO) {
+        try {
+            val errors = CategoryValidator.validate(
+                name = name,
+                kind = kind,
+                parentId = parentId,
+                all = categoryDao.listAll().map { it.toSnapshot() },
+            )
+            if (errors.isNotEmpty()) throw CategoryValidationException(errors)
+            val id = db.withTransaction {
+                categoryDao.insert(
+                    CategoryEntity(
+                        name = name.trim(),
+                        kind = kind,
+                        parentId = parentId,
+                        // 计划 F02「排序」：新建排到同级末尾
+                        sortOrder = categoryDao.maxSortOrder(kind, parentId) + 1,
+                    ),
+                )
+            }
+            Result.success(id)
+        } catch (e: CategoryValidationException) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 改名（F02）。只改名字：kind 与 parentId 原样保留。
+     * 重名检查要排除自己（selfId），否则"把名字改成原名"会被自己挡下来。
+     */
+    suspend fun renameCategory(id: Long, name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val existing = categoryDao.getById(id)
+                ?: return@withContext Result.failure(IllegalStateException("分类不存在"))
+            val errors = CategoryValidator.validate(
+                name = name,
+                kind = existing.kind,
+                parentId = existing.parentId,
+                all = categoryDao.listAll().map { it.toSnapshot() },
+                selfId = existing.id,
+            )
+            if (errors.isNotEmpty()) throw CategoryValidationException(errors)
+            categoryDao.rename(existing.id, name.trim())
+            Result.success(Unit)
+        } catch (e: CategoryValidationException) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 停用分类（F02「停用不删除」）。级联停用它的子分类，历史流水一条不动——
+     * 分类停用后旧流水的分类名照常显示，只是不能再选它记新账。
+     */
+    suspend fun archiveCategory(id: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        val existing = categoryDao.getById(id)
+            ?: return@withContext Result.failure(IllegalStateException("分类不存在"))
+        categoryDao.archiveWithChildren(existing.id)
+        Result.success(Unit)
+    }
+
+    /**
+     * 同级上移 / 下移一格（F02「排序」）。
+     *
+     * 实现是"整组重排"而不是交换两个 sortOrder：备份导入进来的数据可能有重复的 sortOrder，
+     * 交换两个相等的值等于什么都没做（界面上看起来就是按钮失灵）。整组改成 0..n-1 顺带把历史脏顺序理顺。
+     * 已经在第一个（上移）或最后一个（下移）时静默不动，不报错——按钮本来就是置灰的。
+     */
+    suspend fun moveCategory(id: Long, direction: MoveDirection): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val existing = categoryDao.getById(id)
+                ?: return@withContext Result.failure(IllegalStateException("分类不存在"))
+            db.withTransaction {
+                val ordered = categoryDao.listSiblings(existing.kind, existing.parentId).toMutableList()
+                val from = ordered.indexOfFirst { it.id == id }
+                val to = when (direction) {
+                    MoveDirection.UP -> from - 1
+                    MoveDirection.DOWN -> from + 1
+                }
+                if (from < 0 || to !in ordered.indices) return@withTransaction
+                ordered.add(to, ordered.removeAt(from))
+                ordered.forEachIndexed { index, sibling ->
+                    if (sibling.sortOrder != index) categoryDao.setSortOrder(sibling.id, index)
+                }
+            }
+            Result.success(Unit)
+        }
+
+    private fun CategoryEntity.toSnapshot() = CategorySnapshot(
+        id = id,
+        name = name,
+        kind = kind,
+        parentId = parentId,
+        isArchived = isArchived,
+    )
 
     // ---- 交易写入：先校验后落库 ----
 

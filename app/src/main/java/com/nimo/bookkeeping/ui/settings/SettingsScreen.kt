@@ -28,7 +28,11 @@ import com.nimo.bookkeeping.AppContainer
  * 当前承载开发用的数据库自检（自 MainActivity 迁入），后续在此加入备份/导出与主题。
  */
 @Composable
-fun SettingsScreen(container: AppContainer, onOpenAccounts: () -> Unit) {
+fun SettingsScreen(
+    container: AppContainer,
+    onOpenAccounts: () -> Unit,
+    onOpenCategories: () -> Unit,
+) {
     var lines by remember { mutableStateOf(listOf("自检运行中…")) }
     LaunchedEffect(Unit) {
         lines = try {
@@ -59,6 +63,17 @@ fun SettingsScreen(container: AppContainer, onOpenAccounts: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text = "账户管理", style = MaterialTheme.typography.bodyLarge)
+            Text(text = "›", style = MaterialTheme.typography.titleMedium)
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenCategories)
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "分类管理", style = MaterialTheme.typography.bodyLarge)
             Text(text = "›", style = MaterialTheme.typography.titleMedium)
         }
         HorizontalDivider()

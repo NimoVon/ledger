@@ -51,6 +51,37 @@ interface CategoryDao {
     @Query("UPDATE categories SET isArchived = 0 WHERE id = :id")
     suspend fun unarchive(id: Long)
 
+    /**
+     * 同级兄弟（同 kind、同 parentId），顺序与页面一致：sortOrder ASC, id ASC。
+     * 上移 / 下移要拿整组一起看，才知道有没有越界。
+     */
+    @Query(
+        "SELECT * FROM categories WHERE kind = :kind AND parentId IS :parentId " +
+            "ORDER BY sortOrder ASC, id ASC",
+    )
+    suspend fun listSiblings(kind: CategoryKind, parentId: Long?): List<CategoryEntity>
+
+    /** 同级最大 sortOrder（空组为 -1）：新建排到末尾就是 max + 1 */
+    @Query(
+        "SELECT COALESCE(MAX(sortOrder), -1) FROM categories " +
+            "WHERE kind = :kind AND parentId IS :parentId",
+    )
+    suspend fun maxSortOrder(kind: CategoryKind, parentId: Long?): Int
+
+    /**
+     * 新建单条。用 @Insert 而不是 @Upsert：新建就是插入，约束冲突必须抛出来，
+     * 不能像 @Upsert 那样被 Room 转成"按主键 UPDATE 0 行"的静默无操作。
+     */
+    @Insert
+    suspend fun insert(category: CategoryEntity): Long
+
+    /** 改名。不动 kind / parentId：换树会让既有流水落到另一棵树里（F02 不做跨树移动）。 */
+    @Query("UPDATE categories SET name = :name WHERE id = :id")
+    suspend fun rename(id: Long, name: String)
+
+    @Query("UPDATE categories SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun setSortOrder(id: Long, sortOrder: Int)
+
     @Query("SELECT COUNT(*) FROM categories")
     suspend fun count(): Int
 }

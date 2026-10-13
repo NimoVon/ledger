@@ -29,6 +29,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nimo.bookkeeping.AppContainer
 import com.nimo.bookkeeping.ui.accounts.AccountsScreen
+import com.nimo.bookkeeping.ui.categories.CategoriesScreen
 import com.nimo.bookkeeping.ui.record.RecordScreen
 import com.nimo.bookkeeping.ui.reports.ReportsScreen
 import com.nimo.bookkeeping.ui.settings.SettingsScreen
@@ -38,6 +39,9 @@ import com.nimo.bookkeeping.util.Money
 
 /** 账户管理：从设置页进入的二级页面，不在底部导航里 */
 private const val ACCOUNTS_ROUTE = "accounts"
+
+/** 分类管理（F02）：同样从设置页进入，不在底部导航里 */
+private const val CATEGORIES_ROUTE = "categories"
 
 /** 记一笔（F03）：全屏表单，由顶层页面的「记一笔」按钮唤起（计划 F03「从任意页面可唤起」） */
 private const val RECORD_ROUTE = "record"
@@ -199,6 +203,13 @@ fun LedgerApp(container: AppContainer) {
                 SettingsScreen(
                     container = container,
                     onOpenAccounts = { navController.navigate(ACCOUNTS_ROUTE) },
+                    onOpenCategories = { navController.navigate(CATEGORIES_ROUTE) },
+                )
+            }
+            composable(CATEGORIES_ROUTE) {
+                CategoriesScreen(
+                    repository = container.repository,
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(ACCOUNTS_ROUTE) {

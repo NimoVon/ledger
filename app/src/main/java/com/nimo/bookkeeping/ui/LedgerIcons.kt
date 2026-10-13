@@ -130,6 +130,38 @@ object LedgerIcons {
             lineTo(8f, 18f)
         }
     }
+
+    /** 上移（F02 分类排序）：向上的箭头 */
+    val ArrowUp: ImageVector = ledgerIcon("LedgerArrowUp") {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2.2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(12f, 19f)
+            lineTo(12f, 5.5f)
+            moveTo(6.5f, 11f)
+            lineTo(12f, 5.5f)
+            lineTo(17.5f, 11f)
+        }
+    }
+
+    /** 下移（F02 分类排序）：向下的箭头 */
+    val ArrowDown: ImageVector = ledgerIcon("LedgerArrowDown") {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2.2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(12f, 5f)
+            lineTo(12f, 18.5f)
+            moveTo(6.5f, 13f)
+            lineTo(12f, 18.5f)
+            lineTo(17.5f, 13f)
+        }
+    }
 }
 
 private fun ledgerIcon(name: String, content: ImageVector.Builder.() -> Unit): ImageVector =
