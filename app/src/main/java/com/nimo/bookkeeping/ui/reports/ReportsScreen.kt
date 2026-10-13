@@ -1,6 +1,7 @@
 package com.nimo.bookkeeping.ui.reports
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.bookkeeping.data.repository.LedgerRepository
+import com.nimo.bookkeeping.domain.filter.TransactionFilter
 import com.nimo.bookkeeping.ui.components.EmptyState
 import com.nimo.bookkeeping.ui.components.MonthSummaryBar
 import com.nimo.bookkeeping.ui.components.MonthSwitcher
@@ -44,12 +46,17 @@ import kotlinx.coroutines.flow.flowOf
  *
  * 顶部按月切换，月份边界与标签与明细页同一套（共用 [MonthSwitcher] / [MonthSummaryBar]）。
  *
+ * 点排行或账户分布的一行可以下钻：跳回明细页、带上"这一行 + 当前这个月"的筛选条件，
+ * 让用户自己核对该行背后的每一笔流水（计划 M3 验收：月报金额与流水逐笔对账一致）。
+ *
  * @param pendingDeletionIds 正被暂存待删除的那几笔 id：倒计时内它们不进报表
+ * @param onDrillDown 点某一行时要看的筛选条件，由 [ReportDrillDown] 翻译，宿主负责跳转
  */
 @Composable
 fun ReportsScreen(
     repository: LedgerRepository,
     pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
+    onDrillDown: (TransactionFilter) -> Unit = {},
 ) {
     val viewModel: ReportsViewModel =
         viewModel(factory = ReportsViewModel.factory(repository, pendingDeletionIds))
@@ -85,24 +92,38 @@ fun ReportsScreen(
             else -> LazyColumn(modifier = contentModifier) {
                 item(key = "daily") { DailyAverageRow(state.dailyAverageExpenseCents) }
                 item(key = "change") { ChangeSection(state) }
-                item(key = "breakdown-header") { SectionHeader("支出排行") }
+                item(key = "breakdown-header") { SectionHeader("支出排行", hint = "点一行看明细") }
                 if (state.breakdown.isEmpty()) {
                     item(key = "breakdown-empty") {
                         HintRow("本月没有支出。转账与余额调整不算收支，所以不会出现在这里。")
                     }
                 } else {
                     items(items = state.breakdown, key = { "cat-${it.categoryId}" }) { row ->
-                        BreakdownRow(name = row.name, amountCents = row.amountCents, percent = row.percent)
+                        BreakdownRow(
+                            name = row.name,
+                            amountCents = row.amountCents,
+                            percent = row.percent,
+                            onClick = {
+                                onDrillDown(ReportDrillDown.byCategory(state.month, row.categoryId))
+                            },
+                        )
                     }
                 }
-                item(key = "accounts-header") { SectionHeader("账户支出分布") }
+                item(key = "accounts-header") { SectionHeader("账户支出分布", hint = "点一行看明细") }
                 if (state.accountBreakdown.isEmpty()) {
                     item(key = "accounts-empty") {
                         HintRow("本月没有支出，所以没有账户分布。")
                     }
                 } else {
                     items(items = state.accountBreakdown, key = { "acct-${it.accountId}" }) { row ->
-                        BreakdownRow(name = row.name, amountCents = row.amountCents, percent = row.percent)
+                        BreakdownRow(
+                            name = row.name,
+                            amountCents = row.amountCents,
+                            percent = row.percent,
+                            onClick = {
+                                onDrillDown(ReportDrillDown.byAccount(state.month, row.accountId))
+                            },
+                        )
                     }
                 }
             }
@@ -184,17 +205,29 @@ private fun ChangeCell(
     }
 }
 
-/** 段头：与明细页的日段头同款 */
+/** 段头：与明细页的日段头同款。[hint] 用来交代"这一段的行可以点" */
 @Composable
-private fun SectionHeader(title: String) {
+private fun SectionHeader(title: String, hint: String? = null) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.weight(1f),
+            )
+            if (hint != null) {
+                Text(
+                    text = hint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -210,12 +243,21 @@ private fun HintRow(text: String) {
     )
 }
 
-/** 排行一行（分类排行与账户分布共用）：名字 + 占比 + 金额 + 占比条 */
+/**
+ * 排行一行（分类排行与账户分布共用）：名字 + 占比 + 金额 + 占比条。
+ * 整行可点：[onClick] 把"这一行 + 当前月份"下钻到明细页（F07）。
+ */
 @Composable
-private fun BreakdownRow(name: String, amountCents: Long, percent: Double?) {
+private fun BreakdownRow(
+    name: String,
+    amountCents: Long,
+    percent: Double?,
+    onClick: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

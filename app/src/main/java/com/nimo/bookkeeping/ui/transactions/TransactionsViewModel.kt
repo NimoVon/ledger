@@ -14,6 +14,7 @@ import com.nimo.bookkeeping.domain.filter.TransactionFilter
 import com.nimo.bookkeeping.domain.stats.PeriodSummary
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
 import com.nimo.bookkeeping.domain.stats.TransactionVisibility
+import com.nimo.bookkeeping.ui.DrillDownRequests
 import com.nimo.bookkeeping.util.Dates
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -79,6 +80,11 @@ class TransactionsViewModel(
      * 默认值表示"没有待删除的暂存"，测试与旧调用点因此不必都接上。
      */
     private val pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
+    /**
+     * 统计页下钻过来的条件（F07）：非空时本页接管一次，用掉即消费。
+     * 默认 null 表示"这个入口没有下钻来源"（测试与旧调用点因此不必都接上）。
+     */
+    private val drillDown: DrillDownRequests? = null,
 ) : ViewModel() {
 
     /** 当前查看的月份：切换只改这个值 */
@@ -119,6 +125,17 @@ class TransactionsViewModel(
                     }
                     .map { Snapshot(key, it) }
             }.collect { snapshot.value = it }
+        }
+        drillDown?.let { requests ->
+            viewModelScope.launch {
+                requests.pending.collect { filter ->
+                    if (filter != null) {
+                        // 走到这里就是"点了一行要来看这一行背后的流水"：套条件 + 消费掉这次请求
+                        applyFilter(filter)
+                        requests.consume(filter)
+                    }
+                }
+            }
         }
         viewModelScope.launch {
             // 账户含已归档：归档账户不能再记账，但历史流水要照常显示账户名、也要能按它筛（M2 验收）
@@ -272,8 +289,15 @@ class TransactionsViewModel(
         fun factory(
             repository: LedgerRepository,
             pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
+            drillDown: DrillDownRequests? = null,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { TransactionsViewModel(repository, pendingDeletionIds = pendingDeletionIds) }
+            initializer {
+                TransactionsViewModel(
+                    repository,
+                    pendingDeletionIds = pendingDeletionIds,
+                    drillDown = drillDown,
+                )
+            }
         }
     }
 }

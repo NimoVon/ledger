@@ -148,6 +148,8 @@ fun LedgerApp(container: AppContainer) {
                         }
                     },
                     pendingDeletionIds = pendingDeletion.pendingIds,
+                    // 下钻：统计页点了某一行时把条件交给本页（用掉即清，见 DrillDownRequests）
+                    drillDown = container.drillDownRequests,
                 )
             }
             composable(TopDestination.REPORTS.route) {
@@ -155,6 +157,18 @@ fun LedgerApp(container: AppContainer) {
                     repository = container.repository,
                     // 撤销窗口内那几笔数据库里还在：月报要和明细页、账户页一样当它们不存在
                     pendingDeletionIds = pendingDeletion.pendingIds,
+                    // 点排行/账户分布的一行 → 记下"看什么"，再切到明细页由它自己套上条件。
+                    // 请求先落容器再导航：明细页的 ViewModel 早就在跑，切过去立刻就能收到。
+                    onDrillDown = { filter ->
+                        container.drillDownRequests.request(filter)
+                        navController.navigate(TopDestination.TRANSACTIONS.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                 )
             }
             composable(TopDestination.SETTINGS.route) {

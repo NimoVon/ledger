@@ -4,6 +4,7 @@ import android.app.Application
 import com.nimo.bookkeeping.data.local.AppDatabase
 import com.nimo.bookkeeping.data.local.DefaultCategories
 import com.nimo.bookkeeping.data.repository.LedgerRepository
+import com.nimo.bookkeeping.ui.DrillDownRequests
 import com.nimo.bookkeeping.ui.transactions.PendingTransactionDeletion
 import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +40,12 @@ class AppContainer(context: android.content.Context) {
      */
     val pendingTransactionDeletion: PendingTransactionDeletion =
         PendingTransactionDeletion(repository, appScope)
+
+    /**
+     * 统计页 → 明细页的下钻请求（F07）：点排行/账户分布的一行，带着条件跳到明细页。
+     * 用完即清（见 [DrillDownRequests]），不落库、不跨进程。
+     */
+    val drillDownRequests: DrillDownRequests = DrillDownRequests()
 
     /** 首次启动播种预置分类；分类表非空（如恢复备份后）则跳过 */
     suspend fun seedDefaultCategoriesIfEmpty() {

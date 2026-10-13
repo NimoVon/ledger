@@ -15,6 +15,8 @@ import com.nimo.bookkeeping.domain.model.CategoryKind
 import com.nimo.bookkeeping.domain.model.TransactionInput
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
+import com.nimo.bookkeeping.ui.DrillDownRequests
+import com.nimo.bookkeeping.ui.reports.ReportDrillDown
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlinx.coroutines.flow.first
@@ -470,5 +472,37 @@ class TransactionsViewModelTest {
         // 子分类是"子"，不出现在顶层列表里
         assertTrue(options.parents(CategoryKind.EXPENSE).none { it.id == childId })
         assertTrue(options.children(expenseCategoryId).any { it.id == childId })
+    }
+
+    // ---- 下钻（F07）：统计页点一行 → 明细页带着条件落过来 ----
+
+    @Test
+    fun drillDown_appliesTheRequestedFilterAndConsumesItSoThatClearingSticks() = runTest {
+        seed()
+        addExpense(8_000L, "2026-10-12", note = "晚餐")
+        addIncome(500_000L, "2026-10-12")
+
+        val requests = DrillDownRequests()
+        val viewModel = TransactionsViewModel(repository, today = { today }, drillDown = requests)
+        // 统计页点了「餐饮」那一行：条件是"这个分类 + 报表当时看的那个月"
+        val drilledFilter = ReportDrillDown.byCategory(YearMonth.of(2026, 10), expenseCategoryId)
+
+        requests.request(drilledFilter)
+        val drilled = viewModel.awaitFilter(drilledFilter)
+
+        assertEquals(setOf(expenseCategoryId), drilled.filter.categoryIds)
+        assertEquals(8_000L, drilled.summary.expenseCents)
+        assertEquals(0L, drilled.summary.incomeCents)
+        assertEquals(1, drilled.groups.sumOf { it.rows.size })
+        assertTrue(drilled.filterChips.any { it == "分类：餐饮" })
+        // 一次性请求：用掉即清，否则用户「清空」筛选后再切回来又会被这个过期请求套上条件
+        assertNull(requests.pending.value)
+
+        viewModel.clearFilter()
+        val cleared = viewModel.awaitFilter(TransactionFilter())
+
+        assertEquals(2, cleared.groups.sumOf { it.rows.size })
+        assertTrue(cleared.filterChips.isEmpty())
+        assertTrue(cleared.showsMonthSwitcher)
     }
 }

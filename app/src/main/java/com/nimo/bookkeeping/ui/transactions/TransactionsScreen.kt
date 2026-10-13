@@ -37,6 +37,7 @@ import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.ui.LedgerIcons
 import com.nimo.bookkeeping.ui.components.EmptyState
+import com.nimo.bookkeeping.ui.DrillDownRequests
 import com.nimo.bookkeeping.ui.components.MonthSummaryBar
 import com.nimo.bookkeeping.ui.components.MonthSwitcher
 import com.nimo.bookkeeping.util.Money
@@ -63,9 +64,10 @@ fun TransactionsScreen(
     repository: LedgerRepository,
     onTransactionClick: (Long) -> Unit = {},
     pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
+    drillDown: DrillDownRequests? = null,
 ) {
     val viewModel: TransactionsViewModel =
-        viewModel(factory = TransactionsViewModel.factory(repository, pendingDeletionIds))
+        viewModel(factory = TransactionsViewModel.factory(repository, pendingDeletionIds, drillDown))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showFilterDialog by remember { mutableStateOf(false) }
 
