@@ -9,6 +9,7 @@ import com.nimo.bookkeeping.data.local.SchemaHardening
 import com.nimo.bookkeeping.data.local.entity.CategoryEntity
 import com.nimo.bookkeeping.data.local.toRecord
 import com.nimo.bookkeeping.data.repository.LedgerRepository
+import com.nimo.bookkeeping.domain.filter.TransactionFilter
 import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.model.CategoryKind
 import com.nimo.bookkeeping.domain.model.TransactionInput
@@ -314,5 +315,160 @@ class TransactionsViewModelTest {
         val id = addExpense(1_100L, "2026-10-12")
 
         assertEquals(id, newViewModel().awaitLoaded().groups.single().rows.single().id)
+    }
+
+    // ---- 筛选与搜索（F06）：账户 / 分类（父命中子）/ 金额 / 关键词 / 日期 ----
+
+    private suspend fun TransactionsViewModel.awaitFilter(filter: TransactionFilter): TransactionsUiState =
+        uiState.first { it.filter == filter && !it.isLoading }
+
+    @Test
+    fun filter_byAccountKeepsOnlyThatAccountsRows() = runTest {
+        seed()
+        addExpense(1_000L, "2026-10-12")
+        repository.addTransaction(
+            TransactionInput(
+                type = TransactionType.EXPENSE,
+                amountCents = 2_000L,
+                accountId = debitAccountId,
+                categoryId = expenseCategoryId,
+                occurredOn = "2026-10-12",
+            ),
+        ).getOrThrow()
+
+        val filter = TransactionFilter(accountIds = setOf(debitAccountId))
+        val state = newViewModel().apply { applyFilter(filter) }.awaitFilter(filter)
+
+        assertEquals(2_000L, state.groups.single().rows.single().amountCents)
+        assertEquals(2_000L, state.summary.expenseCents)
+        assertTrue("现金" !in state.groups.single().rows.single().accountLabel.orEmpty())
+    }
+
+    @Test
+    fun filter_byParentCategoryAlsoKeepsTheChildRows() = runTest {
+        seed()
+        val childId = db.categoryDao().upsert(
+            CategoryEntity(
+                name = "午餐",
+                kind = CategoryKind.EXPENSE,
+                parentId = expenseCategoryId,
+                sortOrder = 1,
+            ),
+        )
+        addExpense(1_000L, "2026-10-12", note = "食堂")
+        repository.addTransaction(
+            TransactionInput(
+                type = TransactionType.EXPENSE,
+                amountCents = 500L,
+                accountId = cashAccountId,
+                categoryId = childId,
+                occurredOn = "2026-10-11",
+            ),
+        ).getOrThrow()
+
+        val filter = TransactionFilter(categoryIds = setOf(expenseCategoryId))
+        val state = newViewModel().apply { applyFilter(filter) }.awaitFilter(filter)
+
+        assertEquals(listOf("2026-10-12", "2026-10-11"), state.groups.map { it.date })
+        assertEquals(1_500L, state.summary.expenseCents)
+        assertTrue(state.hasActiveFilter)
+        assertTrue(state.filterChips.any { it == "分类：餐饮" })
+    }
+
+    @Test
+    fun filter_byKeywordAndAmountRangeKeepsOnlyTheMatchingRow() = runTest {
+        seed()
+        addExpense(1_250L, "2026-10-12", note = "午餐")
+        addExpense(980L, "2026-10-12", note = "晚饭")
+        addExpense(3_000L, "2026-10-11", note = "午餐")
+
+        val filter = TransactionFilter(
+            minAmountCents = 1_000L,
+            maxAmountCents = 2_000L,
+            noteKeyword = "午",
+        )
+        val state = newViewModel().apply { applyFilter(filter) }.awaitFilter(filter)
+
+        assertEquals(1_250L, state.groups.single().rows.single().amountCents)
+        assertEquals(1_250L, state.summary.expenseCents)
+        assertTrue(state.filterChips.any { it == "关键词：午" })
+    }
+
+    @Test
+    fun filter_byDateRangeSpansMonthsAndTakesOverTheMonthSwitcher() = runTest {
+        seed()
+        addExpense(600L, "2026-08-31")
+        addExpense(700L, "2026-09-20")
+        addExpense(800L, "2026-10-12")
+        addExpense(900L, "2026-11-01")
+
+        val filter = TransactionFilter(
+            from = LocalDate.parse("2026-09-01"),
+            to = LocalDate.parse("2026-10-31"),
+        )
+        val state = newViewModel().apply { applyFilter(filter) }.awaitFilter(filter)
+
+        assertEquals(listOf("2026-10-12", "2026-09-20"), state.groups.map { it.date })
+        assertEquals(1_500L, state.summary.expenseCents)
+        assertFalse(state.showsMonthSwitcher)
+        assertTrue(state.filterChips.any { it == "日期：2026-09-01 ~ 2026-10-31" })
+    }
+
+    @Test
+    fun filter_withNoMatchIsAFilteredEmptyStateNotAnError() = runTest {
+        seed()
+        addExpense(1_000L, "2026-10-12", note = "午餐")
+
+        val filter = TransactionFilter(noteKeyword = "飞机")
+        val state = newViewModel().apply { applyFilter(filter) }.awaitFilter(filter)
+
+        assertTrue(state.groups.isEmpty())
+        assertTrue(state.isEmpty)
+        assertTrue(state.hasActiveFilter)
+        assertNull(state.errorMessage)
+        assertEquals(0L, state.summary.expenseCents)
+    }
+
+    @Test
+    fun clearFilter_bringsBackTheWholeMonth() = runTest {
+        seed()
+        addExpense(1_000L, "2026-10-12", note = "午餐")
+        addExpense(2_000L, "2026-10-11", note = "晚饭")
+
+        val viewModel = newViewModel()
+        viewModel.applyFilter(TransactionFilter(noteKeyword = "午餐"))
+        assertEquals(1_000L, viewModel.awaitFilter(TransactionFilter(noteKeyword = "午餐")).summary.expenseCents)
+
+        viewModel.clearFilter()
+        val restored = viewModel.awaitFilter(TransactionFilter())
+
+        assertEquals(2, restored.groups.sumOf { it.rows.size })
+        assertEquals(3_000L, restored.summary.expenseCents)
+        assertTrue(restored.filterChips.isEmpty())
+        assertTrue(restored.showsMonthSwitcher)
+    }
+
+    @Test
+    fun filterOptions_offerArchivedAccountsAndChildCategories() = runTest {
+        seed()
+        val childId = db.categoryDao().upsert(
+            CategoryEntity(
+                name = "午餐",
+                kind = CategoryKind.EXPENSE,
+                parentId = expenseCategoryId,
+                sortOrder = 1,
+            ),
+        )
+        repository.setAccountArchived(debitAccountId, archived = true).getOrThrow()
+        addExpense(1_000L, "2026-10-12")
+
+        val options = newViewModel().awaitLoaded().filterOptions
+
+        assertEquals(2, options.accounts.size)
+        assertTrue(options.accounts.any { it.id == debitAccountId && it.archived })
+        assertTrue(options.parents(CategoryKind.EXPENSE).any { it.id == expenseCategoryId })
+        // 子分类是"子"，不出现在顶层列表里
+        assertTrue(options.parents(CategoryKind.EXPENSE).none { it.id == childId })
+        assertTrue(options.children(expenseCategoryId).any { it.id == childId })
     }
 }

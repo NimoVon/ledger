@@ -8,16 +8,23 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,21 +34,24 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.bookkeeping.data.repository.LedgerRepository
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import com.nimo.bookkeeping.domain.model.TransactionType
-import com.nimo.bookkeeping.domain.stats.PeriodSummary
+import com.nimo.bookkeeping.ui.LedgerIcons
 import com.nimo.bookkeeping.ui.components.EmptyState
 import com.nimo.bookkeeping.ui.components.MonthSummaryBar
 import com.nimo.bookkeeping.ui.components.MonthSwitcher
 import com.nimo.bookkeeping.util.Money
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
- * 明细（流水时间线，F05）。
+ * 明细（流水时间线，F05）+ 筛选与搜索（F06）。
  *
  * 按日分组倒序展示，每行给出分类图标与名称、账户、备注、金额；
  * 顶部按月切换（月份边界来自 [com.nimo.bookkeeping.util.Dates.monthBounds]），
  * 合计来自 [com.nimo.bookkeeping.domain.stats.StatsCalculator]（转账/余额调整不计入）。
+ *
+ * 筛选条件由 [TransactionFilterDialog] 收集、[TransactionsViewModel] 执行；
+ * 开了日期区间就不再显示月份控件（区间优先），条件摘要贴在「筛选」按钮右侧。
  *
  * 点某一行进入「记一笔」的编辑模式（F03 修改）；删除入口也在那一页，
  * 删除后这一行会立刻消失、合计立刻回退，底部提示条里可撤销（计划 9.2 延迟物理删除）。
@@ -57,14 +67,22 @@ fun TransactionsScreen(
     val viewModel: TransactionsViewModel =
         viewModel(factory = TransactionsViewModel.factory(repository, pendingDeletionIds))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var showFilterDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        MonthSwitcher(
-            label = state.monthLabel,
-            onPrevious = viewModel::showPreviousMonth,
-            onNext = viewModel::showNextMonth,
-        )
+        if (state.showsMonthSwitcher) {
+            MonthSwitcher(
+                label = state.monthLabel,
+                onPrevious = viewModel::showPreviousMonth,
+                onNext = viewModel::showNextMonth,
+            )
+        }
         MonthSummaryBar(summary = state.summary, loading = state.isLoading)
+        FilterBar(
+            chips = state.filterChips,
+            onOpen = { showFilterDialog = true },
+            onClear = viewModel::clearFilter,
+        )
         HorizontalDivider()
 
         val contentModifier = Modifier.weight(1f)
@@ -74,6 +92,13 @@ fun TransactionsScreen(
             state.errorMessage != null -> EmptyState(
                 title = "加载失败",
                 message = state.errorMessage.orEmpty(),
+                modifier = contentModifier,
+            )
+
+            // 筛选态下"没有记录"是条件的问题，不是这个月没记账——措辞要分开，否则用户以为数据丢了
+            state.isEmpty && state.hasActiveFilter -> EmptyState(
+                title = "没有符合条件的记录",
+                message = "试试放宽条件，或点上面的「清空」。",
                 modifier = contentModifier,
             )
 
@@ -98,7 +123,63 @@ fun TransactionsScreen(
             }
         }
     }
+
+    if (showFilterDialog) {
+        TransactionFilterDialog(
+            initial = state.filter,
+            options = state.filterOptions,
+            onDismiss = { showFilterDialog = false },
+            onApply = { filter ->
+                viewModel.applyFilter(filter)
+                showFilterDialog = false
+            },
+            onReset = {
+                viewModel.clearFilter()
+                showFilterDialog = false
+            },
+        )
+    }
 }
+
+/**
+ * 筛选入口 + 当前条件摘要。
+ * 条件文字由 [TransactionFilterSummary] 生成（页面不自己拼字符串），开条件后才出现「清空」。
+ */
+@Composable
+private fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(onClick = onOpen) {
+            Icon(
+                imageVector = LedgerIcons.Filter,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("筛选")
+        }
+        if (chips.isEmpty()) {
+            Spacer(modifier = Modifier.weight(1f))
+        } else {
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                chips.forEach { chip ->
+                    Text(
+                        text = chip,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            TextButton(onClick = onClear) { Text("清空") }
+        }
+    }
+}
+
 /** 日段头：日期 + 当日合计 */
 @Composable
 private fun DayHeader(group: TransactionDayGroup) {

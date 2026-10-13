@@ -87,6 +87,19 @@ object LedgerIcons {
         }
     }
 
+    /** 筛选：漏斗 */
+    val Filter: ImageVector = ledgerIcon("LedgerFilter") {
+        path(fill = SolidColor(Color.Black)) {
+            moveTo(4f, 5f)
+            lineTo(20f, 5f)
+            lineTo(13.5f, 12.5f)
+            lineTo(13.5f, 19.5f)
+            lineTo(10.5f, 17f)
+            lineTo(10.5f, 12.5f)
+            close()
+        }
+    }
+
     /** 新增：加号 */
     val Add: ImageVector = ledgerIcon("LedgerAdd") {
         path(fill = SolidColor(Color.Black)) {

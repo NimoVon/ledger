@@ -31,6 +31,7 @@ fun TransactionEntity.toRecord(): TransactionRecord = TransactionRecord(
     toAccountId = toAccountId,
     categoryId = categoryId,
     occurredOn = LocalDate.parse(occurredOn),
+    note = note,
 )
 
 /**

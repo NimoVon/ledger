@@ -13,6 +13,8 @@ data class TransactionRecord(
     val toAccountId: Long? = null,
     val categoryId: Long? = null,
     val occurredOn: LocalDate,
+    /** 备注：筛选（F06）的关键词匹配要读它；统计口径不读这个字段 */
+    val note: String? = null,
 )
 
 /** 用户提交的尚未落库的交易。occurredOn 为 YYYY-MM-DD 文本，由校验器负责格式校验。 */
