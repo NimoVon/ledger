@@ -12,17 +12,30 @@ object Money {
 
     private val AMOUNT_RE = Regex("""\d{1,11}(\.\d{1,2})?""")
 
+    /** 带千分位的输入：1,234 / 1,234.5 / 99,999,999.99（分组必须整三位，不接受 1,23 这类半截分组） */
+    private val GROUPED_AMOUNT_RE = Regex("""\d{1,3}(,\d{3}){1,4}(\.\d{1,2})?""")
+
     /**
      * 解析用户输入金额文本为分。接受可选前导 '-'（余额校准用负数）。
      * 规则：非空、纯数字、最多两位小数、非零、绝对值不超过上限。
+     * 另外接受**规格正确**的千分位分组（1,234 / 99,999,999.99），
+     * 因为界面上展示的金额带千分位，用户把它复制回输入框时必须仍然可解析。
      * 返回 null 表示非法，由调用方给出提示。
      */
     fun parseCents(input: String): Long? {
         val text = input.trim()
         if (text.isEmpty()) return null
         val negative = text.startsWith("-")
-        val body = if (negative) text.substring(1) else text
-        if (body.isEmpty() || !AMOUNT_RE.matches(body)) return null
+        val raw = if (negative) text.substring(1) else text
+        if (raw.isEmpty()) return null
+        val body = when {
+            raw.contains(',') -> {
+                if (!GROUPED_AMOUNT_RE.matches(raw)) return null
+                raw.replace(",", "")
+            }
+            AMOUNT_RE.matches(raw) -> raw
+            else -> return null
+        }
         val parts = body.split('.')
         val centsDigits = parts[0] + (if (parts.size == 2) parts[1].padEnd(2, '0') else "00")
         val magnitude = centsDigits.toLongOrNull() ?: return null
@@ -30,13 +43,42 @@ object Money {
         return if (negative) -magnitude else magnitude
     }
 
-    /** 分 → 元文本，两位小数，如 12345 -> "123.45"、-105 -> "-1.05" */
+    /**
+     * 分 → 元文本，两位小数，**不带千分位**：12345 -> "123.45"、-105 -> "-1.05"。
+     *
+     * 契约（改动前请先读）：本函数专供**输入框回填**，回填后的文本会再经 [parseCents] 解析回来
+     * （见 RecordViewModel 编辑回填、AccountEditDialog 初始余额、TransactionFilterDialog 金额区间）。
+     * 一旦在这里加千分位，回填文本会多出逗号——虽然 [parseCents] 已能解析规格正确的分组，
+     * 但回填文本仍是"机器文本"，保持纯数字最稳。给人看的展示文本一律用 [formatCurrency]。
+     */
     fun format(cents: Long): String {
         val a = abs(cents)
-        return "${if (cents < 0) "-" else ""}${a / 100}.${(a % 100).toString().padStart(2, '0')}"
+        return (if (cents < 0) "-" else "") + (a / 100).toString() + "." + (a % 100).toString().padStart(2, '0')
     }
 
-    /** 分 → 带货币符号文本，如 12345 -> "¥123.45"、-105 -> "-¥1.05" */
-    fun formatCurrency(cents: Long): String =
-        if (cents < 0) "-¥${format(-cents)}" else "¥${format(cents)}"
+    /**
+     * 分 → 带货币符号与千分位的**展示**文本：12345 -> "¥123.45"、123456789 -> "¥1,234,567.89"、
+     * -105 -> "-¥1.05"。所有给人看的金额都用这个（计划 9.1 示例即 "¥1,000.00" 写法）。
+     */
+    fun formatCurrency(cents: Long): String {
+        val a = abs(cents)
+        val sign = if (cents < 0) "-" else ""
+        return sign + "¥" + groupThousands(a / 100) + "." + (a % 100).toString().padStart(2, '0')
+    }
+
+    /** 整数部分每三位插一个逗号：1234567 -> "1,234,567"（<=3 位原样返回） */
+    private fun groupThousands(value: Long): String {
+        val digits = value.toString()
+        if (digits.length <= 3) return digits
+        val sb = StringBuilder(digits.length + digits.length / 3)
+        val lead = digits.length % 3
+        if (lead > 0) sb.append(digits, 0, lead)
+        var i = lead
+        while (i < digits.length) {
+            if (sb.isNotEmpty()) sb.append(',')
+            sb.append(digits, i, i + 3)
+            i += 3
+        }
+        return sb.toString()
+    }
 }

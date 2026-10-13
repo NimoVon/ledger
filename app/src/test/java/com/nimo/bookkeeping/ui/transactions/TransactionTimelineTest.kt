@@ -199,7 +199,7 @@ class TransactionTimelineTest {
 
         val byId = day.rows.associateBy { it.id }
         assertEquals("-¥12.50", TransactionTimeline.amountText(byId.getValue(1L)))
-        assertEquals("+¥5000.00", TransactionTimeline.amountText(byId.getValue(2L)))
+        assertEquals("+¥5,000.00", TransactionTimeline.amountText(byId.getValue(2L)))
         assertEquals("-¥50.00", TransactionTimeline.amountText(byId.getValue(3L)))
     }
 
