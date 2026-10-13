@@ -6,11 +6,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -23,12 +21,15 @@ import kotlinx.coroutines.withContext
  * 数据库里这一笔其实还在；倒计时 [undoWindowMs] 走完才真正调
  * [LedgerRepository.deleteTransaction]。不引入软删除字段，统计查询因此不必处处过滤 is_deleted。
  *
- * 撤销分两种情况，在同一把锁内判定，不存在竞态：
- * - 还没到点：取消倒计时即可，数据库从头到尾没动过；
- * - 已经落库（Snackbar 还开着，或刚好超时那一刻）：按原 id 整笔恢复
- *   [LedgerRepository.restoreTransaction]，id 不变，因此列表顺序不跳动。
+ * **撤销窗口就是提示条的生命周期**：窗口走完 → 这一笔落库、同时从 [pending] 里摘掉，
+ * 页面按 [pending] 驱动的提示条随之关闭。两个时长是同一个数（[DEFAULT_UNDO_WINDOW_MS]），
+ * 不存在"提示条已经没了、状态却还捂着"的错位。窗口外也**不再**提供撤销：那一笔已经物理删除，
+ * 撤销只在这几秒内有效（计划 9.2：Snackbar 倒计时内可撤销）。
  *
- * 同一时间只允许一笔可撤销：新的删除会先把上一笔立即落定。
+ * 多笔可以同时待撤销，各跑各的倒计时；[pending] 按发起时间倒序，页面取第一项显示提示条，
+ * 撤销按 id 精确到具体某一笔。[pendingIds] 是列表/合计/余额统一的过滤源
+ * （口径实现见 com.nimo.bookkeeping.domain.stats.TransactionVisibility）。
+ *
  * 进程被杀时最坏情况是"这一笔没被删掉"（数据只会多不会少）。
  */
 class PendingTransactionDeletion(
@@ -38,23 +39,29 @@ class PendingTransactionDeletion(
     private val undoWindowMs: Long = DEFAULT_UNDO_WINDOW_MS,
 ) {
 
-    /** 一次待删除会话：整笔 + 是否已物理删除 + Snackbar 是否还开着 */
+    /** 一次待删除会话：整笔 + 自己的倒计时 + 提示条是否还开着 */
     private class Session(val entity: TransactionEntity) {
-        var committed: Boolean = false
         var snackbarVisible: Boolean = true
+        var worker: Job? = null
     }
 
     private val mutex = Mutex()
-    private var session: Session? = null
-    private var worker: Job? = null
 
-    private val _pending = MutableStateFlow<TransactionEntity?>(null)
+    /** key = 流水 id。LinkedHashMap 保持发起顺序，发布时倒序即"最新的一笔在前" */
+    private val sessions = LinkedHashMap<Long, Session>()
 
-    /** 当前可撤销的那一笔（null = 没有待撤销的删除）。Snackbar 据此显示 */
-    val pending: StateFlow<TransactionEntity?> = _pending.asStateFlow()
+    private val _pending = MutableStateFlow<List<TransactionEntity>>(emptyList())
 
-    /** 列表与合计据此把这一笔暂时当作不存在 */
-    val pendingId: Flow<Long?> = pending.map { it?.id }
+    /**
+     * 还开着提示条的待删除会话，**最新的在前**。页面取 [firstOrNull] 显示「已删除 …／撤销」；
+     * 这一项消失（窗口结束或已撤销/划掉）时，提示条就该关掉——页面不要自己再定一个时长。
+     */
+    val pending: StateFlow<List<TransactionEntity>> = _pending.asStateFlow()
+
+    private val _pendingIds = MutableStateFlow<Set<Long>>(emptySet())
+
+    /** 列表、合计、余额据此把这几笔当作不存在：所有算钱入口的唯一过滤源 */
+    val pendingIds: StateFlow<Set<Long>> = _pendingIds.asStateFlow()
 
     /**
      * 暂存整笔并开始倒计时。调用后界面立刻看不到它，数据库要等倒计时结束才删。
@@ -64,69 +71,71 @@ class PendingTransactionDeletion(
      */
     suspend fun schedule(entity: TransactionEntity) = withContext(NonCancellable) {
         mutex.withLock {
-            worker?.cancel()
-            worker = null
-            // 上一笔还没撤销就先落定，保证"可撤销的永远只有最后一笔"
-            commitLocked()
-            session = Session(entity)
-            _pending.value = entity
-            worker = scope.launch {
+            // 同一个 id 又进来一次（理论上不会）：按新的一次算，别留下两个倒计时
+            sessions.remove(entity.id)?.worker?.cancel()
+            val session = Session(entity)
+            sessions[entity.id] = session
+            publishLocked()
+            session.worker = scope.launch {
                 delay(undoWindowMs)
-                mutex.withLock { commitLocked() }
+                mutex.withLock { commitLocked(entity.id) }
             }
         }
     }
 
     /**
-     * 撤销删除。返回 true 表示确实撤销了一笔（false = 没有待撤销的删除）。
+     * 撤销某一笔的删除。返回 true 表示确实撤销了；false = 这一笔已经落库，或本来就不在待撤销集合里。
      */
-    suspend fun undo(): Boolean = withContext(NonCancellable) {
+    suspend fun undo(id: Long): Boolean = withContext(NonCancellable) {
         mutex.withLock {
-            val current = session ?: return@withLock false
-            worker?.cancel()
-            worker = null
-            // 已落库才需要恢复；没落库的话数据库里本来就没动过，不必写一次又删一次
-            if (current.committed) repository.restoreTransaction(current.entity)
-            endLocked()
+            val current = sessions[id] ?: return@withLock false
+            // 还没到点：取消倒计时即可，数据库从头到尾没动过
+            current.worker?.cancel()
+            current.worker = null
+            sessions.remove(id)
+            publishLocked()
             true
         }
     }
 
     /**
-     * Snackbar 消失：这一笔不再可撤销。物理删除照旧按倒计时进行，不受影响。
+     * 提示条消失（用户划掉它，或页面换了另一笔）：这一笔不再可撤销。
+     * 物理删除照旧按自己的倒计时进行，不受影响——所以它只是不再出现在 [pending] 里，
+     * [pendingIds] 要留到真正落库才摘掉。
      */
-    suspend fun dismiss() = withContext(NonCancellable) {
+    suspend fun dismiss(id: Long) = withContext(NonCancellable) {
         mutex.withLock {
-            val current = session ?: return@withLock
+            val current = sessions[id] ?: return@withLock
             current.snackbarVisible = false
-            if (current.committed) endLocked()
+            publishLocked()
         }
     }
 
-    /** 等当前这一轮的倒计时 + 落库动作跑完（测试用：倒计时是真实时间） */
+    /** 等所有倒计时 + 落库动作跑完（测试用：倒计时是真实时间） */
     internal suspend fun awaitIdle() {
-        val current = mutex.withLock { worker }
-        current?.join()
+        val jobs = mutex.withLock { sessions.values.mapNotNull { it.worker } }
+        jobs.forEach { it.join() }
     }
 
-    /** 必须在 [mutex] 内调用 */
-    private suspend fun commitLocked() {
-        val current = session ?: return
-        if (current.committed) return
+    /** 必须在 [mutex] 内调用：落库并摘掉这一笔（提示条随之关闭，撤销窗口同时结束） */
+    private suspend fun commitLocked(id: Long) {
+        val current = sessions[id] ?: return
         repository.deleteTransaction(current.entity)
-        current.committed = true
-        // Snackbar 已经关掉就不用留着可撤销状态了
-        if (!current.snackbarVisible) endLocked()
+        sessions.remove(id)
+        publishLocked()
     }
 
     /** 必须在 [mutex] 内调用 */
-    private fun endLocked() {
-        session = null
-        _pending.value = null
+    private fun publishLocked() {
+        _pendingIds.value = sessions.keys.toSet()
+        _pending.value = sessions.values
+            .filter { it.snackbarVisible }
+            .map { it.entity }
+            .asReversed()
     }
 
     companion object {
-        /** 撤销窗口：这段时间内数据库里的原记录还在，撤销只是取消倒计时 */
+        /** 撤销窗口：窗口内撤销只是取消倒计时，窗口结束时落库。它也是「已删除 …／撤销」提示条的存活时间 */
         const val DEFAULT_UNDO_WINDOW_MS: Long = 5_000L
     }
 }

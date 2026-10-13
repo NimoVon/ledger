@@ -11,6 +11,7 @@ import com.nimo.bookkeeping.data.local.toRecordOrNull
 import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.stats.BalanceCalculator
+import com.nimo.bookkeeping.domain.stats.TransactionVisibility
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,21 +54,21 @@ data class AccountsUiState(
 class AccountsViewModel(
     private val repository: LedgerRepository,
     /**
-     * 撤销窗口内那一笔（延迟物理删除，计划 9.2）的 id：数据库里它还在，
-     * 但界面必须当它不存在，否则会显示一个"用户已经删掉"的余额。
+     * 撤销窗口内那几笔（延迟物理删除，计划 9.2）的 id：数据库里它们还在，
+     * 但界面必须当它们不存在，否则会显示一个"用户已经删掉"的余额。
+     * 过滤统一走 [TransactionVisibility]——余额口径只有一处。
      */
-    private val pendingDeletionId: Flow<Long?> = flowOf(null),
+    private val pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
 ) : ViewModel() {
 
     val uiState: StateFlow<AccountsUiState> = combine(
         repository.observeAccounts(),
         repository.observeAllTransactions(),
-        pendingDeletionId,
-    ) { accounts, transactions, pendingId ->
+        pendingDeletionIds,
+    ) { accounts, transactions, pendingDeletionIds ->
         // 非法 occurredOn（绕过校验器的直插，例如备份导入）由 toRecordOrNull 丢弃：
         // 不能让一行脏数据把 stateIn 拖死，页面永远停在加载态。
-        val records = transactions
-            .filter { it.id != pendingId }
+        val records = TransactionVisibility.visible(transactions, pendingDeletionIds)
             .mapNotNull { it.toRecordOrNull() }
         val inputs = accounts.map { it.toBalanceInput() }
         val balances = BalanceCalculator.computeBalances(inputs, records)
@@ -104,9 +105,9 @@ class AccountsViewModel(
     companion object {
         fun factory(
             repository: LedgerRepository,
-            pendingDeletionId: Flow<Long?> = flowOf(null),
+            pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { AccountsViewModel(repository, pendingDeletionId) }
+            initializer { AccountsViewModel(repository, pendingDeletionIds) }
         }
     }
 }

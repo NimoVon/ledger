@@ -52,11 +52,11 @@ import kotlinx.coroutines.launch
 fun AccountsScreen(
     repository: LedgerRepository,
     onBack: () -> Unit,
-    /** 撤销窗口内那一笔的 id：余额要把它剔除，否则显示的是用户已经删掉的钱（计划 9.2） */
-    pendingDeletionId: Flow<Long?> = flowOf(null),
+    /** 撤销窗口内那几笔的 id：余额要把它们剔除，否则显示的是用户已经删掉的钱（计划 9.2） */
+    pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
 ) {
     val viewModel: AccountsViewModel = viewModel(
-        factory = AccountsViewModel.factory(repository, pendingDeletionId),
+        factory = AccountsViewModel.factory(repository, pendingDeletionIds),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()

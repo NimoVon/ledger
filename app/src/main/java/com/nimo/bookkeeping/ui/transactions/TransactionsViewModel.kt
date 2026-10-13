@@ -11,6 +11,7 @@ import com.nimo.bookkeeping.data.local.entity.TransactionEntity
 import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.stats.PeriodSummary
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
+import com.nimo.bookkeeping.domain.stats.TransactionVisibility
 import com.nimo.bookkeeping.util.Dates
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -58,10 +59,11 @@ class TransactionsViewModel(
     private val repository: LedgerRepository,
     private val today: () -> LocalDate = { LocalDate.now() },
     /**
-     * UI 层延迟物理删除（计划 9.2）里正被暂存的那一笔 id：倒计时内它既不在列表也不在合计里。
+     * UI 层延迟物理删除（计划 9.2）里正被暂存的那几笔 id：倒计时内它们既不在列表也不在合计里。
+     * 过滤一律走 [TransactionVisibility]（本页不再自己写一份），以后新页面也不会漏。
      * 默认值表示"没有待删除的暂存"，测试与旧调用点因此不必都接上。
      */
-    private val pendingDeletionId: Flow<Long?> = flowOf(null),
+    private val pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
 ) : ViewModel() {
 
     /** 当前查看的月份：切换只改这个值，查询区间与标签都由它派生 */
@@ -143,10 +145,10 @@ class TransactionsViewModel(
 
     val uiState: StateFlow<TransactionsUiState> = combine(
         timelineInput,
-        pendingDeletionId,
-    ) { input, pendingDeletionId ->
-        // 待删除的那一笔在倒计时内先从界面消失；数据库里它其实还在（计划 9.2 延迟物理删除）
-        val rows = input.rows?.filter { it.id != pendingDeletionId }
+        pendingDeletionIds,
+    ) { input, pendingDeletionIds ->
+        // 待删除的那几笔在倒计时内先从界面消失；数据库里它们其实还在（计划 9.2 延迟物理删除）
+        val rows = input.rows?.let { TransactionVisibility.visible(it, pendingDeletionIds) }
         val accounts = input.accounts
         val categories = input.categories
         // 三样都到位才算"这个月加载完成"：
@@ -185,9 +187,9 @@ class TransactionsViewModel(
     companion object {
         fun factory(
             repository: LedgerRepository,
-            pendingDeletionId: Flow<Long?> = flowOf(null),
+            pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { TransactionsViewModel(repository, pendingDeletionId = pendingDeletionId) }
+            initializer { TransactionsViewModel(repository, pendingDeletionIds = pendingDeletionIds) }
         }
     }
 }

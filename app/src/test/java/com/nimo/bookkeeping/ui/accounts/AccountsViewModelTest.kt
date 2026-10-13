@@ -57,8 +57,8 @@ class AccountsViewModelTest {
         CategoryEntity(name = "餐饮", kind = CategoryKind.EXPENSE, sortOrder = 0),
     )
 
-    private fun newViewModel(pendingDeletionId: Flow<Long?> = flowOf(null)) =
-        AccountsViewModel(repository, pendingDeletionId)
+    private fun newViewModel(pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet())) =
+        AccountsViewModel(repository, pendingDeletionIds)
 
     private suspend fun AccountsViewModel.awaitLoaded(): AccountsUiState = uiState.first { !it.isLoading }
 
@@ -96,18 +96,37 @@ class AccountsViewModelTest {
     fun pendingDeletion_isLeftOutOfBalanceUntilItSettles() = runTest {
         val accountId = repository.createAccount("CMB", AccountType.CASH, 123_400L).getOrThrow()
         val txId = addExpense(accountId, 60_000L)
-        val pending = MutableStateFlow<Long?>(null)
+        val pending = MutableStateFlow<Set<Long>>(emptySet())
         val vm = newViewModel(pending)
 
         assertEquals(63_400L, vm.awaitLoaded().balances[accountId])
 
         // 撤销窗口内：数据库里那一行还在，但余额必须当它不存在（计划 9.2 延迟物理删除）
-        pending.value = txId
+        pending.value = setOf(txId)
         assertEquals(123_400L, vm.awaitBalance(accountId, 123_400L).netWorthCents)
 
         // 撤销/落库后余额要跟着回到正确值
-        pending.value = null
+        pending.value = emptySet()
         assertEquals(63_400L, vm.awaitBalance(accountId, 63_400L).netWorthCents)
+    }
+
+    @Test
+    fun pendingDeletions_twoRowsAtOnce_areBothLeftOutOfTheBalance() = runTest {
+        val accountId = repository.createAccount("CMB", AccountType.CASH, 123_400L).getOrThrow()
+        val first = addExpense(accountId, 60_000L)
+        val second = addExpense(accountId, 10_000L)
+        val pending = MutableStateFlow<Set<Long>>(emptySet())
+        val vm = newViewModel(pending)
+
+        assertEquals(53_400L, vm.awaitLoaded().balances[accountId])
+
+        // 5 秒内连删两笔：两笔都要同时退出余额（多笔并行待撤销）
+        pending.value = setOf(first, second)
+        assertEquals(123_400L, vm.awaitBalance(accountId, 123_400L).netWorthCents)
+
+        // 只撤回其中一笔：另一笔仍要当不存在
+        pending.value = setOf(first)
+        assertEquals(113_400L, vm.awaitBalance(accountId, 113_400L).netWorthCents)
     }
 
     @Test

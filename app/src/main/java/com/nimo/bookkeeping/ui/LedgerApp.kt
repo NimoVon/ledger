@@ -80,18 +80,27 @@ fun LedgerApp(container: AppContainer) {
     // 延迟物理删除（计划 9.2）：删除后立刻从流水消失，「撤销」提示条挂在这里，
     // 倒计时跑在 Application 级作用域上，切页/返回都不会打断它。
     val pendingDeletion = container.pendingTransactionDeletion
-    val pendingDeletionEntity by pendingDeletion.pending.collectAsStateWithLifecycle()
+    val pendingDeletions by pendingDeletion.pending.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(pendingDeletionEntity?.id) {
-        val entity = pendingDeletionEntity ?: return@LaunchedEffect
+    // 提示条只挂最新的一笔；其余几笔的倒计时照旧在跑，撤销是一笔一笔来的。
+    // 时长由状态机定：撤销窗口就是提示条的寿命——窗口结束时这一笔从 pending 里摘掉，
+    // 这里的 key 一变（LaunchedEffect 被取消）提示条随之关闭。页面因此不许再写第二个时长
+    // （原先 Long ≈ 4s 与 5s 的窗口只是碰巧接近，谁都不能保证它们一直对齐）。
+    val undoableDeletion = pendingDeletions.firstOrNull()
+    LaunchedEffect(undoableDeletion?.id) {
+        val entity = undoableDeletion ?: return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
             message = "已删除 " + Money.formatCurrency(entity.amount),
             actionLabel = "撤销",
-            duration = SnackbarDuration.Long,
+            duration = SnackbarDuration.Indefinite,
         )
-        // 点了撤销就撤销；提示条自己消失则只是不再可撤销（物理删除仍按倒计时进行）
-        if (result == SnackbarResult.ActionPerformed) pendingDeletion.undo() else pendingDeletion.dismiss()
+        // 点了撤销就撤销这一笔；提示条被划掉则只是不再可撤销（物理删除仍按倒计时进行）
+        if (result == SnackbarResult.ActionPerformed) {
+            pendingDeletion.undo(entity.id)
+        } else {
+            pendingDeletion.dismiss(entity.id)
+        }
     }
 
     Scaffold(
@@ -138,7 +147,7 @@ fun LedgerApp(container: AppContainer) {
                             launchSingleTop = true
                         }
                     },
-                    pendingDeletionId = pendingDeletion.pendingId,
+                    pendingDeletionIds = pendingDeletion.pendingIds,
                 )
             }
             composable(TopDestination.REPORTS.route) { ReportsScreen() }
@@ -152,8 +161,8 @@ fun LedgerApp(container: AppContainer) {
                 AccountsScreen(
                     repository = container.repository,
                     onBack = { navController.popBackStack() },
-                    // 撤销窗口内那一笔数据库里还在：账户余额要和流水页一样当它不存在（计划 9.2）
-                    pendingDeletionId = pendingDeletion.pendingId,
+                    // 撤销窗口内那几笔数据库里还在：账户余额要和流水页一样当它们不存在（计划 9.2）
+                    pendingDeletionIds = pendingDeletion.pendingIds,
                 )
             }
             composable(

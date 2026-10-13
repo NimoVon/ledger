@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -117,7 +118,7 @@ class TransactionEditDeleteTest {
     private fun newStore() = PendingTransactionDeletion(repository, storeScope, undoWindowMs)
 
     private fun newViewModel(store: PendingTransactionDeletion) =
-        TransactionsViewModel(repository, today = { today }, pendingDeletionId = store.pendingId)
+        TransactionsViewModel(repository, today = { today }, pendingDeletionIds = store.pendingIds)
 
     private suspend fun TransactionsViewModel.awaitLoaded(): TransactionsUiState =
         uiState.first { !it.isLoading }
@@ -239,19 +240,19 @@ class TransactionEditDeleteTest {
         store.schedule(entityOf(second)!!)
         vm.awaitState { idsOf(it) == listOf(first) }
 
-        assertTrue(store.undo())
+        assertTrue(store.undo(second))
 
         val back = vm.awaitState { idsOf(it) == listOf(second, first) }
         assertEquals(3_500L, back.summary.expenseCents)
         assertEquals(listOf(second, first), idsOf(back))
         assertEquals("午餐", back.groups.single().rows.first().note)
-        assertNull(store.pending.value)
+        assertTrue(store.pending.value.isEmpty())
         // 没落过库：整笔连 updatedAt 都没变
         assertEquals(3_500L, summaryFromDatabase().expenseCents)
     }
 
     @Test
-    fun deleteAfterTimeout_thenUndo_restoresByOriginalIdWithoutReordering() = runTest {
+    fun deleteAfterTimeout_settlesAndTheRowIsGoneForGood() = runTest {
         seed()
         val first = addExpense(1_000L, note = "早餐")
         val second = addExpense(2_500L, note = "午餐")
@@ -268,12 +269,12 @@ class TransactionEditDeleteTest {
         val afterDelete = vm.awaitState { idsOf(it) == listOf(third, first) }
         assertEquals(1_300L, afterDelete.summary.expenseCents)
 
-        // 撤销：按原 id 恢复整笔，位置与合计都回到删除前
-        assertTrue(store.undo())
-        val restored = vm.awaitState { it.summary.expenseCents == 3_800L }
-        assertEquals(listOf(third, second, first), idsOf(restored))
-        assertEquals(3_800L, restored.summary.expenseCents)
-        assertEquals("午餐", restored.groups.single().rows[1].note)
-        assertEquals(3_800L, summaryFromDatabase().expenseCents)
+        // 撤销窗口和提示条一起结束：这一笔已经物理删除，撤销不再有效，
+        // 列表停在删除后的样子（不再有"按原 id 恢复"这条窗口外的路径）
+        assertFalse(store.undo(second))
+        assertEquals(listOf(third, first), idsOf(afterDelete))
+        assertEquals(1_300L, afterDelete.summary.expenseCents)
+        assertEquals(1_300L, summaryFromDatabase().expenseCents)
+        assertEquals(null, entityOf(second))
     }
 }

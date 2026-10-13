@@ -48,16 +48,16 @@ import com.nimo.bookkeeping.util.Money
  * 点某一行进入「记一笔」的编辑模式（F03 修改）；删除入口也在那一页，
  * 删除后这一行会立刻消失、合计立刻回退，底部提示条里可撤销（计划 9.2 延迟物理删除）。
  *
- * @param pendingDeletionId 正被暂存待删除的那一笔 id：倒计时内它不在列表也不在合计里
+ * @param pendingDeletionIds 正被暂存待删除的那几笔 id：倒计时内它们不在列表也不在合计里
  */
 @Composable
 fun TransactionsScreen(
     repository: LedgerRepository,
     onTransactionClick: (Long) -> Unit = {},
-    pendingDeletionId: Flow<Long?> = flowOf(null),
+    pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
 ) {
     val viewModel: TransactionsViewModel =
-        viewModel(factory = TransactionsViewModel.factory(repository, pendingDeletionId))
+        viewModel(factory = TransactionsViewModel.factory(repository, pendingDeletionIds))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
