@@ -36,16 +36,28 @@ import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.ui.LedgerIcons
 import com.nimo.bookkeeping.ui.components.EmptyState
 import com.nimo.bookkeeping.util.Money
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 /**
  * 账户管理（F01）：列表 / 新建 / 编辑 / 归档（归档不删除历史数据）。
- * 余额不在此列显示推导值——账户列表展示"初始余额"，推导余额随流水页一起做。
+ *
+ * 列表展示的是**当前余额**：初始余额 + 全部交易变动，由 [AccountsViewModel] 交给
+ * BalanceCalculator 推导（铁律 2）。初始余额只在编辑对话框里出现——它是建账当时的快照，
+ * 直接当余额显示会让用户看到一个"没有跟着记账变化"的数字。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccountsScreen(repository: LedgerRepository, onBack: () -> Unit) {
-    val viewModel: AccountsViewModel = viewModel(factory = AccountsViewModel.factory(repository))
+fun AccountsScreen(
+    repository: LedgerRepository,
+    onBack: () -> Unit,
+    /** 撤销窗口内那一笔的 id：余额要把它剔除，否则显示的是用户已经删掉的钱（计划 9.2） */
+    pendingDeletionId: Flow<Long?> = flowOf(null),
+) {
+    val viewModel: AccountsViewModel = viewModel(
+        factory = AccountsViewModel.factory(repository, pendingDeletionId),
+    )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
@@ -98,8 +110,16 @@ fun AccountsScreen(repository: LedgerRepository, onBack: () -> Unit) {
             )
 
             else -> LazyColumn(modifier = contentModifier) {
+                item(key = "netWorth") {
+                    NetWorthRow(netWorthCents = state.netWorthCents)
+                    HorizontalDivider()
+                }
                 items(state.accounts, key = { it.id }) { account ->
-                    AccountRow(account = account, onClick = { openDialog(account) })
+                    AccountRow(
+                        account = account,
+                        balanceCents = state.balanceOf(account),
+                        onClick = { openDialog(account) },
+                    )
                     HorizontalDivider()
                 }
             }
@@ -141,8 +161,23 @@ fun AccountsScreen(repository: LedgerRepository, onBack: () -> Unit) {
     }
 }
 
+/** 净资产合计：只统计"计入净资产"的账户（信用卡欠款以负余额体现，计划 3.4） */
 @Composable
-private fun AccountRow(account: AccountEntity, onClick: () -> Unit) {
+private fun NetWorthRow(netWorthCents: Long) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(text = "净资产", style = MaterialTheme.typography.bodySmall)
+        Text(text = Money.formatCurrency(netWorthCents), style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+@Composable
+private fun AccountRow(account: AccountEntity, balanceCents: Long, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -158,8 +193,9 @@ private fun AccountRow(account: AccountEntity, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+        // 当前余额（推导值），不是建账时的初始余额
         Text(
-            text = Money.formatCurrency(account.initialBalance),
+            text = Money.formatCurrency(balanceCents),
             style = MaterialTheme.typography.bodyLarge,
         )
     }

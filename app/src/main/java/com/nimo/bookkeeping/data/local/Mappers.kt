@@ -33,6 +33,14 @@ fun TransactionEntity.toRecord(): TransactionRecord = TransactionRecord(
     occurredOn = LocalDate.parse(occurredOn),
 )
 
+/**
+ * 容错版 [toRecord]：occurredOn 不是合法 ISO 日期时返回 null，而不是抛异常。
+ * 统计、合计、余额这类"必须活着"的流一律用它——裸 [toRecord] 会在 LocalDate.parse 抛异常，
+ * 把上层的 combine/stateIn 一起带走（流水页曾因此永远停在加载态）。
+ */
+fun TransactionEntity.toRecordOrNull(): TransactionRecord? =
+    runCatching { toRecord() }.getOrNull()
+
 fun AccountEntity.toBalanceInput(): AccountBalanceInput =
     AccountBalanceInput(id = id, initialBalanceCents = initialBalance, includeInTotal = includeInTotal)
 

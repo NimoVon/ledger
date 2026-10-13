@@ -152,6 +152,8 @@ fun LedgerApp(container: AppContainer) {
                 AccountsScreen(
                     repository = container.repository,
                     onBack = { navController.popBackStack() },
+                    // 撤销窗口内那一笔数据库里还在：账户余额要和流水页一样当它不存在（计划 9.2）
+                    pendingDeletionId = pendingDeletion.pendingId,
                 )
             }
             composable(

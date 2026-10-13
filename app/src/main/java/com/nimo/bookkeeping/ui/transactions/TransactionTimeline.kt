@@ -3,7 +3,7 @@ package com.nimo.bookkeeping.ui.transactions
 import com.nimo.bookkeeping.data.local.entity.AccountEntity
 import com.nimo.bookkeeping.data.local.entity.CategoryEntity
 import com.nimo.bookkeeping.data.local.entity.TransactionEntity
-import com.nimo.bookkeeping.data.local.toRecord
+import com.nimo.bookkeeping.data.local.toRecordOrNull
 import com.nimo.bookkeeping.domain.model.TransactionRecord
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
@@ -166,5 +166,5 @@ object TransactionTimeline {
      * 记为 internal 是为了让 ViewModel 的月度合计复用同一份保护，避免两处口径分叉。
      */
     internal fun toRecords(rows: List<TransactionEntity>): List<TransactionRecord> =
-        rows.mapNotNull { runCatching { it.toRecord() }.getOrNull() }
+        rows.mapNotNull { it.toRecordOrNull() }
 }

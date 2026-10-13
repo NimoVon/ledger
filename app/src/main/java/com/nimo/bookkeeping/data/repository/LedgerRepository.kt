@@ -50,6 +50,12 @@ class LedgerRepository(private val db: AppDatabase) {
         txDao.observeBetween(from, to)
 
     /**
+     * 全量流水（所有历史，不按月裁剪）：账户当前余额要的是"全部变动"。
+     * 余额算法仍然只有 domain/stats/BalanceCalculator 一处（铁律 2），这里只提供输入。
+     */
+    fun observeAllTransactions(): Flow<List<TransactionEntity>> = txDao.observeAll()
+
+    /**
      * 读单笔（编辑页预填用）。UI 不直接访问 DAO，读取同样经 Repository（计划 4.3）。
      * 返回 null 表示这一笔已不存在（例如别处已删除）。
      */
