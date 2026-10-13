@@ -9,6 +9,7 @@ import com.nimo.bookkeeping.data.local.entity.TransactionEntity
 import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.model.CategoryKind
 import com.nimo.bookkeeping.domain.model.TransactionType
+import com.nimo.bookkeeping.domain.filter.TransactionFilter
 import com.nimo.bookkeeping.domain.stats.BalanceCalculator
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
 import com.nimo.bookkeeping.data.local.entity.BudgetEntity
@@ -48,43 +49,7 @@ class TenThousandBenchmark {
 
     @Test
     fun balanceAggregation_10kTransactions_underBudget() = runTest {
-        // 准备：2 账户 + 2 分类
-        db.accountDao().upsert(AccountEntity(name = "银行", type = AccountType.DEBIT, initialBalance = 5000000, createdAt = 1, updatedAt = 1))
-        db.accountDao().upsert(AccountEntity(name = "现金", type = AccountType.CASH, initialBalance = 50000, createdAt = 1, updatedAt = 1))
-        db.categoryDao().upsert(CategoryEntity(name = "餐饮", kind = CategoryKind.EXPENSE))
-        db.categoryDao().upsert(CategoryEntity(name = "工资", kind = CategoryKind.INCOME))
-
-        // 批量插入 1 万笔（跨 14 个月，验证范围查询）
-        val start = System.currentTimeMillis()
-        val baseDate = LocalDate.of(2025, 9, 1)
-        db.openHelper.writableDatabase.beginTransaction()
-        try {
-            for (i in 1..10_000) {
-                val date = baseDate.plusDays((i % 420).toLong())
-                val type = when (i % 10) {
-                    0 -> "INCOME"
-                    1, 2 -> "TRANSFER"
-                    else -> "EXPENSE"
-                }
-                db.openHelper.writableDatabase.execSQL(
-                    "INSERT INTO transactions (type, amount, accountId, toAccountId, categoryId, occurredOn, note, createdAt, updatedAt) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, NULL, 0, 0)",
-                    arrayOf<Any?>(
-                        type,
-                        (i % 500 + 1).toLong(),
-                        1L,
-                        if (type == "TRANSFER") 2L else null,
-                        if (type == "EXPENSE" || type == "INCOME") (if (type == "INCOME") 2L else 1L) else null,
-                        date.toString(),
-                    ),
-                )
-            }
-            db.openHelper.writableDatabase.setTransactionSuccessful()
-        } finally {
-            db.openHelper.writableDatabase.endTransaction()
-        }
-        assertEquals(10_000, db.transactionDao().count())
-        val insertMs = System.currentTimeMillis() - start
+        val insertMs = seed10k()
 
         // 基准 1：单月范围查询（走 idx(type, occurredOn)）
         val t1 = System.currentTimeMillis()
@@ -117,5 +82,86 @@ class TenThousandBenchmark {
         // Robolectric 宽松上限（真机远快于此）
         assertTrue("单月查询 ${monthQueryMs}ms 超标", monthQueryMs < 2_000)
         assertTrue("余额聚合 ${balanceMs}ms 超标", balanceMs < 2_000)
+    }
+
+    /**
+     * 播 1 万笔种子（跨 14 个月）：2 账户、3 分类（餐饮 1 / 工资 2 / 餐饮的子分类「早餐」3），每 7 笔 1 笔备注 coffee。
+     * 返回插入耗时（毫秒）。所有基准共用同一份数据——改这里等于改所有基准。
+     */
+    private suspend fun seed10k(): Long {
+        db.accountDao().upsert(AccountEntity(name = "银行", type = AccountType.DEBIT, initialBalance = 5000000, createdAt = 1, updatedAt = 1))
+        db.accountDao().upsert(AccountEntity(name = "现金", type = AccountType.CASH, initialBalance = 50000, createdAt = 1, updatedAt = 1))
+        db.categoryDao().upsert(CategoryEntity(name = "餐饮", kind = CategoryKind.EXPENSE))
+        db.categoryDao().upsert(CategoryEntity(name = "工资", kind = CategoryKind.INCOME))
+        db.categoryDao().upsert(CategoryEntity(name = "早餐", kind = CategoryKind.EXPENSE, parentId = 1L))
+        val start = System.currentTimeMillis()
+        val baseDate = LocalDate.of(2025, 9, 1)
+        db.openHelper.writableDatabase.beginTransaction()
+        try {
+            for (i in 1..10_000) {
+                val date = baseDate.plusDays((i % 420).toLong())
+                val type = when (i % 10) {
+                    0 -> "INCOME"
+                    1, 2 -> "TRANSFER"
+                    else -> "EXPENSE"
+                }
+                db.openHelper.writableDatabase.execSQL(
+                    "INSERT INTO transactions (type, amount, accountId, toAccountId, categoryId, occurredOn, note, createdAt, updatedAt) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)",
+                    arrayOf<Any?>(
+                        type,
+                        (i % 500 + 1).toLong(),
+                        1L,
+                        if (type == "TRANSFER") 2L else null,
+                        when {
+                            type == "INCOME" -> 2L
+                            type == "EXPENSE" -> if (i % 3 == 0) 3L else 1L
+                            else -> null
+                        },
+                        date.toString(),
+                        if (i % 7 == 0) "coffee" else null,
+                    ),
+                )
+            }
+            db.openHelper.writableDatabase.setTransactionSuccessful()
+        } finally {
+            db.openHelper.writableDatabase.endTransaction()
+        }
+        assertEquals(10_000, db.transactionDao().count())
+        return System.currentTimeMillis() - start
+    }
+
+    @Test
+    fun filterAndStats_10kTransactions_underBudget() = runTest {
+        seed10k()
+        // 计划 6.2：1 万笔交易下的筛选与统计口径切换要有预算。这里走真口径：
+        // 日期区间（命中索引）→ TransactionFilter.matches（父分类连子分类）→ StatsCalculator。
+        val filter = TransactionFilter(
+            accountIds = setOf(1L),
+            categoryIds = setOf(1L),
+            minAmountCents = 100,
+            maxAmountCents = 400,
+            noteKeyword = "coffee",
+            from = LocalDate.of(2025, 9, 1),
+            to = LocalDate.of(2026, 10, 25),
+        )
+        val parentIds = mapOf(3L to 1L)
+        val (from, to) = filter.queryBounds()!!
+
+        val t0 = System.currentTimeMillis()
+        val rows = db.transactionDao().observeBetween(from, to).first()
+        val filtered = rows.map { it.toRecord() }.filter { filter.matches(it, parentIds) }
+        val summary = StatsCalculator.summarize(filtered)
+        val totalMs = System.currentTimeMillis() - t0
+
+        println("BENCHMARK-FILTER: rangeQuery(${rows.size}笔) 筛选后(${filtered.size}笔) 支出=${summary.expenseCents}分 合计=${totalMs}ms")
+
+        assertTrue("筛选应命中数据: ${filtered.size}", filtered.isNotEmpty())
+        assertTrue("父分类命中应含子分类「早餐」的行", filtered.any { it.categoryId == 3L })
+        assertEquals(
+            filtered.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountCents },
+            summary.expenseCents,
+        )
+        assertTrue("筛选+统计 ${totalMs}ms 超标", totalMs < 2_000)
     }
 }
