@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.nimo.bookkeeping.data.backup.AutoBackupInfo
 import com.nimo.bookkeeping.data.backup.AutoBackupStore
 import com.nimo.bookkeeping.data.backup.BackupFileIO
 import com.nimo.bookkeeping.data.repository.BackupRepository
@@ -39,14 +41,16 @@ import com.nimo.bookkeeping.domain.backup.CsvImportOutcome
 import com.nimo.bookkeeping.domain.backup.CsvRowProblem
 import com.nimo.bookkeeping.ui.transactions.PendingTransactionDeletion
 import java.io.IOException
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 设置页的「备份与恢复」（F08c，计划 4.5/4.6）。
+ * 设置页的「导入与导出」（F08c，计划 4.5/4.6）。
  *
  * 四条入口：导出 JSON（完整备份）、导出 CSV（4 个文件，Excel 直开）、
  * 导入 JSON（覆盖替换：整机数据被文件覆盖）、导入 CSV（增量合并）。
@@ -54,7 +58,8 @@ import kotlinx.coroutines.withContext
  * - 全部走 SAF，只要用户给出的 URI，不假定有真实文件路径（4.6 文件权限）；
  * - 导出前先说明文件里有什么（4.5：导出前说明内容）；
  * - 导入 JSON（覆盖替换）前说明"替换而不是追加"，并要求用户在弹窗里确认（4.6 恢复策略）；
- * - 导入 JSON 前先写自动备份，自动备份失败就中止、原数据不动（4.6 恢复前）。
+ * - 导入 JSON 前先写自动备份，自动备份失败就中止、原数据不动（4.6 恢复前）；
+ * - 自动备份只保留最近 [AutoBackupStore.MAX_KEPT_FILES] 份并在界面上显示"最近一次"，长期备份只认「导出 JSON」。
  *
  * 这里只做"选位置 / 读字节 / 报告结果"，编解码与落库都在 [BackupRepository]，
  * 所以危险动作的顺序由可单测的那一层决定，UI 不参与判断。
@@ -77,6 +82,13 @@ fun BackupSettingsSection(
     var importCandidateName by remember { mutableStateOf("") }
     var explainImport by remember { mutableStateOf(false) }
     var importOutcome by remember { mutableStateOf<CsvImportOutcome?>(null) }
+    var lastAutoBackup by remember { mutableStateOf<AutoBackupInfo?>(null) }
+    var autoBackupRefresh by remember { mutableStateOf(0) }
+
+    // 最近一次自动备份：首次进入读一次，导入成功后（那一刻会写一份新的）再读一次
+    LaunchedEffect(autoBackupRefresh) {
+        lastAutoBackup = withContext(Dispatchers.IO) { autoBackupStore.latestInfo() }
+    }
 
     /** 导出 JSON：让用户选一个新文件（系统负责重名与覆盖确认），再写字节 */
     val jsonExport = rememberLauncherForActivityResult(
@@ -212,7 +224,15 @@ fun BackupSettingsSection(
 
         Text(
             text = "「导入 JSON（覆盖替换）」前会自动把当前数据备份到应用私有目录（" + autoBackupStore.directoryPath +
-                "）；该目录随应用卸载一起删除，长期备份请用「导出 JSON」。",
+                "），只保留最近 " + AutoBackupStore.MAX_KEPT_FILES + " 份，更早的自动清理；" +
+                "该目录随应用卸载一起删除，长期备份请用「导出 JSON」。",
+            style = MaterialTheme.typography.bodySmall,
+        )
+
+        Text(
+            text = lastAutoBackup?.let {
+                "最近一次自动备份：" + formatBackupTime(it.timestamp) + "（" + formatBytes(it.sizeBytes) + "）"
+            } ?: "还没有自动备份（第一次导入 JSON 时会自动生成）。",
             style = MaterialTheme.typography.bodySmall,
         )
 
@@ -352,6 +372,7 @@ fun BackupSettingsSection(
                             .onSuccess {
                                 status = "已导入：" + counts(candidate) +
                                     (autoBackupName?.let { "；导入前的数据已自动备份为 " + it } ?: "")
+                                autoBackupRefresh++
                             }
                             .onFailure { errorText = "导入失败：" + describe(it) + "\n当前数据未被改动。" }
                     }
@@ -413,6 +434,16 @@ private fun writtenSummary(outcome: CsvImportOutcome): String =
 /** 汇总行的行号是 0，不带文件名；其余带「文件 第 N 行」 */
 private fun CsvRowProblem.describeLine(): String =
     if (line > 0) file + " 第 " + line + " 行：" + reason else reason
+
+/** 自动备份的时间戳 → 本地时间「2026-10-13 23:41」 */
+private fun formatBackupTime(timestamp: Long): String =
+    LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+
+/** 备份文件大小：1 KB 以下按字节显示（自动备份通常只有几 KB，两位小数没意义） */
+private fun formatBytes(bytes: Long): String =
+    if (bytes < 1024L) bytes.toString() + " B"
+    else String.format(java.util.Locale.US, "%.1f KB", bytes / 1024.0)
 
 private fun defaultBackupFileName(): String =
     "ledger-backup-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".json"

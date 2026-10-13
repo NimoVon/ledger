@@ -62,7 +62,7 @@ fun SettingsScreen(container: AppContainer, onOpenAccounts: () -> Unit) {
             Text(text = "›", style = MaterialTheme.typography.titleMedium)
         }
         HorizontalDivider()
-        Text(text = "备份与恢复", style = MaterialTheme.typography.titleMedium)
+        Text(text = "导入与导出", style = MaterialTheme.typography.titleMedium)
         BackupSettingsSection(
             backupRepository = container.backupRepository,
             autoBackupStore = container.autoBackupStore,

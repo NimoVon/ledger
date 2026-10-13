@@ -18,6 +18,9 @@ import kotlinx.coroutines.withContext
  */
 class AutoBackupStore(
     private val directory: File,
+    /** 保留份数上限：自动备份是"刚刚那次覆盖之前的救命副本"，不是长期存档（长期靠「导出 JSON」） */
+    private val maxKeptFiles: Int = MAX_KEPT_FILES,
+    // clock 必须是最后一个参数：调用方习惯用尾随 lambda 传时钟（AutoBackupStore(dir) { now }）
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
@@ -45,20 +48,56 @@ class AutoBackupStore(
         } finally {
             if (temp.exists()) temp.delete()
         }
+        pruneOldEntries()
         target
     }
 
-    /** 已有的自动备份，最新的在前（目录不存在或读不了时返回空表，不抛） */
+    /**
+     * 已有的自动备份，最新的在前（目录不存在或读不了时返回空表，不抛）。
+     *
+     * 按**解析出来的时间戳**排，不按文件名字符串排：时间戳位数不一样时
+     * （restore-9000.json vs restore-24000.json）字符串序会把旧的排到前面，
+     * latest() 与"只留最近 N 份"的清理都会跟着错。
+     */
     fun list(): List<File> =
         (directory.listFiles { file: File -> file.isFile && file.name.startsWith(PREFIX) && file.name.endsWith(SUFFIX) }
             ?: emptyArray())
-            .sortedByDescending { it.name }
+            .sortedByDescending { timestampOf(it) }
 
     /** 最近一次自动备份 */
     fun latest(): File? = list().firstOrNull()
 
-    private companion object {
-        const val PREFIX = "restore-"
-        const val SUFFIX = ".json"
+    /** 最近一次自动备份的时间与大小（给设置页显示"上次自动备份是什么时候"） */
+    fun latestInfo(): AutoBackupInfo? = latest()?.let { file ->
+        AutoBackupInfo(name = file.name, timestamp = timestampOf(file), sizeBytes = file.length())
+    }
+
+    /**
+     * 只保留最新的 [maxKeptFiles] 份，更旧的删掉。
+     *
+     * 刻意"尽力而为"：备份本体已经写成功了，删旧文件失败（别的进程占着、目录没有删权限）
+     * 不该反过来让用户的导入失败 —— 多留几份备份不会害人，导入被拦下来才会。
+     */
+    private fun pruneOldEntries() {
+        list().drop(maxKeptFiles).forEach { it.delete() }
+    }
+
+    /** 文件名里的时间戳；名字被人改过就退回文件修改时间 */
+    private fun timestampOf(file: File): Long =
+        file.name.removePrefix(PREFIX).removeSuffix(SUFFIX).toLongOrNull() ?: file.lastModified()
+
+    companion object {
+        /** 自动备份保留份数上限 */
+        const val MAX_KEPT_FILES: Int = 20
+
+        private const val PREFIX = "restore-"
+        private const val SUFFIX = ".json"
     }
 }
+
+/** 一份自动备份的元信息（文件名、时间戳、字节数），供界面如实显示"最近一次" */
+data class AutoBackupInfo(
+    val name: String,
+    val timestamp: Long,
+    val sizeBytes: Long,
+)
