@@ -48,12 +48,13 @@ import kotlinx.coroutines.withContext
 /**
  * 设置页的「备份与恢复」（F08c，计划 4.5/4.6）。
  *
- * 三条入口：导出 JSON（完整备份）、导出 CSV（4 个文件，Excel 直开）、从备份恢复（替换模式）。
+ * 四条入口：导出 JSON（完整备份）、导出 CSV（4 个文件，Excel 直开）、
+ * 导入 JSON（覆盖替换：整机数据被文件覆盖）、导入 CSV（增量合并）。
  * 规则按计划执行：
  * - 全部走 SAF，只要用户给出的 URI，不假定有真实文件路径（4.6 文件权限）；
  * - 导出前先说明文件里有什么（4.5：导出前说明内容）；
- * - 恢复前说明"替换而不是追加"，并要求用户在弹窗里确认（4.6 恢复策略）；
- * - 恢复前先写自动备份，自动备份失败就中止、原数据不动（4.6 恢复前）。
+ * - 导入 JSON（覆盖替换）前说明"替换而不是追加"，并要求用户在弹窗里确认（4.6 恢复策略）；
+ * - 导入 JSON 前先写自动备份，自动备份失败就中止、原数据不动（4.6 恢复前）。
  *
  * 这里只做"选位置 / 读字节 / 报告结果"，编解码与落库都在 [BackupRepository]，
  * 所以危险动作的顺序由可单测的那一层决定，UI 不参与判断。
@@ -72,8 +73,8 @@ fun BackupSettingsSection(
     var status by remember { mutableStateOf<String?>(null) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var explainExport by remember { mutableStateOf<ExportKind?>(null) }
-    var restoreCandidate by remember { mutableStateOf<BackupFile?>(null) }
-    var restoreCandidateName by remember { mutableStateOf("") }
+    var importCandidate by remember { mutableStateOf<BackupFile?>(null) }
+    var importCandidateName by remember { mutableStateOf("") }
     var explainImport by remember { mutableStateOf(false) }
     var importOutcome by remember { mutableStateOf<CsvImportOutcome?>(null) }
 
@@ -155,12 +156,12 @@ fun BackupSettingsSection(
         }
     }
 
-    /** 从备份恢复：先读文件、再解码校验，校验不过连确认框都不弹 */
-    val restorePicker = rememberLauncherForActivityResult(
+    /** 导入 JSON（覆盖替换）：先读文件、再解码校验，校验不过连确认框都不弹 */
+    val jsonImport = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri == null) {
-            status = "已取消恢复"
+            status = "已取消导入"
             return@rememberLauncherForActivityResult
         }
         scope.launch {
@@ -171,12 +172,12 @@ fun BackupSettingsSection(
                 .onSuccess { text ->
                     when (val decoded = BackupCodec.decode(text)) {
                         is BackupDecodeResult.Success -> {
-                            restoreCandidate = decoded.file
-                            restoreCandidateName = uri.lastPathSegment?.substringAfterLast('/') ?: "所选文件"
+                            importCandidate = decoded.file
+                            importCandidateName = uri.lastPathSegment?.substringAfterLast('/') ?: "所选文件"
                         }
 
                         is BackupDecodeResult.Failure -> {
-                            errorText = "这个备份文件不能用：\n" + decoded.errors.joinToString("\n")
+                            errorText = "这个 JSON 备份文件不能用：\n" + decoded.errors.joinToString("\n")
                         }
                     }
                 }
@@ -187,7 +188,7 @@ fun BackupSettingsSection(
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         BackupRow(
             title = "导出 JSON 完整备份",
-            subtitle = "账户、分类、每笔交易、预算；可用来以后恢复",
+            subtitle = "账户、分类、每笔交易、预算；以后可以用「导入 JSON」装回来",
             enabled = !busy,
         ) { explainExport = ExportKind.JSON }
 
@@ -198,10 +199,10 @@ fun BackupSettingsSection(
         ) { explainExport = ExportKind.CSV }
 
         BackupRow(
-            title = "从备份恢复",
-            subtitle = "用备份文件替换本机现有的全部数据（不是追加）",
+            title = "导入 JSON（覆盖替换）",
+            subtitle = "选中一个 JSON 备份：整机数据被它覆盖替换（不是追加）",
             enabled = !busy,
-        ) { restorePicker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
+        ) { jsonImport.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
 
         BackupRow(
             title = "导入 CSV（增量合并）",
@@ -210,7 +211,7 @@ fun BackupSettingsSection(
         ) { explainImport = true }
 
         Text(
-            text = "恢复前会自动把当前数据备份到应用私有目录（" + autoBackupStore.directoryPath +
+            text = "「导入 JSON（覆盖替换）」前会自动把当前数据备份到应用私有目录（" + autoBackupStore.directoryPath +
                 "）；该目录随应用卸载一起删除，长期备份请用「导出 JSON」。",
             style = MaterialTheme.typography.bodySmall,
         )
@@ -273,7 +274,7 @@ fun BackupSettingsSection(
                         "· 文件里的 id 本机已经有 → 覆盖那一行；\n" +
                         "· 文件里的 id 本机没有 → 追加成一行新的；\n" +
                         "· 本机独有的数据不会被删除。\n\n" +
-                        "如果你要导入的是一份全新数据，请先用「从备份恢复」清空本机数据，" +
+                        "如果你要导入的是一份全新数据，请先用「导入 JSON（覆盖替换）」清空本机数据，" +
                         "否则新旧数据会混在一起。\n" +
                         "看不明白的行会跳过，导入完成后会告诉你是哪个文件的第几行、为什么。",
                 )
@@ -318,26 +319,26 @@ fun BackupSettingsSection(
         )
     }
 
-    // 恢复确认：把"替换掉什么、替换成什么"说清楚，再让用户按下去
-    restoreCandidate?.let { candidate ->
+    // 导入 JSON 确认：把"替换掉什么、替换成什么"说清楚，再让用户按下去
+    importCandidate?.let { candidate ->
         AlertDialog(
-            onDismissRequest = { restoreCandidate = null },
-            title = { Text(text = "恢复会替换当前全部数据") },
+            onDismissRequest = { importCandidate = null },
+            title = { Text(text = "导入会覆盖替换当前全部数据") },
             text = {
                 Text(
-                    text = "备份文件：" + restoreCandidateName + "\n" +
+                    text = "JSON 文件：" + importCandidateName + "\n" +
                         "将写入：" + counts(candidate) + "\n\n" +
-                        "这会「替换」本机现有的全部数据（不是追加，当前数据不会保留）。" +
-                        "确定后先把当前数据写成自动备份；自动备份失败会中止恢复，原数据不动。",
+                        "这会「覆盖替换」本机现有的全部数据（不是追加，当前数据不会保留）。" +
+                        "确定后先把当前数据写成自动备份；自动备份失败会中止导入，原数据不动。",
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    restoreCandidate = null
+                    importCandidate = null
                     scope.launch {
                         busy = true
                         // 待撤销的删除里那几笔 id 可能在新数据里属于另一笔交易：
-                        // 恢复前整批取消倒计时，失败则把整笔重新排期（不丢用户那次删除）
+                        // 导入前整批取消倒计时，失败则把整笔重新排期（不丢用户那次删除）
                         val cancelled = pendingDeletion.cancelAll()
                         var autoBackupName: String? = null
                         val result = backupRepository.restore(candidate) { snapshot ->
@@ -349,15 +350,15 @@ fun BackupSettingsSection(
                         busy = false
                         result
                             .onSuccess {
-                                status = "已恢复：" + counts(candidate) +
-                                    (autoBackupName?.let { "；恢复前的数据已自动备份为 " + it } ?: "")
+                                status = "已导入：" + counts(candidate) +
+                                    (autoBackupName?.let { "；导入前的数据已自动备份为 " + it } ?: "")
                             }
-                            .onFailure { errorText = "恢复失败：" + describe(it) + "\n当前数据未被改动。" }
+                            .onFailure { errorText = "导入失败：" + describe(it) + "\n当前数据未被改动。" }
                     }
-                }) { Text(text = "替换并恢复") }
+                }) { Text(text = "替换并导入") }
             },
             dismissButton = {
-                TextButton(onClick = { restoreCandidate = null }) { Text(text = "取消") }
+                TextButton(onClick = { importCandidate = null }) { Text(text = "取消") }
             },
         )
     }
