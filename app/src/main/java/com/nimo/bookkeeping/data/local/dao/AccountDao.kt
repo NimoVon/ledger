@@ -27,6 +27,13 @@ interface AccountDao {
     @Upsert
     suspend fun upsert(account: AccountEntity): Long
 
+    /** 备份恢复用：带显式 id 整体写入（不走 autoGenerate，也不做 upsert 掩盖冲突） */
+    @Insert
+    suspend fun insertAll(items: List<AccountEntity>)
+
+    @Query("DELETE FROM accounts")
+    suspend fun deleteAll()
+
     @Query("UPDATE accounts SET isArchived = :archived, updatedAt = :updatedAt WHERE id = :id")
     suspend fun setArchived(id: Long, archived: Boolean, updatedAt: Long)
 

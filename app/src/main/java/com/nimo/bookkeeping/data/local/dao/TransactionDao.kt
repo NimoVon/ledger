@@ -23,6 +23,10 @@ interface TransactionDao {
     )
     fun observeBetween(from: String, to: String): Flow<List<TransactionEntity>>
 
+    /** 备份导出用的一次性全量读取（不走 Flow，导出要的是一次快照） */
+    @Query("SELECT * FROM transactions ORDER BY occurredOn DESC, id DESC")
+    suspend fun listAll(): List<TransactionEntity>
+
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun getById(id: Long): TransactionEntity?
 
@@ -34,6 +38,13 @@ interface TransactionDao {
 
     @Delete
     suspend fun delete(tx: TransactionEntity)
+
+    /** 备份恢复用：带显式 id 整体写入 */
+    @Insert
+    suspend fun insertAll(items: List<TransactionEntity>)
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAll()
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int

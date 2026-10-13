@@ -1,6 +1,7 @@
 package com.nimo.bookkeeping.data.local.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Upsert
 import com.nimo.bookkeeping.data.local.entity.CategoryEntity
@@ -24,6 +25,13 @@ interface CategoryDao {
 
     @Upsert
     suspend fun upsert(category: CategoryEntity): Long
+
+    /** 备份恢复用：带显式 id 整体写入 */
+    @Insert
+    suspend fun insertAll(items: List<CategoryEntity>)
+
+    @Query("DELETE FROM categories")
+    suspend fun deleteAll()
 
     /**
      * 归档父分类时级联归档其子分类（计划 9.2：不允许父已归档子仍可选的悬空状态）。
