@@ -1,11 +1,8 @@
 package com.nimo.bookkeeping.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -18,10 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -57,8 +52,9 @@ private const val RECORD_TX_ID_ARG = "txId"
 private const val RECORD_ROUTE_PATTERN = "$RECORD_ROUTE?$RECORD_TX_ID_ARG={$RECORD_TX_ID_ARG}"
 
 /**
- * 转账（F04）：和记一笔并列的独立表单。
- * 转账是「两个账户 + 没有分类」，塞进记一笔会丢掉 toAccountId，所以它有自己的路由与页面。
+ * 转账（F04）：转账页。
+ * 新建的入口在记一笔页的「转账」分段（就地渲染同一块转账表单）；
+ * 这个路由保留给「编辑转账」——点流水里的转账行进来，转账 ≠ 收支，路由与页面自成一套。
  */
 private const val TRANSFER_ROUTE = "transfer"
 
@@ -92,9 +88,6 @@ fun LedgerApp(container: AppContainer) {
     val isTopLevel = TopDestination.entries.any { dest ->
         currentDestination?.hierarchy?.any { it.route == dest.route } == true
     }
-    // 明细页（转账入口只在这里露出）
-    val isTransactionsPage = currentDestination?.hierarchy
-        ?.any { it.route == TopDestination.TRANSACTIONS.route } == true
     // 记账页/转账页都是沉浸式表单：收起底部导航，避免误切页丢掉已填内容
     val isRecordPage = currentDestination?.hierarchy?.any { it.route == RECORD_ROUTE_PATTERN } == true
     val isTransferPage =
@@ -147,33 +140,14 @@ fun LedgerApp(container: AppContainer) {
             }
         },
         floatingActionButton = {
-            // 「记一笔」在三个顶层页面都可达（计划 F03：从任意页面可唤起）
+            // 「记一笔」在三个顶层页面都可达（计划 F03：从任意页面可唤起）。
+            // 转账（F04）不再另开一个悬浮按钮：它的入口是记一笔页里的「转账」分段
             if (isTopLevel) {
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    // 「转账」（F04）只在明细页露出：它是主流程动作，藏进设置里等于没有入口；
-                    // 但统计/设置页的高频动作是「记一笔」，不必让两个按钮同时占着视线
-                    if (isTransactionsPage) {
-                        ExtendedFloatingActionButton(
-                            onClick = {
-                                navController.navigate(TRANSFER_ROUTE) { launchSingleTop = true }
-                            },
-                            icon = {
-                                Icon(imageVector = LedgerIcons.Transfer, contentDescription = null)
-                            },
-                            text = { Text("转账") },
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
-                    ExtendedFloatingActionButton(
-                        onClick = { navController.navigate(RECORD_ROUTE) { launchSingleTop = true } },
-                        icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
-                        text = { Text("记一笔") },
-                    )
-                }
+                ExtendedFloatingActionButton(
+                    onClick = { navController.navigate(RECORD_ROUTE) { launchSingleTop = true } },
+                    icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
+                    text = { Text("记一笔") },
+                )
             }
         },
     ) { innerPadding ->

@@ -36,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,15 +53,21 @@ import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.ui.LedgerIcons
 import com.nimo.bookkeeping.ui.components.EmptyState
+import com.nimo.bookkeeping.ui.transfer.TransferFormSection
+import com.nimo.bookkeeping.ui.transfer.TransferUiState
+import com.nimo.bookkeeping.ui.transfer.TransferViewModel
 import com.nimo.bookkeeping.util.Dates
 
 /**
- * 记一笔 / 改一笔（F03，仅支出/收入）。
+ * 记一笔 / 改一笔（F03 收支，F04 转账入口）。
  *
  * 从任意顶层页面（明细/统计/设置）的「记一笔」按钮唤起，冷启动到保存 ≤ 3 次点击：
  * 点按钮 → 输入金额 → 点保存（账户默认选中第一个可用账户）。
+ * 顶部三个分段：支出 / 收入 / 转账——「转账」不换页，就地换成转账表单（两个账户 + 没有分类），
+ * 保存按钮、返回、日期选择共用同一个 Scaffold。转账表单与转账页是同一块内容
+ * （[com.nimo.bookkeeping.ui.transfer.TransferFormSection]），不存第二份实现。
  * 点流水行进来则是编辑模式：表单、校验与错误提示完全共用这一套，只是预填了整笔内容。
- * 转账（F04）与余额校准（P1）不走本页。
+ * 编辑支出/收入时不出现「转账」分段；转账行的编辑走转账页。余额校准（P1）不走本页。
  *
  * @param editingId 非空 = 编辑这一笔
  * @param onDeleted 用户要求删除这一笔。**本页不删数据**：整笔交给延迟物理删除策略
@@ -82,6 +89,22 @@ fun RecordScreen(
 
     var showDatePicker by remember { mutableStateOf(false) }
 
+    // 「转账」是记一笔页里的第三个分段（用户要求：转账入口放进记一笔，不再占一个悬浮按钮）：
+    // 切过去就地渲染转账表单。转账有自己的 ViewModel 与校验（两个账户、没有分类）。
+    // 只在真的切过去时才建它——不切就一分钱开销都不付。
+    var transferMode by rememberSaveable { mutableStateOf(false) }
+    val transferViewModel: TransferViewModel? = if (transferMode) {
+        viewModel(factory = TransferViewModel.factory(repository))
+    } else {
+        null
+    }
+    val transferState: TransferUiState? = if (transferViewModel != null) {
+        val transferUiState by transferViewModel.uiState.collectAsStateWithLifecycle()
+        transferUiState
+    } else {
+        null
+    }
+
     // 保存成功 → 通知页面返回（先消费信号，避免重组时重复触发）
     LaunchedEffect(state.savedTransactionId) {
         val savedId = state.savedTransactionId ?: return@LaunchedEffect
@@ -96,20 +119,51 @@ fun RecordScreen(
         onDeleted(entity)
     }
 
+    // 转账保存成功 → 和收支一样从这里返回（先消费信号）
+    LaunchedEffect(transferState?.savedTransactionId) {
+        val savedId = transferState?.savedTransactionId ?: return@LaunchedEffect
+        transferViewModel?.consumeSaved()
+        onSaved(savedId)
+    }
+
+    val isSaving = transferState?.isSaving ?: state.isSaving
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (state.isEditing) "编辑" else "记一笔") },
+                title = {
+                    Text(
+                        when {
+                            transferState != null -> "转账"
+                            state.isEditing -> "编辑"
+                            else -> "记一笔"
+                        },
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack, enabled = !state.isSaving) {
+                    IconButton(onClick = onBack, enabled = !isSaving) {
                         Icon(imageVector = LedgerIcons.Back, contentDescription = "返回")
                     }
                 },
                 actions = {
                     // 「保存」只跟着同一个展示决策：表单露出来了才有保存
-                    if (state.screen == RecordScreenState.Form) {
-                        TextButton(onClick = { viewModel.save() }, enabled = !state.isSaving) {
-                            Text(if (state.isSaving) "保存中…" else "保存")
+                    val showSave = if (transferState != null) {
+                        transferState.isFormVisible
+                    } else {
+                        state.screen == RecordScreenState.Form
+                    }
+                    if (showSave) {
+                        TextButton(
+                            onClick = {
+                                if (transferViewModel != null) {
+                                    transferViewModel.save()
+                                } else {
+                                    viewModel.save()
+                                }
+                            },
+                            enabled = !isSaving,
+                        ) {
+                            Text(if (isSaving) "保存中…" else "保存")
                         }
                     }
                 },
@@ -120,37 +174,88 @@ fun RecordScreen(
             .fillMaxSize()
             .padding(innerPadding)
 
-        // 分支顺序只在 RecordUiState.screen 里定义一次；这里 by-when 是穷举的，没有 else 兜底
-        when (state.screen) {
-            RecordScreenState.Loading -> Box(contentModifier, Alignment.Center) { CircularProgressIndicator() }
+        if (transferState != null && transferViewModel != null) {
+            // 转账：分段 + 转账表单（TransferFormSection 是唯一的转账表单实现）
+            Column(modifier = contentModifier) {
+                RecordSegmentRow(
+                    selected = RecordSegment.TRANSFER,
+                    showTransfer = true,
+                    onSelect = { segment ->
+                        if (segment == RecordSegment.TRANSFER) {
+                            transferMode = true
+                        } else {
+                            transferMode = false
+                            viewModel.setType(segment.type)
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+                TransferFormSection(
+                    state = transferState,
+                    viewModel = transferViewModel,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        } else {
+            Column(modifier = contentModifier) {
+                // 分段只在表单露出来时出现：加载中/没有可用账户时，给一个切不过去的分段没有意义
+                if (state.screen == RecordScreenState.Form) {
+                    RecordSegmentRow(
+                        selected = if (state.form.type == TransactionType.INCOME) {
+                            RecordSegment.INCOME
+                        } else {
+                            RecordSegment.EXPENSE
+                        },
+                        // 编辑一笔支出/收入时不给「转账」分段：那时候切到转账没有意义
+                        showTransfer = !state.isEditing,
+                        onSelect = { segment ->
+                            if (segment == RecordSegment.TRANSFER) {
+                                transferMode = true
+                            } else {
+                                viewModel.setType(segment.type)
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
 
-            RecordScreenState.LoadError -> EmptyState(
-                title = "加载失败",
-                message = state.loadErrorMessage.orEmpty(),
-                modifier = contentModifier,
-            )
+                val bodyModifier = Modifier.weight(1f)
 
-            // 转账（F04）与余额调整（P1）有各自的入口：硬套收支表单会写出半截数据
-            RecordScreenState.UnsupportedType -> EmptyState(
-                title = "这一笔不能在这里改",
-                message = "转账与余额调整不进入收支统计，它们有各自的编辑入口。\n本页只处理支出与收入。",
-                modifier = contentModifier,
-            )
+                // 分支顺序只在 RecordUiState.screen 里定义一次；这里 by-when 是穷举的，没有 else 兜底
+                when (state.screen) {
+                    RecordScreenState.Loading -> Box(bodyModifier, Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
 
-            // 没有可用账户就无法记账：明确指路，不给一张填了也存不进去的表单。
-            // 编辑模式不算在内（见 RecordUiState.hasNoAccount）：否则这一笔的恢复入口也会被顶掉。
-            RecordScreenState.NoAccount -> EmptyState(
-                title = "还没有可用账户",
-                message = "先到「设置 → 账户管理」新建一个账户，才能记一笔。\n（已归档的账户不会出现在这里）",
-                modifier = contentModifier,
-            )
+                    RecordScreenState.LoadError -> EmptyState(
+                        title = "加载失败",
+                        message = state.loadErrorMessage.orEmpty(),
+                        modifier = bodyModifier,
+                    )
 
-            RecordScreenState.Form -> RecordFormBody(
-                state = state,
-                viewModel = viewModel,
-                onPickDate = { showDatePicker = true },
-                modifier = contentModifier,
-            )
+                    // 转账（F04）与余额调整（P1）的编辑入口不在本页：硬套收支表单会写出半截数据
+                    RecordScreenState.UnsupportedType -> EmptyState(
+                        title = "这一笔不能在这里改",
+                        message = "转账与余额调整不进入收支统计，它们有各自的编辑入口。\n本页只处理支出与收入。",
+                        modifier = bodyModifier,
+                    )
+
+                    // 没有可用账户就无法记账：明确指路，不给一张填了也存不进去的表单。
+                    // 编辑模式不算在内（见 RecordUiState.hasNoAccount）：否则这一笔的恢复入口也会被顶掉。
+                    RecordScreenState.NoAccount -> EmptyState(
+                        title = "还没有可用账户",
+                        message = "先到「设置 → 账户管理」新建一个账户，才能记一笔。\n（已归档的账户不会出现在这里）",
+                        modifier = bodyModifier,
+                    )
+
+                    RecordScreenState.Form -> RecordFormBody(
+                        state = state,
+                        viewModel = viewModel,
+                        onPickDate = { showDatePicker = true },
+                        modifier = bodyModifier,
+                    )
+                }
+            }
         }
     }
 
@@ -252,19 +357,6 @@ private fun RecordFormBody(
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
-            }
-        }
-
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SegmentType.entries.forEachIndexed { index, segment ->
-                SegmentedButton(
-                    selected = state.form.type == segment.type,
-                    onClick = { viewModel.setType(segment.type) },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = index,
-                        count = SegmentType.entries.size,
-                    ),
-                ) { Text(segment.label) }
             }
         }
 
@@ -391,8 +483,37 @@ private fun FieldSection(title: String, content: @Composable () -> Unit) {
     }
 }
 
-/** 收支切换的两个分段（顺序即按钮顺序） */
-private enum class SegmentType(val type: TransactionType, val label: String) {
+/**
+ * 记一笔页顶部的分段（顺序即按钮顺序）：支出 / 收入就地换表单，转账换成转账表单。
+ * 转账分段只在新建时出现——编辑一笔支出/收入时切到转账没有意义。
+ */
+private enum class RecordSegment(val type: TransactionType, val label: String) {
     EXPENSE(TransactionType.EXPENSE, "支出"),
     INCOME(TransactionType.INCOME, "收入"),
+    TRANSFER(TransactionType.TRANSFER, "转账"),
+}
+
+/** 分段行：三段，或只有收支两段（[showTransfer] = false 时） */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RecordSegmentRow(
+    selected: RecordSegment,
+    showTransfer: Boolean,
+    onSelect: (RecordSegment) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val segments = if (showTransfer) {
+        RecordSegment.entries
+    } else {
+        listOf(RecordSegment.EXPENSE, RecordSegment.INCOME)
+    }
+    SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {
+        segments.forEachIndexed { index, segment ->
+            SegmentedButton(
+                selected = selected == segment,
+                onClick = { onSelect(segment) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = segments.size),
+            ) { Text(segment.label) }
+        }
+    }
 }

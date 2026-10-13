@@ -73,7 +73,7 @@ internal const val TO_ACCOUNT_TAG_PREFIX = "transfer-to-"
  * 转账和记一笔是两种东西：记一笔是"一个账户 + 一个分类"，转账是"两个账户 + 没有分类"，
  * 所以这里自成一套表单，而不是往记一笔里塞一个模式开关。
  *
- * 从明细页 FAB 区的「转账」进来；点流水里的转账行则是编辑模式（[editingId] 非空）。
+ * 新建的入口在记一笔页的「转账」分段（F04）；点流水里的转账行进来则是编辑模式（[editingId] 非空）。
  *
  * @param onDeleted 用户要求删除这一笔。**本页不删数据**：整笔交给延迟物理删除策略
  *   （[com.nimo.bookkeeping.ui.transactions.PendingTransactionDeletion]），页面随即返回，
@@ -93,7 +93,6 @@ fun TransferScreen(
         factory = TransferViewModel.factory(repository, editingId, pendingDeletionIds),
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var showDatePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.savedTransactionId) {
         val id = state.savedTransactionId ?: return@LaunchedEffect
@@ -125,32 +124,53 @@ fun TransferScreen(
             )
         },
     ) { padding ->
-        when {
-            state.isLoading -> Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator() }
+        TransferFormSection(
+            state = state,
+            viewModel = viewModel,
+            modifier = Modifier.fillMaxSize().padding(padding),
+        )
+    }
 
-            state.loadErrorMessage != null -> EmptyState(
-                title = "加载失败",
-                message = state.loadErrorMessage.orEmpty(),
-                modifier = Modifier.fillMaxSize().padding(padding),
-            )
+}
 
-            state.hasNotEnoughAccounts -> EmptyState(
-                title = "还不能转账",
-                message = "转账要在两个账户之间移动钱。先到「设置 → 账户管理」再建一个账户。",
-                modifier = Modifier.fillMaxSize().padding(padding),
-            )
+/**
+ * 转账表单的整块内容：加载中 / 加载失败 / 账户不够 / 表单，外加日期选择弹窗。
+ *
+ * 宿主只管 Scaffold 与顶栏的「保存」按钮：转账页用它，记一笔页的「转账」分段也用它——
+ * 转账表单因此只有一份实现，两处渲染的是同一块内容，不存在第二个真相。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun TransferFormSection(
+    state: TransferUiState,
+    viewModel: TransferViewModel,
+    modifier: Modifier = Modifier,
+) {
+    var showDatePicker by remember { mutableStateOf(false) }
 
-            else -> Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-                TransferFormBody(
-                    state = state,
-                    viewModel = viewModel,
-                    onPickDate = { showDatePicker = true },
-                )
-            }
+    when {
+        state.isLoading -> Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
         }
+
+        state.loadErrorMessage != null -> EmptyState(
+            title = "加载失败",
+            message = state.loadErrorMessage.orEmpty(),
+            modifier = modifier,
+        )
+
+        state.hasNotEnoughAccounts -> EmptyState(
+            title = "还不能转账",
+            message = "转账要在两个账户之间移动钱。先到「设置 → 账户管理」再建一个账户。",
+            modifier = modifier,
+        )
+
+        else -> TransferFormBody(
+            state = state,
+            viewModel = viewModel,
+            onPickDate = { showDatePicker = true },
+            modifier = modifier,
+        )
     }
 
     if (showDatePicker) {
@@ -184,6 +204,7 @@ private fun TransferFormBody(
     state: TransferUiState,
     viewModel: TransferViewModel,
     onPickDate: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val amountFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -191,7 +212,7 @@ private fun TransferFormBody(
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
