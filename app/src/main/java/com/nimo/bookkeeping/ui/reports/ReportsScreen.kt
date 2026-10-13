@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -123,17 +124,28 @@ fun ReportsScreen(
                         onSpanChange = viewModel::setTrendSpan,
                     )
                 }
+                // 先给个总览：谁占了大头；具体数字看下面的排行（占比条用同一套颜色对号）
+                if (state.breakdown.isNotEmpty()) {
+                    item(key = "donut-header") {
+                        SectionHeader("分类占比", hint = "占比 = 分类支出 ÷ 支出合计")
+                    }
+                    item(key = "donut") { CategoryDonutSection(rows = state.breakdown) }
+                }
                 item(key = "breakdown-header") { SectionHeader("支出排行", hint = "点一行看明细") }
                 if (state.breakdown.isEmpty()) {
                     item(key = "breakdown-empty") {
                         HintRow("本月没有支出。转账与余额调整不算收支，所以不会出现在这里。")
                     }
                 } else {
-                    items(items = state.breakdown, key = { "cat-${it.categoryId}" }) { row ->
+                    itemsIndexed(
+                        items = state.breakdown,
+                        key = { _, row -> "cat-${row.categoryId}" },
+                    ) { index, row ->
                         BreakdownRow(
                             name = row.name,
                             amountCents = row.amountCents,
                             percent = row.percent,
+                            barColor = donutColorAt(index),
                             onClick = {
                                 onDrillDown(ReportDrillDown.byCategory(state.month, row.categoryId))
                             },
@@ -151,6 +163,8 @@ fun ReportsScreen(
                             name = row.name,
                             amountCents = row.amountCents,
                             percent = row.percent,
+                            // 账户分布不对应环形图，沿用主题色
+                            barColor = MaterialTheme.colorScheme.primary,
                             onClick = {
                                 onDrillDown(ReportDrillDown.byAccount(state.month, row.accountId))
                             },
@@ -277,12 +291,16 @@ private fun HintRow(text: String) {
 /**
  * 排行一行（分类排行与账户分布共用）：名字 + 占比 + 金额 + 占比条。
  * 整行可点：[onClick] 把"这一行 + 当前月份"下钻到明细页（F07）。
+ *
+ * @param barColor 占比条的颜色：分类排行用 [donutColorAt]（与环形图同色，看图能对上号），
+ *   账户分布沿用主题色
  */
 @Composable
 private fun BreakdownRow(
     name: String,
     amountCents: Long,
     percent: Double?,
+    barColor: Color,
     onClick: () -> Unit,
 ) {
     Column(
@@ -312,14 +330,14 @@ private fun BreakdownRow(
         }
         if (percent != null) {
             Spacer(modifier = Modifier.height(6.dp))
-            BreakdownBar(fraction = percent)
+            BreakdownBar(fraction = percent, color = barColor)
         }
     }
 }
 
-/** 占比条：用两层 Box 画，宽度就是占比 */
+/** 占比条：用两层 Box 画，宽度就是占比，颜色由调用方给（分类排行 = 环形图那一块的颜色） */
 @Composable
-private fun BreakdownBar(fraction: Double) {
+private fun BreakdownBar(fraction: Double, color: Color) {
     val shape = RoundedCornerShape(3.dp)
     Box(
         modifier = Modifier
@@ -331,7 +349,7 @@ private fun BreakdownBar(fraction: Double) {
             modifier = Modifier
                 .fillMaxWidth(fraction.coerceIn(0.0, 1.0).toFloat())
                 .height(6.dp)
-                .background(MaterialTheme.colorScheme.primary, shape),
+                .background(color, shape),
         )
     }
 }

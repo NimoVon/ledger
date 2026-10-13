@@ -3,14 +3,14 @@ package com.nimo.bookkeeping.ui.reports
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.nimo.bookkeeping.data.local.AppDatabase
@@ -97,20 +97,24 @@ class ReportsScreenUiTest {
         }
     }
 
+    private fun awaitText(text: String) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     @Test
     fun tappingTheCategoryRow_handsOverThatCategoryAndTheCurrentMonth() {
         val month = seedInCurrentMonth()
         showReports()
 
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodesWithText("娱乐", substring = true).fetchSemanticsNodes().isNotEmpty()
-        }
-        // 两个段头都带这句提示：支出排行 + 账户支出分布
-        composeRule.onAllNodesWithText("点一行看明细")[0].performScrollTo().assertIsDisplayed()
+        // 排行在环形图下面：先等首屏渲染出来，再让列表自己把那一行滚进视野
+        awaitText("日均支出")
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("娱乐", substring = true))
         // 合并后的语义树里，可点的整行自己就带上了子节点的文字
         composeRule
             .onNode(hasClickAction() and hasText("娱乐", substring = true))
-            .performScrollTo()
+            .assertIsDisplayed()
             .performClick()
 
         assertEquals(ReportDrillDown.byCategory(month, entertainmentId), drilled)
@@ -121,10 +125,8 @@ class ReportsScreenUiTest {
         seedInCurrentMonth()
         showReports()
 
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodesWithText("¥600.00").fetchSemanticsNodes().isNotEmpty()
-        }
-        // 合计条、分类排行、账户分布都会出现这个金额
+        awaitText("¥600.00")
+        // 合计条、环心、分类排行、账户分布都会出现这个金额：首屏那一条必须是显示的
         composeRule.onAllNodesWithText("¥600.00")[0].assertIsDisplayed()
     }
 }

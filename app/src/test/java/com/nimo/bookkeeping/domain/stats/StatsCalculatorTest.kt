@@ -116,6 +116,34 @@ class StatsCalculatorTest {
         assertEquals(100000L, rows[0].amountCents)
     }
 
+    /** 环形图的总额必须等于顶部的"支出合计"：分类金额之和 = 支出总和（干净数据） */
+    @Test
+    fun categoryBreakdown_amountsAddUpToTheSummary() {
+        val rows = StatsCalculator.categoryBreakdown(october, categories)
+        assertEquals(
+            StatsCalculator.summarize(october).expenseCents,
+            rows.sumOf { it.amountCents },
+        )
+        // 占比之和 = 1：各扇形加起来正好一圈，环不会缺口
+        assertEquals(1.0, rows.sumOf { it.percent ?: 0.0 }, 0.0001)
+    }
+
+    /**
+     * 脏数据里的"孤儿分类"（分类被删了、记录还留着 categoryId）：支出合计认得它，
+     * 分类占比认不出——环心的数会比顶部小。有意的取舍：宁可少算一块，
+     * 也不要编一个不存在的分类名。
+     */
+    @Test
+    fun categoryBreakdown_dropsRecordsWhoseCategoryIsUnknown() {
+        val records = listOf(
+            tx(1, TransactionType.EXPENSE, 70000, 4, categoryId = 2),
+            tx(2, TransactionType.EXPENSE, 30000, 5, categoryId = 999),
+        )
+        val rows = StatsCalculator.categoryBreakdown(records, categories)
+        assertEquals(70000L, rows.sumOf { it.amountCents })
+        assertEquals(100000L, StatsCalculator.summarize(records).expenseCents)
+    }
+
     // ---- 环比与日均 ----
 
     @Test
