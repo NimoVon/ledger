@@ -25,8 +25,28 @@ object Money {
     fun parseCents(input: String): Long? {
         val text = input.trim()
         if (text.isEmpty()) return null
-        val negative = text.startsWith("-")
-        val raw = if (negative) text.substring(1) else text
+        val magnitude = parseMagnitudeOrNull(text) ?: return null
+        if (magnitude == 0L || magnitude > MAX_AMOUNT_CENTS) return null
+        return if (text.startsWith("-")) -magnitude else magnitude
+    }
+
+    /**
+     * 输入文本"格式合法、但数值超过 [MAX_AMOUNT_CENTS]"（计划 line 495：金额超上限要有明确处理）。
+     *
+     * 与 [parseCents] 共用同一个 [parseMagnitudeOrNull]，所以两者的格式口径永远不会漂移：
+     * 能解析出数值且大于上限才是 true；空、三位小数、半截千分位这类**格式**问题一律 false
+     * （由 parseCents 返回 null 去走"格式不正确"文案）。零（"0"/"0.00"）不算超上限。
+     */
+    fun exceedsMaxAmount(input: String): Boolean {
+        val magnitude = parseMagnitudeOrNull(input) ?: return false
+        return magnitude > MAX_AMOUNT_CENTS
+    }
+
+    /** 纯格式解析：返回金额绝对值（分），格式非法返回 null。**不做**零值与上限判断，由调用方决定。 */
+    private fun parseMagnitudeOrNull(input: String): Long? {
+        val text = input.trim()
+        if (text.isEmpty()) return null
+        val raw = if (text.startsWith("-")) text.substring(1) else text
         if (raw.isEmpty()) return null
         val body = when {
             raw.contains(',') -> {
@@ -38,9 +58,7 @@ object Money {
         }
         val parts = body.split('.')
         val centsDigits = parts[0] + (if (parts.size == 2) parts[1].padEnd(2, '0') else "00")
-        val magnitude = centsDigits.toLongOrNull() ?: return null
-        if (magnitude == 0L || magnitude > MAX_AMOUNT_CENTS) return null
-        return if (negative) -magnitude else magnitude
+        return centsDigits.toLongOrNull()
     }
 
     /**

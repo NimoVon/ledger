@@ -4,6 +4,7 @@ import com.nimo.bookkeeping.data.local.entity.TransactionEntity
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.util.Dates
+import com.nimo.bookkeeping.util.Money
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -113,10 +114,31 @@ class RecordFormTest {
     }
 
     @Test
-    fun amountOverProductLimit_isRejected() {
-        // 产品上限 ¥99,999,999.99 = 9_999_999_999 分
+    fun amountOverTheProductLimit_getsItsOwnMessage() {
+        // 计划 line 495：超上限要有明确处理。真机上输入 200566831（元）曾被报成"格式不正确"。
+        // 注意 12,50 这类半截千分位是**格式**问题，仍走 AmountInvalid（见上一个用例）。
+        listOf("100000000.00", "100,000,000.00", "200566831").forEach { text ->
+            assertEquals("金额 $text", listOf(RecordFormError.AmountTooLarge), errorsOf(form(amountText = text)))
+        }
+        // 恰好等于上限必须照旧通过，不许因为新分支多拦一笔
+        assertTrue(form(amountText = "99999999.99").toOutcome() is RecordFormOutcome.Valid)
+    }
+
+    @Test
+    fun amountTooLargeMessage_statesTheLimitTakenFromMoney() {
         assertEquals(
-            listOf(RecordFormError.AmountInvalid),
+            "金额超出上限（单笔最多 ${Money.formatCurrency(Money.MAX_AMOUNT_CENTS)}）",
+            RecordFormError.AmountTooLarge.toMessage(),
+        )
+    }
+
+    @Test
+    fun amountOverProductLimit_isRejected() {
+        // 产品上限 ¥99,999,999.99 = 9_999_999_999 分。
+        // 2026-10-13 按计划 line 495 改：超上限不再复用"格式不正确"，单独给 AmountTooLarge
+        //（拒绝行为不变，只是文案分开了——所以这里从 AmountInvalid 改成 AmountTooLarge）。
+        assertEquals(
+            listOf(RecordFormError.AmountTooLarge),
             errorsOf(form(amountText = "100000000.00")),
         )
     }

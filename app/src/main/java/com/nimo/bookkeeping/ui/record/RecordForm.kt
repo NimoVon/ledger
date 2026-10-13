@@ -44,6 +44,8 @@ sealed interface RecordFormError {
     data object UnsupportedType : RecordFormError
     data object AmountBlank : RecordFormError
     data object AmountInvalid : RecordFormError
+    /** 格式合法但超过产品上限 —— 与 [AmountInvalid] 分开，别让用户去猜"哪里格式错了" */
+    data object AmountTooLarge : RecordFormError
     data object AmountMustBePositive : RecordFormError
     data object AccountRequired : RecordFormError
     data object CategoryRequired : RecordFormError
@@ -56,6 +58,7 @@ fun RecordFormError.toMessage(): String = when (this) {
     RecordFormError.UnsupportedType -> "本页只支持支出与收入"
     RecordFormError.AmountBlank -> "请输入金额"
     RecordFormError.AmountInvalid -> "金额格式不正确（例：12.5 或 12.50，最多两位小数）"
+    RecordFormError.AmountTooLarge -> "金额超出上限（单笔最多 ${Money.formatCurrency(Money.MAX_AMOUNT_CENTS)}）"
     RecordFormError.AmountMustBePositive -> "金额必须大于 0"
     RecordFormError.AccountRequired -> "请选择账户"
     RecordFormError.CategoryRequired -> "请选择分类"
@@ -80,6 +83,13 @@ fun RecordForm.toOutcome(): RecordFormOutcome {
 
     if (!isSupportedType) errors += RecordFormError.UnsupportedType
 
+    // 解析失败时先分清"超上限"还是"格式不对"：两种情况给不同文案（计划 line 495）
+    val amountError = if (Money.exceedsMaxAmount(amountText)) {
+        RecordFormError.AmountTooLarge
+    } else {
+        RecordFormError.AmountInvalid
+    }
+
     val cents: Long? = when {
         amountText.isBlank() -> {
             errors += RecordFormError.AmountBlank
@@ -87,7 +97,7 @@ fun RecordForm.toOutcome(): RecordFormOutcome {
         }
 
         else -> Money.parseCents(amountText).also {
-            if (it == null) errors += RecordFormError.AmountInvalid
+            if (it == null) errors += amountError
         }
     }
     if (cents != null && cents <= 0L) errors += RecordFormError.AmountMustBePositive
@@ -100,7 +110,7 @@ fun RecordForm.toOutcome(): RecordFormOutcome {
     if (errors.isNotEmpty()) return RecordFormOutcome.Invalid(errors)
 
     val amountCents = cents
-        ?: return RecordFormOutcome.Invalid(listOf(RecordFormError.AmountInvalid))
+        ?: return RecordFormOutcome.Invalid(listOf(amountError))
 
     return RecordFormOutcome.Valid(
         TransactionInput(

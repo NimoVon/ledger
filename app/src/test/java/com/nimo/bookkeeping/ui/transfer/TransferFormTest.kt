@@ -3,6 +3,7 @@ package com.nimo.bookkeeping.ui.transfer
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.util.Dates
+import com.nimo.bookkeeping.util.Money
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -82,6 +83,25 @@ class TransferFormTest {
         listOf("abc", "1.234", "1,23", "12.5.6").forEach { text ->
             assertEquals("金额 $text 应该被拒", listOf(TransferFormError.AmountInvalid), errorsOf(form(amountText = text)))
         }
+    }
+
+    @Test
+    fun anAmountOverTheProductLimit_getsItsOwnMessage() {
+        // 计划 line 495：超上限与格式错两条文案（真机上输入 200566831 曾报"格式不正确"）
+        listOf("100000000.00", "100,000,000.00", "200566831").forEach { text ->
+            assertEquals("金额 $text", listOf(TransferFormError.AmountTooLarge), errorsOf(form(amountText = text)))
+        }
+        // 恰好等于上限照旧通过；格式问题仍是 AmountInvalid
+        assertTrue(form(amountText = "99999999.99").toOutcome() is TransferFormOutcome.Valid)
+        assertEquals(listOf(TransferFormError.AmountInvalid), errorsOf(form(amountText = "1,23")))
+    }
+
+    @Test
+    fun amountTooLargeMessage_statesTheLimitTakenFromMoney() {
+        assertEquals(
+            "金额超出上限（单笔最多 ${Money.formatCurrency(Money.MAX_AMOUNT_CENTS)}）",
+            TransferFormError.AmountTooLarge.toMessage(),
+        )
     }
 
     @Test

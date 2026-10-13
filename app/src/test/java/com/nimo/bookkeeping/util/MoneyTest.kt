@@ -1,7 +1,9 @@
 package com.nimo.bookkeeping.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MoneyTest {
@@ -37,6 +39,27 @@ class MoneyTest {
         assertEquals(Money.MAX_AMOUNT_CENTS, Money.parseCents("99999999.99"))  // ¥99,999,999.99
         assertNull(Money.parseCents("100000000.00"))                            // 超上限
         assertNull(Money.parseCents("100,000,000.00"))                          // 超上限（带千分位）
+    }
+
+    @Test
+    fun exceedsMaxAmount_separatesOverflowFromMalformedInput() {
+        // 计划 line 495：超上限与格式错要能分开——超限 true，格式问题 false
+        assertTrue(Money.exceedsMaxAmount("100000000.00"))
+        assertTrue(Money.exceedsMaxAmount("100,000,000.00"))
+        assertTrue(Money.exceedsMaxAmount("200566831"))       // 真机上那一串（元）
+        assertTrue(Money.exceedsMaxAmount("1000000000"))
+        assertFalse(Money.exceedsMaxAmount("99999999.99"))    // 恰好等于上限，不算超
+        assertFalse(Money.exceedsMaxAmount("99,999,999.99"))
+        assertFalse(Money.exceedsMaxAmount("0"))              // 零是"格式/非零"问题，不是超限
+        assertFalse(Money.exceedsMaxAmount("0.00"))
+        assertFalse(Money.exceedsMaxAmount("abc"))
+        assertFalse(Money.exceedsMaxAmount("1,23"))
+        assertFalse(Money.exceedsMaxAmount("1.234"))
+        // 超限判定与符号无关：余额校准用的负数金额超限也算超限（调用方仍给"超出上限"文案）
+        assertTrue(Money.exceedsMaxAmount("-100000000.00"))
+        assertTrue(Money.exceedsMaxAmount("-200566831"))
+        assertFalse(Money.exceedsMaxAmount("-99999999.99"))
+        assertFalse(Money.exceedsMaxAmount(""))
     }
 
     // ---- 解析：非法输入必须拒绝（计划 9.2 金额边界） ----

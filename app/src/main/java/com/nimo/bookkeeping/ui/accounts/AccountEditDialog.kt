@@ -120,7 +120,11 @@ fun AccountEditDialog(
                 onClick = {
                     val cents = if (amountText.isBlank()) 0L else Money.parseCents(amountText)
                     if (cents == null) {
-                        localError = "初始余额格式不正确（例：1000 或 1000.50）"
+                        localError = if (Money.exceedsMaxAmount(amountText)) {
+                            "初始余额超出上限（最多 ${Money.formatCurrency(Money.MAX_AMOUNT_CENTS)}）"
+                        } else {
+                            "初始余额格式不正确（例：1000 或 1000.50）"
+                        }
                         return@TextButton
                     }
                     val errors = AccountValidator.validate(name, cents)
