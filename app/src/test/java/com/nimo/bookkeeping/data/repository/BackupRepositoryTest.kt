@@ -27,6 +27,7 @@ import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -292,6 +293,12 @@ class BackupRepositoryTest {
         assertEquals(3, db.categoryDao().listAll().size)
         assertEquals(4, db.transactionDao().count())
         assertEquals(2, db.budgetDao().listAll().size)
+
+        // 失败原因会原样显示给用户，必须与设置页入口「导入 JSON（覆盖替换）」同口径：
+        // 满屏写「恢复」而入口叫「导入」，用户根本对不上自己点的是哪一个（改名残留的自动打脸）。
+        val message = result.exceptionOrNull()?.message.orEmpty()
+        assertTrue("要说清是自动备份这一步挂了，实际：$message", message.contains("自动备份失败"))
+        assertFalse("用户可见文案里不要再出现「恢复」，实际：$message", message.contains("恢复"))
     }
 
     @Test

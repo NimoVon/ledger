@@ -148,7 +148,7 @@ class BackupRepository(private val db: AppDatabase) {
                 BackupCodec.encode(exportFile())
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                return@withContext Result.failure(IOException("无法读取当前数据，已中止恢复", e))
+                return@withContext Result.failure(IOException("无法读取当前数据，已中止导入", e))
             }
 
             try {
@@ -156,7 +156,7 @@ class BackupRepository(private val db: AppDatabase) {
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 return@withContext Result.failure(
-                    IOException("自动备份失败，已中止恢复，数据未改动", e),
+                    IOException("自动备份失败，已中止导入，数据未改动", e),
                 )
             }
 
@@ -167,7 +167,7 @@ class BackupRepository(private val db: AppDatabase) {
                 if (e is CancellationException) throw e
                 Result.failure(
                     IllegalStateException(
-                        "恢复失败，原有数据未改动：" + (e.message ?: e.javaClass.simpleName),
+                        "导入失败，原有数据未改动：" + (e.message ?: e.javaClass.simpleName),
                         e,
                     ),
                 )
