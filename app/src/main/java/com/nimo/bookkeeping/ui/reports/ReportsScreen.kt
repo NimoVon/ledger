@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -81,6 +82,27 @@ fun ReportsScreen(
             )
 
             state.isLoading -> Box(contentModifier, Alignment.Center) { CircularProgressIndicator() }
+
+            // 本月没记账、但趋势窗口里有数据：空状态照旧，下面把趋势图也放出来。
+            // 不放的话，用户一切到空月份就看不到刚做好的趋势折线（F10）。
+            state.isEmpty && state.trendHasData -> LazyColumn(modifier = contentModifier) {
+                item(key = "empty-month") {
+                    EmptyState(
+                        title = "本月还没有记录",
+                        message = "记一笔之后，这里会给出收入、支出、结余与环比。",
+                        modifier = Modifier.heightIn(min = 180.dp),
+                    )
+                }
+                item(key = "trend-header") { SectionHeader("收支趋势", hint = "近半年 / 近全年") }
+                item(key = "trend") {
+                    TrendSection(
+                        span = state.trendSpan,
+                        points = state.trend,
+                        isLoading = state.isTrendLoading,
+                        onSpanChange = viewModel::setTrendSpan,
+                    )
+                }
+            }
 
             // 空状态按"本月"表述：切到没有记录的月份不该看起来像坏了
             state.isEmpty -> EmptyState(

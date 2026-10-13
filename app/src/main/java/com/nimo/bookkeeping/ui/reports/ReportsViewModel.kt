@@ -77,6 +77,14 @@ data class ReportsUiState(
         get() = StatsCalculator.monthOverMonth(summary.incomeCents, previousSummary.incomeCents)
 
     val isEmpty: Boolean get() = !isLoading && errorMessage == null && !hasRecords
+
+    /**
+     * 趋势窗口内是否有任何收入/支出。
+     * 本月没有记录时用它决定要不要把趋势图放出来——否则用户切到一个没记账的月份，
+     * 刚做好的趋势折线就整块"不见了"（F10）。
+     */
+    val trendHasData: Boolean
+        get() = trend.any { it.incomeCents > 0L || it.expenseCents > 0L }
 }
 
 /**

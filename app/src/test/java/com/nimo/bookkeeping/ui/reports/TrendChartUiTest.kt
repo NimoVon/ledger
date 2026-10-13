@@ -2,11 +2,13 @@ package com.nimo.bookkeeping.ui.reports
 
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -60,8 +62,8 @@ class TrendChartUiTest {
         db.close()
     }
 
-    private fun seedInCurrentMonth(): YearMonth {
-        val month = YearMonth.now()
+    /** 记一笔 ¥600 的娱乐支出到 [month]（账户与分类一并建好） */
+    private fun seedExpense(month: YearMonth): YearMonth {
         runBlocking {
             val accountId = repository.createAccount("CMB", AccountType.CASH, 0L).getOrThrow()
             val categoryId = db.categoryDao().upsert(
@@ -78,6 +80,23 @@ class TrendChartUiTest {
             ).getOrThrow()
         }
         return month
+    }
+
+    private fun seedInCurrentMonth(): YearMonth = seedExpense(YearMonth.now())
+
+    private fun seedLastMonth(): YearMonth = seedExpense(YearMonth.now().minusMonths(1))
+
+    /** 只建账户不记账：让报表读完 references，停在"整个窗口都没有记录"的状态 */
+    private fun seedAccountOnly() {
+        runBlocking {
+            repository.createAccount("CMB", AccountType.CASH, 0L).getOrThrow()
+        }
+    }
+
+    private fun awaitText(text: String) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun showReports() {
@@ -125,5 +144,31 @@ class TrendChartUiTest {
 
         awaitDescription(trendDescription(TrendSpan.HALF_YEAR))
         composeRule.onNodeWithContentDescription(trendDescription(TrendSpan.HALF_YEAR)).performScrollTo().assertIsDisplayed()
+    }
+
+    /** 本月没记账、但窗口内有数据：趋势图不能被空状态挡掉（F10 的可达性） */
+    @Test
+    fun anEmptyMonth_stillShowsTheTrend_whenTheWindowHasRecords() {
+        seedLastMonth()
+        showReports()
+
+        awaitText("本月还没有记录")
+        composeRule.onNodeWithText("本月还没有记录").assertIsDisplayed()
+        awaitDescription(trendDescription(TrendSpan.HALF_YEAR))
+        composeRule.onNodeWithContentDescription(trendDescription(TrendSpan.HALF_YEAR))
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("最高 ¥600.00").performScrollTo().assertIsDisplayed()
+    }
+
+    /** 整个窗口都没有记录：保持原来的纯空状态，不摆一张空图 */
+    @Test
+    fun anEmptyWindow_keepsThePlainEmptyState() {
+        seedAccountOnly()
+        showReports()
+
+        awaitText("本月还没有记录")
+        composeRule.onNodeWithText("本月还没有记录").assertIsDisplayed()
+        composeRule.onAllNodesWithContentDescription(trendDescription(TrendSpan.HALF_YEAR))
+            .assertCountEquals(0)
     }
 }
