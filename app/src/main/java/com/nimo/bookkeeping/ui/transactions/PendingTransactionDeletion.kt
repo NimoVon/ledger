@@ -111,6 +111,23 @@ class PendingTransactionDeletion(
         }
     }
 
+    /**
+     * 整批取消待撤销会话，并把暂存的整笔交还给调用方（F08c：恢复备份前必须做这件事）。
+     *
+     * 恢复备份是**替换**全部数据：倒计时里那几笔的 id 在新数据里可能已经属于另一笔交易，
+     * 让它们继续跑就会删掉刚恢复进来的行。失败路径由调用方拿返回的整笔重新 [schedule]，
+     * 所以"取消 → 恢复失败"不会连带丢掉用户刚点的那次删除。
+     */
+    suspend fun cancelAll(): List<TransactionEntity> = withContext(NonCancellable) {
+        mutex.withLock {
+            val cancelled = sessions.values.map { it.entity }
+            sessions.values.forEach { it.worker?.cancel() }
+            sessions.clear()
+            publishLocked()
+            cancelled
+        }
+    }
+
     /** 等所有倒计时 + 落库动作跑完（测试用：倒计时是真实时间） */
     internal suspend fun awaitIdle() {
         val jobs = mutex.withLock { sessions.values.mapNotNull { it.worker } }

@@ -1,9 +1,12 @@
 package com.nimo.bookkeeping
 
 import android.app.Application
+import com.nimo.bookkeeping.data.backup.AutoBackupStore
 import com.nimo.bookkeeping.data.local.AppDatabase
 import com.nimo.bookkeeping.data.local.DefaultCategories
+import com.nimo.bookkeeping.data.repository.BackupRepository
 import com.nimo.bookkeeping.data.repository.LedgerRepository
+import java.io.File
 import com.nimo.bookkeeping.ui.DrillDownRequests
 import com.nimo.bookkeeping.ui.transactions.PendingTransactionDeletion
 import androidx.sqlite.db.SimpleSQLiteQuery
@@ -30,6 +33,16 @@ class AppContainer(context: android.content.Context) {
 
     val database: AppDatabase = AppDatabase.build(context)
     val repository: LedgerRepository = LedgerRepository(database)
+
+    /** F08：备份导出 / 替换式恢复。UI 不碰 DAO，一切写入都经过 Repository */
+    val backupRepository: BackupRepository = BackupRepository(database)
+
+    /**
+     * F08c：恢复前的自动备份。放应用私有目录（不经 SAF 弹窗），
+     * 因为它必须"确定地"写成功或失败——失败了就要中止恢复（计划 4.6）。
+     */
+    val autoBackupStore: AutoBackupStore =
+        AutoBackupStore(File(context.applicationContext.filesDir, "auto-backup"))
 
     /** 页面销毁不该打断的活儿放这里：预置分类、删除倒计时（计划 9.2） */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

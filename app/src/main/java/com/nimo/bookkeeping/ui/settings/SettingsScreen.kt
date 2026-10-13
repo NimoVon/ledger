@@ -62,6 +62,13 @@ fun SettingsScreen(container: AppContainer, onOpenAccounts: () -> Unit) {
             Text(text = "›", style = MaterialTheme.typography.titleMedium)
         }
         HorizontalDivider()
+        Text(text = "备份与恢复", style = MaterialTheme.typography.titleMedium)
+        BackupSettingsSection(
+            backupRepository = container.backupRepository,
+            autoBackupStore = container.autoBackupStore,
+            pendingDeletion = container.pendingTransactionDeletion,
+        )
+        HorizontalDivider()
         Text(text = "数据库自检（开发用）", style = MaterialTheme.typography.titleMedium)
         lines.forEach { line ->
             Text(text = line, style = MaterialTheme.typography.bodyMedium)

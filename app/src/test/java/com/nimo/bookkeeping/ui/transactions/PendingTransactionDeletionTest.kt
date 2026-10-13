@@ -242,4 +242,37 @@ class PendingTransactionDeletionTest {
         assertFalse(exists(id))
         assertTrue("落库后过滤也要摘掉", store.pendingIds.value.isEmpty())
     }
+
+    // ---- 恢复备份前：整批取消，并把整笔交还调用方（失败时可原样排回去） ----
+
+    @Test
+    fun cancelAll_stopsEveryCountdownAndHandsBackTheEntities() = runTest {
+        seed()
+        val first = addExpense(100L, note = "第一笔")
+        val second = addExpense(200L, note = "第二笔")
+        val store = newStore()
+
+        store.schedule(entityOf(first))
+        store.schedule(entityOf(second))
+        // 提示条被划掉的那一笔也在待删除集合里：恢复前同样必须一起取消
+        store.dismiss(first)
+
+        val cancelled = store.cancelAll()
+
+        assertEquals(setOf(first, second), cancelled.map { it.id }.toSet())
+        assertEquals(listOf(first, second), cancelled.map { it.id })
+        assertTrue(store.pendingIds.value.isEmpty())
+        assertTrue(store.pending.value.isEmpty())
+
+        // 倒计时真的被取消了：等过窗口，两笔都还在库里
+        store.awaitWindow()
+        assertTrue(exists(first))
+        assertTrue(exists(second))
+    }
+
+    @Test
+    fun cancelAll_withNothingPending_isAnEmptyList() = runTest {
+        seed()
+        assertTrue(newStore().cancelAll().isEmpty())
+    }
 }
