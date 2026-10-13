@@ -13,6 +13,7 @@ import com.nimo.bookkeeping.domain.filter.TransactionFilter
 import com.nimo.bookkeeping.domain.stats.BalanceCalculator
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
 import com.nimo.bookkeeping.ui.reports.ReportDrillDown
+import com.nimo.bookkeeping.ui.reports.TrendSpan
 import com.nimo.bookkeeping.data.local.entity.BudgetEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -196,5 +197,36 @@ class TenThousandBenchmark {
             summary.expenseCents,
         )
         assertTrue("下钻查询+${filtered.size}笔统计 ${totalMs}ms 超标", totalMs < 2_000)
+    }
+
+    @Test
+    fun monthlyTrend_10kTransactions_underBudget() = runTest {
+        seed10k()
+        // F10 趋势折线：全年 12 个月的窗口查询 + 按月归档，链路与页面一致——
+        // Dates.monthBounds 给 [首月1号, 次月1号) → DAO 范围查询 → StatsCalculator.monthlyTotals。
+        val month = YearMonth.of(2026, 8)
+        val span = TrendSpan.FULL_YEAR
+        val firstTrendMonth = month.minusMonths((span.months - 1).toLong())
+        val (from, _) = com.nimo.bookkeeping.util.Dates.monthBounds(firstTrendMonth)
+        val (_, to) = com.nimo.bookkeeping.util.Dates.monthBounds(month)
+        val months = (span.months - 1 downTo 0).map { month.minusMonths(it.toLong()) }
+
+        val t0 = System.currentTimeMillis()
+        val rows = db.transactionDao().observeBetween(from, to).first()
+        val totals = StatsCalculator.monthlyTotals(rows.map { it.toRecord() }, months)
+        val totalMs = System.currentTimeMillis() - t0
+
+        println("BENCHMARK-TREND: yearQuery(${rows.size}笔) ${months.size}个月 支出=${totals.sumOf { it.expenseCents }}分 合计=${totalMs}ms")
+
+        assertEquals("2025-09-01", from)
+        assertEquals("2026-09-01", to)
+        assertEquals(span.months, totals.size)
+        assertEquals(month, totals.last().month)
+        // 口径唯一：折线各月之和必须等于对同一段区间直接 summarize
+        assertEquals(
+            StatsCalculator.summarize(rows.map { it.toRecord() }).expenseCents,
+            totals.sumOf { it.expenseCents },
+        )
+        assertTrue("全年趋势查询+归档 ${totalMs}ms 超标", totalMs < 2_000)
     }
 }

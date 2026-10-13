@@ -92,6 +92,15 @@ fun ReportsScreen(
             else -> LazyColumn(modifier = contentModifier) {
                 item(key = "daily") { DailyAverageRow(state.dailyAverageExpenseCents) }
                 item(key = "change") { ChangeSection(state) }
+                item(key = "trend-header") { SectionHeader("收支趋势", hint = "近半年 / 近全年") }
+                item(key = "trend") {
+                    TrendSection(
+                        span = state.trendSpan,
+                        points = state.trend,
+                        isLoading = state.isTrendLoading,
+                        onSpanChange = viewModel::setTrendSpan,
+                    )
+                }
                 item(key = "breakdown-header") { SectionHeader("支出排行", hint = "点一行看明细") }
                 if (state.breakdown.isEmpty()) {
                     item(key = "breakdown-empty") {

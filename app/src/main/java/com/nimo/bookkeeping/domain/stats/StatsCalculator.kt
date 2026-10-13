@@ -33,6 +33,13 @@ data class AccountBreakdownRow(
     val percent: Double?,
 )
 
+/** 趋势折线上的一个点（F10）：某个月的收支合计 */
+data class MonthlyTotal(
+    val month: YearMonth,
+    val incomeCents: Long,
+    val expenseCents: Long,
+)
+
 /**
  * 统计口径唯一实现（计划 3.4）。纯函数，不依赖 Android / Room / Context。
  * 任何页面显示的统计数字都必须来自这里，不允许另写一套首页算法。
@@ -141,6 +148,37 @@ object StatsCalculator {
             month == current -> today.dayOfMonth
             month.isBefore(current) -> month.lengthOfMonth()
             else -> 0
+        }
+    }
+
+    /**
+     * 趋势折线（F10）：把 [records] 按月归档成收支合计，输出顺序与 [months] 一致——没有记录的月份补 0。
+     * 只算 INCOME / EXPENSE：转账与余额调整永不进入（铁律 3），与 [summarize] 同一套白名单。
+     * 不在 [months] 里的记录直接忽略：区间由调用方按月边界给出（月度查询禁止 substr 截取）。
+     */
+    fun monthlyTotals(
+        records: List<TransactionRecord>,
+        months: List<YearMonth>,
+    ): List<MonthlyTotal> {
+        if (months.isEmpty()) return emptyList()
+        val wanted = months.toHashSet()
+        val income = HashMap<YearMonth, Long>()
+        val expense = HashMap<YearMonth, Long>()
+        for (r in records) {
+            val ym = YearMonth.from(r.occurredOn)
+            if (ym !in wanted) continue
+            when (r.type) {
+                TransactionType.INCOME -> income[ym] = (income[ym] ?: 0L) + r.amountCents
+                TransactionType.EXPENSE -> expense[ym] = (expense[ym] ?: 0L) + r.amountCents
+                TransactionType.TRANSFER, TransactionType.BALANCE_ADJUST -> Unit
+            }
+        }
+        return months.map { ym ->
+            MonthlyTotal(
+                month = ym,
+                incomeCents = income[ym] ?: 0L,
+                expenseCents = expense[ym] ?: 0L,
+            )
         }
     }
 
