@@ -33,6 +33,10 @@ import com.nimo.bookkeeping.data.repository.BackupRepository
 import com.nimo.bookkeeping.domain.backup.BackupCodec
 import com.nimo.bookkeeping.domain.backup.BackupDecodeResult
 import com.nimo.bookkeeping.domain.backup.BackupFile
+import com.nimo.bookkeeping.domain.backup.CsvExporter
+import com.nimo.bookkeeping.domain.backup.CsvImportCounts
+import com.nimo.bookkeeping.domain.backup.CsvImportOutcome
+import com.nimo.bookkeeping.domain.backup.CsvRowProblem
 import com.nimo.bookkeeping.ui.transactions.PendingTransactionDeletion
 import java.io.IOException
 import java.time.LocalDateTime
@@ -70,6 +74,8 @@ fun BackupSettingsSection(
     var explainExport by remember { mutableStateOf<ExportKind?>(null) }
     var restoreCandidate by remember { mutableStateOf<BackupFile?>(null) }
     var restoreCandidateName by remember { mutableStateOf("") }
+    var explainImport by remember { mutableStateOf(false) }
+    var importOutcome by remember { mutableStateOf<CsvImportOutcome?>(null) }
 
     /** 导出 JSON：让用户选一个新文件（系统负责重名与覆盖确认），再写字节 */
     val jsonExport = rememberLauncherForActivityResult(
@@ -113,6 +119,39 @@ fun BackupSettingsSection(
             result
                 .onSuccess { names -> status = "已导出 CSV：" + names.joinToString("、") }
                 .onFailure { errorText = "导出失败：" + describe(it) }
+        }
+    }
+
+    /** 导入 CSV：让用户选一个目录，读回 4 个文件后做增量合并（同 id 覆盖、新 id 追加） */
+    val csvImport = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri == null) {
+            status = "已取消导入"
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            busy = true
+            val result = runCatching {
+                val files = readCsvFiles(context, uri)
+                if (files.isEmpty()) {
+                    throw IOException(
+                        "这个文件夹里没有 accounts.csv、categories.csv、transactions.csv、budgets.csv 中的任何一个",
+                    )
+                }
+                backupRepository.importCsv(files).getOrThrow()
+            }
+            busy = false
+            result
+                .onSuccess { outcome ->
+                    status = "已导入：" + writtenSummary(outcome)
+                    importOutcome = outcome
+                }
+                .onFailure {
+                    val message = describe(it)
+                    errorText = (if (message.startsWith("导入失败")) message else "导入没有完成：" + message) +
+                        "\n本机数据未被改动。"
+                }
         }
     }
 
@@ -164,6 +203,12 @@ fun BackupSettingsSection(
             enabled = !busy,
         ) { restorePicker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
 
+        BackupRow(
+            title = "导入 CSV（增量合并）",
+            subtitle = "选中放着 4 个 CSV 的文件夹：同 id 覆盖、新 id 追加，本机独有的数据不删",
+            enabled = !busy,
+        ) { explainImport = true }
+
         Text(
             text = "恢复前会自动把当前数据备份到应用私有目录（" + autoBackupStore.directoryPath +
                 "）；该目录随应用卸载一起删除，长期备份请用「导出 JSON」。",
@@ -212,6 +257,63 @@ fun BackupSettingsSection(
             },
             dismissButton = {
                 TextButton(onClick = { explainExport = null }) { Text(text = "取消") }
+            },
+        )
+    }
+
+    // 导入前说明：导入是合并不是替换，用户得先知道这一点（计划 4.8 / 用户口径）
+    if (explainImport) {
+        AlertDialog(
+            onDismissRequest = { explainImport = false },
+            title = { Text(text = "导入是增量合并") },
+            text = {
+                Text(
+                    text = "需要选中一个放着 accounts.csv、categories.csv、transactions.csv、budgets.csv 的文件夹。" +
+                        "导入规则：\n" +
+                        "· 文件里的 id 本机已经有 → 覆盖那一行；\n" +
+                        "· 文件里的 id 本机没有 → 追加成一行新的；\n" +
+                        "· 本机独有的数据不会被删除。\n\n" +
+                        "如果你要导入的是一份全新数据，请先用「从备份恢复」清空本机数据，" +
+                        "否则新旧数据会混在一起。\n" +
+                        "看不明白的行会跳过，导入完成后会告诉你是哪个文件的第几行、为什么。",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    explainImport = false
+                    csvImport.launch(null)
+                }) { Text(text = "选择文件夹") }
+            },
+            dismissButton = {
+                TextButton(onClick = { explainImport = false }) { Text(text = "取消") }
+            },
+        )
+    }
+
+    // 导入结果：新增/覆盖了多少、跳了哪些行（带文件名与行号）
+    importOutcome?.let { outcome ->
+        AlertDialog(
+            onDismissRequest = { importOutcome = null },
+            title = { Text(text = if (outcome.skippedRows > 0) "导入完成，有行被跳过" else "导入完成") },
+            text = {
+                Text(
+                    text = "新增：" + countsLine(outcome.inserted) + "\n" +
+                        "覆盖：" + countsLine(outcome.updated) + "\n" +
+                        (if (outcome.missingFiles.isEmpty()) {
+                            ""
+                        } else {
+                            "没找到的文件：" + outcome.missingFiles.joinToString("、") + "\n"
+                        }) +
+                        (if (outcome.problems.isEmpty()) {
+                            ""
+                        } else {
+                            "\n跳过 " + outcome.skippedRows + " 行：\n" +
+                                outcome.problems.joinToString("\n") { it.describeLine() }
+                        }),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { importOutcome = null }) { Text(text = "知道了") }
             },
         )
     }
@@ -299,6 +401,18 @@ private fun counts(file: BackupFile): String =
         "、交易 " + file.data.transactions.size +
         "、预算 " + file.data.budgets.size
 
+private fun countsLine(counts: CsvImportCounts): String =
+    "账户 " + counts.accounts + "、分类 " + counts.categories +
+        "、交易 " + counts.transactions + "、预算 " + counts.budgets
+
+private fun writtenSummary(outcome: CsvImportOutcome): String =
+    "新增 " + outcome.inserted.total + " 行、覆盖 " + outcome.updated.total + " 行" +
+        (if (outcome.skippedRows > 0) "，跳过 " + outcome.skippedRows + " 行" else "")
+
+/** 汇总行的行号是 0，不带文件名；其余带「文件 第 N 行」 */
+private fun CsvRowProblem.describeLine(): String =
+    if (line > 0) file + " 第 " + line + " 行：" + reason else reason
+
 private fun defaultBackupFileName(): String =
     "ledger-backup-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".json"
 
@@ -317,6 +431,47 @@ private suspend fun readBackupText(context: Context, uri: Uri): String = withCon
         ?: throw IOException("无法读取所选文件")
     stream.use { BackupFileIO.readText(it) }
 }
+
+/** 从用户选的目录里读回 4 个 CSV：SAF 只能按 URI 读，先列出子文档再按显示名匹配 */
+private suspend fun readCsvFiles(context: Context, treeUri: Uri): Map<String, String> =
+    withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
+            treeUri,
+            DocumentsContract.getTreeDocumentId(treeUri),
+        )
+        val wanted = setOf(
+            CsvExporter.ACCOUNTS_FILE,
+            CsvExporter.CATEGORIES_FILE,
+            CsvExporter.TRANSACTIONS_FILE,
+            CsvExporter.BUDGETS_FILE,
+        )
+        val found = LinkedHashMap<String, Uri>()
+        resolver.query(
+            childrenUri,
+            arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            ),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                val name = cursor.getString(nameIndex)?.lowercase() ?: continue
+                if (name !in wanted || found.containsKey(name)) continue
+                val id = cursor.getString(idIndex) ?: continue
+                found[name] = DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
+            }
+        }
+        found.mapValues { (_, document) ->
+            val stream = resolver.openInputStream(document)
+                ?: throw IOException("无法读取文件：" + DocumentsContract.getDocumentId(document))
+            stream.use { BackupFileIO.readText(it) }
+        }
+    }
 
 /** 逐个创建 CSV：SAF 下每个文件都要拿到 URI 才能写，不能按路径写 */
 private suspend fun writeCsvFiles(context: Context, treeUri: Uri, files: Map<String, String>): List<String> =

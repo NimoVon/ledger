@@ -14,6 +14,11 @@ import com.nimo.bookkeeping.domain.backup.BackupFile
 import com.nimo.bookkeeping.domain.backup.BudgetBackup
 import com.nimo.bookkeeping.domain.backup.CategoryBackup
 import com.nimo.bookkeeping.domain.backup.CsvExporter
+import com.nimo.bookkeeping.domain.backup.CsvImportCounts
+import com.nimo.bookkeeping.domain.backup.CsvImportOutcome
+import com.nimo.bookkeeping.domain.backup.CsvImportParse
+import com.nimo.bookkeeping.domain.backup.CsvImportParser
+import com.nimo.bookkeeping.domain.backup.CsvRowProblem
 import com.nimo.bookkeeping.domain.backup.TransactionBackup
 import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.model.CategoryKind
@@ -63,7 +68,57 @@ class BackupRepository(private val db: AppDatabase) {
         )
     }
 
+    // ---- 增量导入（F14） ----
+
+    /**
+     * CSV 增量导入（计划 line 84）。
+     *
+     * 语义：**同 id 覆盖成文件里的值、新 id 追加，不删除本机任何一行**（要「全新数据」请先用替换式恢复）。
+     * 步骤：解析 → 与本机数据合并后校验引用与冲突 → 单事务写入。
+     * 有问题的行只跳过它自己并在结果里报「文件 + 行号 + 原因」；任何一行都不许静默改写数据。
+     */
+    suspend fun importCsv(files: Map<String, String>): Result<CsvImportOutcome> =
+        withContext(Dispatchers.IO) {
+            try {
+                val parsed = CsvImportParser.parse(files)
+                val plan = planImport(parsed, readAll())
+                if (plan.hasAnythingToWrite) {
+                    db.withTransaction {
+                        if (plan.accountsToInsert.isNotEmpty()) accountDao.insertAll(plan.accountsToInsert)
+                        if (plan.accountsToUpdate.isNotEmpty()) accountDao.updateAll(plan.accountsToUpdate)
+                        if (plan.categoriesToInsert.isNotEmpty()) {
+                            val ordered = parentsFirst(
+                                plan.categoriesToInsert,
+                                CategoryEntity::id,
+                                CategoryEntity::parentId,
+                            )
+                            categoryDao.insertAll(ordered)
+                        }
+                        if (plan.categoriesToUpdate.isNotEmpty()) categoryDao.updateAll(plan.categoriesToUpdate)
+                        if (plan.transactionsToInsert.isNotEmpty()) txDao.insertAll(plan.transactionsToInsert)
+                        if (plan.transactionsToUpdate.isNotEmpty()) txDao.updateAll(plan.transactionsToUpdate)
+                        if (plan.budgetsToInsert.isNotEmpty()) budgetDao.insertAll(plan.budgetsToInsert)
+                        if (plan.budgetsToUpdate.isNotEmpty()) budgetDao.updateAll(plan.budgetsToUpdate)
+                    }
+                }
+                Result.success(
+                    CsvImportOutcome(
+                        inserted = plan.insertedCounts,
+                        updated = plan.updatedCounts,
+                        problems = CsvImportParser.foldProblems(parsed.problems + plan.problems),
+                        missingFiles = parsed.missingFiles,
+                    ),
+                )
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Result.failure(
+                    IllegalStateException("导入失败，本机数据未改动：" + (e.message ?: e.javaClass.simpleName), e),
+                )
+            }
+        }
+
     // ---- 恢复 ----
+
 
     /** 解析 → 校验 → 恢复。文本不是本应用备份时直接失败，不碰数据库。 */
     suspend fun restoreFromJson(text: String, autoBackup: AutoBackupWriter): Result<Unit> =
@@ -124,6 +179,43 @@ class BackupRepository(private val db: AppDatabase) {
     private suspend fun exportFile(): BackupFile =
         BackupFile(exportedAt = System.currentTimeMillis(), data = readAll().toBackupData())
 
+    /**
+     * 一次增量导入算出来的写入计划：哪些行是新增、哪些是覆盖、哪些必须跳过。
+     */
+    private class ImportPlan(
+        val accountsToInsert: List<AccountEntity>,
+        val accountsToUpdate: List<AccountEntity>,
+        val categoriesToInsert: List<CategoryEntity>,
+        val categoriesToUpdate: List<CategoryEntity>,
+        val transactionsToInsert: List<TransactionEntity>,
+        val transactionsToUpdate: List<TransactionEntity>,
+        val budgetsToInsert: List<BudgetEntity>,
+        val budgetsToUpdate: List<BudgetEntity>,
+        val problems: List<CsvRowProblem>,
+    ) {
+        val hasAnythingToWrite: Boolean
+            get() = accountsToInsert.isNotEmpty() || accountsToUpdate.isNotEmpty() ||
+                categoriesToInsert.isNotEmpty() || categoriesToUpdate.isNotEmpty() ||
+                transactionsToInsert.isNotEmpty() || transactionsToUpdate.isNotEmpty() ||
+                budgetsToInsert.isNotEmpty() || budgetsToUpdate.isNotEmpty()
+
+        val insertedCounts: CsvImportCounts
+            get() = CsvImportCounts(
+                accounts = accountsToInsert.size,
+                categories = categoriesToInsert.size,
+                transactions = transactionsToInsert.size,
+                budgets = budgetsToInsert.size,
+            )
+
+        val updatedCounts: CsvImportCounts
+            get() = CsvImportCounts(
+                accounts = accountsToUpdate.size,
+                categories = categoriesToUpdate.size,
+                transactions = transactionsToUpdate.size,
+                budgets = budgetsToUpdate.size,
+            )
+    }
+
     private class Snapshot(
         val accounts: List<AccountEntity>,
         val categories: List<CategoryEntity>,
@@ -147,33 +239,175 @@ class BackupRepository(private val db: AppDatabase) {
             accountDao.deleteAll()
 
             accountDao.insertAll(data.accounts.map { it.toEntity() })
-            categoryDao.insertAll(parentsFirst(data.categories).map { it.toEntity() })
+            categoryDao.insertAll(
+                parentsFirst(data.categories, CategoryBackup::id, CategoryBackup::parentId).map { it.toEntity() },
+            )
             txDao.insertAll(data.transactions.map { it.toEntity() })
             budgetDao.insertAll(data.budgets.map { it.toEntity() })
         }
     }
 
     /**
+     * 把「文件里的行」和「本机的行」合起来算一遍：哪些新增、哪些覆盖、哪些必须跳过。
+     *
+     * 引用校验看的是**合并后的集合**（本机 + 文件）：文件里新加的账户/分类，可以被同一批流水立刻引用。
+     * 与数据库触发器同口径的规则（金额、账户、分类方向）已在解析层挡过一轮，这里只补「引用是否存在」。
+     */
+    private fun planImport(parsed: CsvImportParse, snapshot: Snapshot): ImportPlan {
+        val problems = mutableListOf<CsvRowProblem>()
+
+        val existingAccountIds = snapshot.accounts.mapTo(HashSet()) { it.id }
+        val existingCategoryIds = snapshot.categories.mapTo(HashSet()) { it.id }
+        val existingTransactionIds = snapshot.transactions.mapTo(HashSet()) { it.id }
+        val existingBudgetIds = snapshot.budgets.mapTo(HashSet()) { it.id }
+
+        fun lineOf(file: String, id: Long): Int = parsed.rowLines[file to id] ?: 0
+
+        // 账户：本机没有这个 id 就新增，已有就覆盖成文件里的值
+        val accountsToInsert = mutableListOf<AccountEntity>()
+        val accountsToUpdate = mutableListOf<AccountEntity>()
+        for (account in parsed.accounts) {
+            val entity = account.toEntity()
+            if (account.id in existingAccountIds) accountsToUpdate += entity else accountsToInsert += entity
+        }
+
+        // 分类：父必须存在（本机或文件里），且不能把自己接到自己的子孙下面
+        val mergedParentOf = HashMap<Long, Long?>()
+        snapshot.categories.forEach { mergedParentOf[it.id] = it.parentId }
+        parsed.categories.forEach { mergedParentOf[it.id] = it.parentId }
+        val categoriesToInsert = mutableListOf<CategoryEntity>()
+        val categoriesToUpdate = mutableListOf<CategoryEntity>()
+        for (category in parsed.categories) {
+            val parentId = category.parentId
+            if (parentId != null) {
+                val reason = when {
+                    parentId !in mergedParentOf.keys ->
+                        "parent_id " + parentId + " 在本机数据和这个文件里都不存在"
+                    wouldCreateCycle(category.id, mergedParentOf) ->
+                        "parent_id 会把分类挂到自己的子孙下面"
+                    else -> null
+                }
+                if (reason != null) {
+                    problems += CsvRowProblem(
+                        CsvExporter.CATEGORIES_FILE,
+                        lineOf(CsvExporter.CATEGORIES_FILE, category.id),
+                        reason,
+                    )
+                    continue
+                }
+            }
+            val entity = category.toEntity()
+            if (category.id in existingCategoryIds) categoriesToUpdate += entity else categoriesToInsert += entity
+        }
+
+        // 交易：账户/分类引用必须存在，分类的收支方向必须和交易类型一致（数据库触发器也管这条）
+        val mergedCategoryKind = HashMap<Long, CategoryKind>()
+        snapshot.categories.forEach { mergedCategoryKind[it.id] = it.kind }
+        parsed.categories.forEach { mergedCategoryKind[it.id] = CategoryKind.valueOf(it.kind) }
+        val mergedAccountIds = existingAccountIds + parsed.accounts.map { it.id }
+        val transactionsToInsert = mutableListOf<TransactionEntity>()
+        val transactionsToUpdate = mutableListOf<TransactionEntity>()
+        for (tx in parsed.transactions) {
+            val reason = when {
+                tx.accountId !in mergedAccountIds ->
+                    "account_id " + tx.accountId + " 在本机数据和这个文件里都不存在"
+                tx.toAccountId != null && tx.toAccountId !in mergedAccountIds ->
+                    "to_account_id " + tx.toAccountId + " 在本机数据和这个文件里都不存在"
+                tx.categoryId != null && tx.categoryId !in mergedCategoryKind.keys ->
+                    "category_id " + tx.categoryId + " 在本机数据和这个文件里都不存在"
+                tx.categoryId != null && mergedCategoryKind[tx.categoryId] != kindOf(tx.type) ->
+                    "分类的收支方向和交易类型不一致"
+                else -> null
+            }
+            if (reason != null) {
+                problems += CsvRowProblem(
+                    CsvExporter.TRANSACTIONS_FILE,
+                    lineOf(CsvExporter.TRANSACTIONS_FILE, tx.id),
+                    reason,
+                )
+                continue
+            }
+            val entity = tx.toEntity()
+            if (tx.id in existingTransactionIds) transactionsToUpdate += entity else transactionsToInsert += entity
+        }
+
+        // 预算：同一月份同一分类只能有一份（本机已有别的 id 占着这个键就跳过，不让触发器把整批回滚）
+        val budgetKeyOwner = HashMap<Pair<String, Long?>, Long>()
+        snapshot.budgets.forEach { budgetKeyOwner[it.month to it.categoryId] = it.id }
+        val budgetsToInsert = mutableListOf<BudgetEntity>()
+        val budgetsToUpdate = mutableListOf<BudgetEntity>()
+        for (budget in parsed.budgets) {
+            val owner = budgetKeyOwner[budget.month to budget.categoryId]
+            val reason = when {
+                owner != null && owner != budget.id ->
+                    "本机已经有 " + budget.month + " 的这份预算（id " + owner + "），同一月份同一个分类只能有一份"
+                budget.categoryId != null && budget.categoryId !in mergedCategoryKind.keys ->
+                    "category_id " + budget.categoryId + " 在本机数据和这个文件里都不存在"
+                else -> null
+            }
+            if (reason != null) {
+                problems += CsvRowProblem(
+                    CsvExporter.BUDGETS_FILE,
+                    lineOf(CsvExporter.BUDGETS_FILE, budget.id),
+                    reason,
+                )
+                continue
+            }
+            val entity = budget.toEntity()
+            if (budget.id in existingBudgetIds) budgetsToUpdate += entity else budgetsToInsert += entity
+        }
+
+        return ImportPlan(
+            accountsToInsert = accountsToInsert,
+            accountsToUpdate = accountsToUpdate,
+            categoriesToInsert = categoriesToInsert,
+            categoriesToUpdate = categoriesToUpdate,
+            transactionsToInsert = transactionsToInsert,
+            transactionsToUpdate = transactionsToUpdate,
+            budgetsToInsert = budgetsToInsert,
+            budgetsToUpdate = budgetsToUpdate,
+            problems = problems,
+        )
+    }
+
+    /** 顺着 parentId 往上走，走到自己（或绕回走过的节点）说明会成环。 */
+    private fun wouldCreateCycle(id: Long, parentOf: Map<Long, Long?>): Boolean {
+        var cursor = parentOf[id]
+        val seen = HashSet<Long>()
+        while (cursor != null) {
+            if (cursor == id || !seen.add(cursor)) return true
+            cursor = parentOf[cursor]
+        }
+        return false
+    }
+
+    /** 交易类型对应的分类方向；转账/余额调整没有分类，返回 null。 */
+    private fun kindOf(type: String): CategoryKind? = when (type) {
+        TransactionType.EXPENSE.name -> CategoryKind.EXPENSE
+        TransactionType.INCOME.name -> CategoryKind.INCOME
+        else -> null
+    }
+    /**
      * 分类按「父在前」排序：parentId 引用同一批数据，父行先落库。
      * 现在数据库没有外键，这是为将来加外键留的后路，也顺手保证顺序稳定。
      */
-    private fun parentsFirst(categories: List<CategoryBackup>): List<CategoryBackup> {
-        val byId = categories.associateBy { it.id }
+    private fun <T> parentsFirst(items: List<T>, idOf: (T) -> Long, parentIdOf: (T) -> Long?): List<T> {
+        val byId = items.associateBy(idOf)
         val depth = HashMap<Long, Int>()
-        fun depthOf(start: CategoryBackup): Int {
-            depth[start.id]?.let { return it }
+        fun depthOf(start: T): Int {
+            depth[idOf(start)]?.let { return it }
             var steps = 0
-            var cursor: CategoryBackup? = start
+            var cursor: T? = start
             val seen = HashSet<Long>()
-            while (cursor != null && seen.add(cursor.id)) {
-                val parent = cursor.parentId?.let { byId[it] } ?: break
+            while (cursor != null && seen.add(idOf(cursor))) {
+                val parent = parentIdOf(cursor)?.let { byId[it] } ?: break
                 steps++
                 cursor = parent
             }
-            depth[start.id] = steps
+            depth[idOf(start)] = steps
             return steps
         }
-        return categories.sortedBy { depthOf(it) }
+        return items.sortedBy { depthOf(it) }
     }
 
     private fun Snapshot.toBackupData(): BackupData = BackupData(

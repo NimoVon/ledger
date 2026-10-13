@@ -3,6 +3,7 @@ package com.nimo.bookkeeping.data.local.dao
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Upsert
 import com.nimo.bookkeeping.data.local.entity.BudgetEntity
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +28,10 @@ interface BudgetDao {
     /** 备份恢复用：带显式 id 整体写入 */
     @Insert
     suspend fun insertAll(items: List<BudgetEntity>)
+
+    /** 批量覆盖已有行（CSV 增量导入用）。用 @Update 而不是 @Upsert：约束冲突必须抛出来，不能静默 0 行。 */
+    @Update
+    suspend fun updateAll(items: List<BudgetEntity>)
 
     @Query("DELETE FROM budgets")
     suspend fun deleteAll()

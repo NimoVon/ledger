@@ -31,6 +31,20 @@ object Money {
     }
 
     /**
+     * 解析"元"文本为分，**允许 0 与负数**（CSV 导入用：账户初始余额可以是 0 或负数）。
+     *
+     * 与 [parseCents] 共用同一个格式解析器与同一个上限，唯一区别是不拒绝零值：
+     * CSV/数据库都以上限为界，超上限一样返回 null。转账等"必须大于 0"的规则由调用方判断。
+     */
+    fun parseCentsAllowingZero(input: String): Long? {
+        val text = input.trim()
+        if (text.isEmpty()) return null
+        val magnitude = parseMagnitudeOrNull(text) ?: return null
+        if (magnitude > MAX_AMOUNT_CENTS) return null
+        return if (text.startsWith("-")) -magnitude else magnitude
+    }
+
+    /**
      * 输入文本"格式合法、但数值超过 [MAX_AMOUNT_CENTS]"（计划 line 495：金额超上限要有明确处理）。
      *
      * 与 [parseCents] 共用同一个 [parseMagnitudeOrNull]，所以两者的格式口径永远不会漂移：

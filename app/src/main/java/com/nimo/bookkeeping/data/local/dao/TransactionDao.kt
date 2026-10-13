@@ -43,6 +43,10 @@ interface TransactionDao {
     @Insert
     suspend fun insertAll(items: List<TransactionEntity>)
 
+    /** 批量覆盖已有行（CSV 增量导入用）。用 @Update 而不是 @Upsert：约束冲突必须抛出来，不能静默 0 行。 */
+    @Update
+    suspend fun updateAll(items: List<TransactionEntity>)
+
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
 

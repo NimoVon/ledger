@@ -17,6 +17,8 @@ import com.nimo.bookkeeping.domain.backup.BackupFile
 import com.nimo.bookkeeping.domain.backup.BudgetBackup
 import com.nimo.bookkeeping.domain.backup.CategoryBackup
 import com.nimo.bookkeeping.domain.backup.CsvExporter
+import com.nimo.bookkeeping.domain.backup.CsvImportCounts
+import com.nimo.bookkeeping.domain.backup.CsvRowProblem
 import com.nimo.bookkeeping.domain.backup.TransactionBackup
 import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.model.CategoryKind
@@ -345,4 +347,160 @@ class BackupRepositoryTest {
         assertEquals(2, db.budgetDao().listAll().size)
         assertEquals(4, exportedData().transactions.size)
     }
+
+    // ---- 增量导入（F14：同 id 覆盖、新 id 追加，不删本机任何行） ----
+
+    private fun csv(header: List<String>, vararg rows: List<String>): String =
+        CsvExporter.BOM + (listOf(header) + rows).joinToString("\r\n") { it.joinToString(",") } + "\r\n"
+
+    @Test
+    fun importCsv_mergesByOverwritingMatchingIdsAndAppendingNewOnes() = runTest {
+        seedSample()
+        val files = mapOf(
+            CsvExporter.ACCOUNTS_FILE to csv(
+                CsvExporter.ACCOUNTS_HEADER,
+                listOf("9", "余额宝（改）", "ALIPAY", "7.77", "true", "false", "1", "1", "2"),
+                listOf("20", "现金", "CASH", "88.00", "true", "false", "9", "31", "31"),
+            ),
+            CsvExporter.CATEGORIES_FILE to csv(
+                CsvExporter.CATEGORIES_HEADER,
+                listOf("5", "餐饮", "EXPENSE", "", "food", "#FF8800", "false", "1"),
+                listOf("21", "交通", "EXPENSE", "5", "bus", "", "false", "3"),
+            ),
+            CsvExporter.TRANSACTIONS_FILE to csv(
+                CsvExporter.TRANSACTIONS_HEADER,
+                listOf("7", "EXPENSE", "9.99", "2", "", "5", "2026-10-13", "改过的午饭", "21", "99"),
+                listOf("30", "TRANSFER", "50.00", "20", "9", "", "2026-10-14", "", "41", "41"),
+            ),
+            CsvExporter.BUDGETS_FILE to csv(
+                CsvExporter.BUDGETS_HEADER,
+                listOf("11", "2026-10", "5", "12.34"),
+                listOf("31", "2026-11", "", "50.00"),
+            ),
+        )
+
+        val outcome = repo.importCsv(files).getOrThrow()
+
+        assertEquals(emptyList<CsvRowProblem>(), outcome.problems)
+        assertEquals(emptyList<String>(), outcome.missingFiles)
+        assertEquals(
+            CsvImportCounts(accounts = 1, categories = 1, transactions = 1, budgets = 1),
+            outcome.inserted,
+        )
+        assertEquals(
+            CsvImportCounts(accounts = 1, categories = 1, transactions = 1, budgets = 1),
+            outcome.updated,
+        )
+        assertEquals(8, outcome.writtenRows)
+
+        // 本机原有行一行都没少
+        assertEquals(3, db.accountDao().count())
+        assertEquals(4, db.categoryDao().listAll().size)
+        assertEquals(5, db.transactionDao().count())
+        assertEquals(3, db.budgetDao().listAll().size)
+
+        // 同 id：整行覆盖成文件里的值
+        assertEquals("余额宝（改）", db.accountDao().getById(9L)?.name)
+        assertEquals(777L, db.accountDao().getById(9L)?.initialBalance)
+        assertEquals(999L, db.transactionDao().getById(7L)?.amount)
+        assertEquals("改过的午饭", db.transactionDao().getById(7L)?.note)
+        assertEquals(99L, db.transactionDao().getById(7L)?.updatedAt)
+
+        // 新 id：追加，且能引用同一批文件里的新账户/新分类
+        assertEquals(8800L, db.accountDao().getById(20L)?.initialBalance)
+        assertEquals(5L, db.categoryDao().getById(21L)?.parentId)
+        assertEquals(5000L, db.transactionDao().getById(30L)?.amount)
+        assertEquals(9L, db.transactionDao().getById(30L)?.toAccountId)
+        assertEquals(1234L, db.budgetDao().find("2026-10", 5L)?.amount)
+        assertEquals(5000L, db.budgetDao().find("2026-11", null)?.amount)
+
+        // 文件里没提到的本机行必须原样保留（含空月份总预算那份）
+        assertEquals(200000L, db.budgetDao().find("2026-10", null)?.amount)
+        assertEquals("招行", db.accountDao().getById(2L)?.name)
+    }
+
+    @Test
+    fun importCsv_skipsRowsWhoseReferencesDoNotExistAnywhere() = runTest {
+        seedSample()
+        val files = mapOf(
+            CsvExporter.TRANSACTIONS_FILE to csv(
+                CsvExporter.TRANSACTIONS_HEADER,
+                listOf("40", "EXPENSE", "5.00", "404", "", "5", "2026-10-14", "", "1", "1"),
+                listOf("41", "EXPENSE", "5.00", "2", "", "999", "2026-10-14", "", "1", "1"),
+                listOf("42", "EXPENSE", "5.00", "2", "", "6", "2026-10-14", "", "1", "1"),
+                listOf("43", "EXPENSE", "6.00", "2", "", "5", "2026-10-14", "好的那笔", "1", "1"),
+            ),
+        )
+
+        val outcome = repo.importCsv(files).getOrThrow()
+
+        assertEquals(CsvImportCounts(transactions = 1), outcome.inserted)
+        assertEquals(1, outcome.writtenRows)
+        assertEquals(3, outcome.skippedRows)
+        assertEquals(listOf(2, 3, 4), outcome.problems.map { it.line })
+        assertTrue(outcome.problems.all { it.file == CsvExporter.TRANSACTIONS_FILE })
+        assertTrue(outcome.problems[2].reason, outcome.problems[2].reason.contains("分类的收支方向"))
+
+        assertEquals(5, db.transactionDao().count())
+        assertEquals(600L, db.transactionDao().getById(43L)?.amount)
+        assertEquals(null, db.transactionDao().getById(40L))
+        assertEquals(null, db.transactionDao().getById(41L))
+        assertEquals(null, db.transactionDao().getById(42L))
+    }
+
+    @Test
+    fun importCsv_skipsABudgetThatWouldCollideOnTheSameMonthAndCategory() = runTest {
+        seedSample()
+        val files = mapOf(
+            CsvExporter.BUDGETS_FILE to csv(
+                CsvExporter.BUDGETS_HEADER,
+                listOf("99", "2026-10", "5", "1.00"),
+                listOf("98", "2026-11", "", "2.00"),
+            ),
+        )
+
+        val outcome = repo.importCsv(files).getOrThrow()
+
+        assertEquals(CsvImportCounts(budgets = 1), outcome.inserted)
+        assertEquals(0, outcome.updated.total)
+        assertEquals(1, outcome.problems.size)
+        assertEquals(2, outcome.problems[0].line)
+        assertTrue(outcome.problems[0].reason, outcome.problems[0].reason.contains("只能有一份"))
+        assertEquals(3, db.budgetDao().listAll().size)
+        assertEquals(100000L, db.budgetDao().find("2026-10", 5L)?.amount)
+        assertEquals(200L, db.budgetDao().find("2026-11", null)?.amount)
+    }
+
+    @Test
+    fun importCsv_withNoFilesAtAll_writesNothingAndListsTheMissingFiles() = runTest {
+        seedSample()
+
+        val outcome = repo.importCsv(emptyMap()).getOrThrow()
+
+        assertEquals(0, outcome.writtenRows)
+        assertEquals(emptyList<CsvRowProblem>(), outcome.problems)
+        assertEquals(4, outcome.missingFiles.size)
+        assertTrue(outcome.missingFiles.contains(CsvExporter.TRANSACTIONS_FILE))
+        assertEquals(2, db.accountDao().count())
+        assertEquals(4, db.transactionDao().count())
+    }
+
+    @Test
+    fun importCsv_ofOurOwnExportChangesNothingAndOnlyOverwrites() = runTest {
+        seedSample()
+        val before = exportedData()
+
+        val outcome = repo.importCsv(repo.exportCsvFiles()).getOrThrow()
+
+        // 一个 id 都不新：全部走覆盖；数据逐行一致（CSV 的元 ↔ JSON 的分没有丢精度）
+        assertEquals(0, outcome.inserted.total)
+        assertEquals(11, outcome.updated.total)
+        assertEquals(emptyList<CsvRowProblem>(), outcome.problems)
+        assertEquals(before, exportedData())
+        assertEquals(2, db.accountDao().count())
+        assertEquals(3, db.categoryDao().listAll().size)
+        assertEquals(4, db.transactionDao().count())
+        assertEquals(2, db.budgetDao().listAll().size)
+    }
 }
+
