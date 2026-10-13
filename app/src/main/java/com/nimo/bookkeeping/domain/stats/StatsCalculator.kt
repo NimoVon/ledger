@@ -5,6 +5,7 @@ import com.nimo.bookkeeping.domain.model.CategoryKind
 import com.nimo.bookkeeping.domain.model.TransactionRecord
 import com.nimo.bookkeeping.domain.model.TransactionType
 import java.time.LocalDate
+import java.time.YearMonth
 
 /** 期间收支汇总。净结余 = 收入 - 支出，转账与余额调整永不进入（铁律 3：类型白名单） */
 data class PeriodSummary(
@@ -20,6 +21,15 @@ data class CategoryBreakdownRow(
     val name: String,
     val amountCents: Long,
     /** 占支出（或收入）合计的比例，合计为 0 时为 null */
+    val percent: Double?,
+)
+
+/** 账户支出分布行（F07「账户支出分布」） */
+data class AccountBreakdownRow(
+    val accountId: Long,
+    val name: String,
+    val amountCents: Long,
+    /** 占本月支出合计的比例，合计为 0 时为 null */
     val percent: Double?,
 )
 
@@ -85,6 +95,34 @@ object StatsCalculator {
         }.sortedByDescending { it.amountCents }
     }
 
+    /**
+     * 账户支出分布（F07）：按支出账户聚合，按金额降序。
+     * 只统计 EXPENSE——转账按定义不是支出，它的两端都不出现在这里（铁律 3）。
+     */
+    fun accountBreakdown(
+        records: List<TransactionRecord>,
+        accountNames: Map<Long, String>,
+        range: ClosedRange<LocalDate>? = null,
+    ): List<AccountBreakdownRow> {
+        val byAccount = HashMap<Long, Long>()
+        for (r in records) {
+            if (r.type != TransactionType.EXPENSE) continue
+            if (!inRange(r.occurredOn, range)) continue
+            // 支出按定义必有账户；直插脏数据可能没有，丢掉它好过把 page 拖崩
+            val accountId = r.accountId ?: continue
+            byAccount[accountId] = (byAccount[accountId] ?: 0L) + r.amountCents
+        }
+        val total = byAccount.values.sum()
+        return byAccount.map { (accountId, amount) ->
+            AccountBreakdownRow(
+                accountId = accountId,
+                name = accountNames[accountId] ?: "?",
+                amountCents = amount,
+                percent = if (total > 0) amount.toDouble() / total else null,
+            )
+        }.sortedByDescending { it.amountCents }
+    }
+
     /** 环比：(当前-上月)/上月。上月为 0 时返回 null，UI 显示 "—"（计划 3.4） */
     fun monthOverMonth(currentCents: Long, previousCents: Long): Double? =
         if (previousCents == 0L) null else (currentCents - previousCents).toDouble() / previousCents
@@ -92,6 +130,19 @@ object StatsCalculator {
     /** 日均支出（向下取整到分） */
     fun dailyAverage(expenseCents: Long, days: Int): Long =
         if (days <= 0) 0L else expenseCents / days
+
+    /**
+     * 日均支出的分母（已过去的天数）：查看当月时按"今天几号"，
+     * 已结束的月份按整月天数，还没到的月份按 0。用整月天数当分母会把月中看到的日均压得偏低。
+     */
+    fun elapsedDays(month: YearMonth, today: LocalDate): Int {
+        val current = YearMonth.from(today)
+        return when {
+            month == current -> today.dayOfMonth
+            month.isBefore(current) -> month.lengthOfMonth()
+            else -> 0
+        }
+    }
 
     private fun inRange(date: LocalDate, range: ClosedRange<LocalDate>?): Boolean =
         range == null || (date >= range.start && date <= range.endInclusive)

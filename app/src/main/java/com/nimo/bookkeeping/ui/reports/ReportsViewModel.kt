@@ -10,6 +10,7 @@ import com.nimo.bookkeeping.data.local.entity.TransactionEntity
 import com.nimo.bookkeeping.data.local.toInfo
 import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.model.CategoryKind
+import com.nimo.bookkeeping.domain.stats.AccountBreakdownRow
 import com.nimo.bookkeeping.domain.stats.CategoryBreakdownRow
 import com.nimo.bookkeeping.domain.stats.PeriodSummary
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
@@ -47,6 +48,10 @@ data class ReportsUiState(
     val previousSummary: PeriodSummary = PeriodSummary(incomeCents = 0, expenseCents = 0),
     /** 本月支出分类排行（一级分类粒度，子分类金额已并入父分类） */
     val breakdown: List<CategoryBreakdownRow> = emptyList(),
+    /** 本月支出账户分布 */
+    val accountBreakdown: List<AccountBreakdownRow> = emptyList(),
+    /** 本月日均支出（分母 = 已过去的天数，见 StatsCalculator.elapsedDays） */
+    val dailyAverageExpenseCents: Long = 0L,
     /**
      * 本月是否有任何流水（含转账/余额调整）。
      * 决定"空月"还是"有记录但本月没花钱"——后者不该显示整页空态。
@@ -97,7 +102,14 @@ class ReportsViewModel(
 
     /** null = 当前月份还没加载完成（用于区分"加载中"与"本月确实没有记录"） */
     private val snapshot = MutableStateFlow<MonthSnapshot?>(null)
-    private val categories = MutableStateFlow<Map<Long, CategoryEntity>?>(null)
+
+    /** 报表要用的"参考数据"：分类（含已停用）与账户名（含已归档）。两样都到齐才出数 */
+    private data class References(
+        val categories: Map<Long, CategoryEntity>,
+        val accountNames: Map<Long, String>,
+    )
+
+    private val references = MutableStateFlow<References?>(null)
     private val loadError = MutableStateFlow<String?>(null)
 
     init {
@@ -118,26 +130,36 @@ class ReportsViewModel(
             }.collect { snapshot.value = it }
         }
         viewModelScope.launch {
-            // 分类含已停用：历史流水的分类名不能丢
-            repository.observeAllCategories()
+            // 分类含已停用、账户含已归档：历史流水的名字不能丢（各自失败只丢自己那一份）
+            val categoryFlow = repository.observeAllCategories()
                 .catch {
                     loadError.value = "读取分类失败，请稍后重试"
                     emit(emptyList())
                 }
-                .collect { list -> categories.value = list.associateBy { it.id } }
+            val accountFlow = repository.observeAccounts()
+                .catch {
+                    loadError.value = "读取账户失败，请稍后重试"
+                    emit(emptyList())
+                }
+            combine(categoryFlow, accountFlow) { categories, accounts ->
+                References(
+                    categories = categories.associateBy { it.id },
+                    accountNames = accounts.associate { it.id to it.name },
+                )
+            }.collect { references.value = it }
         }
     }
 
     val uiState: StateFlow<ReportsUiState> = combine(
         month,
         snapshot,
-        categories,
+        references,
         loadError,
         pendingDeletionIds,
-    ) { month, snapshot, categories, loadError, pendingDeletionIds ->
+    ) { month, snapshot, references, loadError, pendingDeletionIds ->
         // 快照必须属于当前月份：切月瞬间不能把上个月的数字挂在标题下
         val current = snapshot?.takeIf { it.month == month }
-        val ready = current != null && categories != null
+        val ready = current != null && references != null
         if (!ready) {
             ReportsUiState(isLoading = true, errorMessage = loadError, month = month)
         } else {
@@ -147,16 +169,22 @@ class ReportsViewModel(
             // 非法 occurredOn（绕过校验器的直插，例如备份导入）由 toRecords 丢弃：不能让一行脏数据
             // 把 stateIn 拖死，也不能计入任何合计。区间已由 observeTransactions 限定，这里不再重复判断。
             val records = TransactionTimeline.toRecords(visibleCurrent)
+            val summary = StatsCalculator.summarize(records)
             ReportsUiState(
                 isLoading = false,
                 errorMessage = loadError,
                 month = month,
-                summary = StatsCalculator.summarize(records),
+                summary = summary,
                 previousSummary = StatsCalculator.summarize(TransactionTimeline.toRecords(visiblePrevious)),
                 breakdown = StatsCalculator.categoryBreakdown(
                     records = records,
-                    categories = categories.mapValues { it.value.toInfo() },
+                    categories = references.categories.mapValues { it.value.toInfo() },
                     kind = CategoryKind.EXPENSE,
+                ),
+                accountBreakdown = StatsCalculator.accountBreakdown(records, references.accountNames),
+                dailyAverageExpenseCents = StatsCalculator.dailyAverage(
+                    expenseCents = summary.expenseCents,
+                    days = StatsCalculator.elapsedDays(month, today()),
                 ),
                 hasRecords = visibleCurrent.isNotEmpty(),
             )

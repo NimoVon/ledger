@@ -108,6 +108,18 @@ class ReportsViewModelTest {
             ),
         ).getOrThrow()
 
+    /** 指定账户记一笔支出（账户分布用） */
+    private suspend fun addExpenseFrom(amount: Long, date: String, accountId: Long): Long =
+        repository.addTransaction(
+            TransactionInput(
+                type = TransactionType.EXPENSE,
+                amountCents = amount,
+                accountId = accountId,
+                categoryId = foodId,
+                occurredOn = date,
+            ),
+        ).getOrThrow()
+
     private suspend fun addIncome(amount: Long, date: String): Long =
         repository.addTransaction(
             TransactionInput(
@@ -316,5 +328,58 @@ class ReportsViewModelTest {
         // 月报观察的是同一份 Room Flow：记一笔保存后无需手动刷新
         val state = vm.uiState.first { it.summary.expenseCents == 2_500L }
         assertEquals("餐饮", state.breakdown.single().name)
+    }
+
+    @Test
+    fun accountBreakdown_splitsExpensesByAccountAndSkipsTransfers() = runTest {
+        seed()
+        addExpense(10_000L, "2026-10-05")
+        addExpenseFrom(4_000L, "2026-10-06", debitAccountId)
+        repository.addTransaction(
+            TransactionInput(
+                type = TransactionType.TRANSFER,
+                amountCents = 99_999L,
+                accountId = cashAccountId,
+                toAccountId = debitAccountId,
+                occurredOn = "2026-10-07",
+            ),
+        ).getOrThrow()
+
+        val state = newViewModel().awaitLoaded()
+
+        assertEquals(14_000L, state.summary.expenseCents)
+        assertEquals(listOf("现金", "招行卡"), state.accountBreakdown.map { it.name })
+        assertEquals(10_000L, state.accountBreakdown[0].amountCents)
+        assertEquals(4_000L, state.accountBreakdown[1].amountCents)
+        assertEquals(10_000.0 / 14_000.0, state.accountBreakdown[0].percent!!, 1e-9)
+    }
+
+    @Test
+    fun accountBreakdown_keepsArchivedAccountNames() = runTest {
+        seed()
+        addExpenseFrom(4_000L, "2026-10-06", debitAccountId)
+        repository.setAccountArchived(debitAccountId, true).getOrThrow()
+
+        val state = newViewModel().awaitLoaded()
+
+        // 归档只是不再出现在选择器里，历史流水的账户名照样要显示
+        assertEquals("招行卡", state.accountBreakdown.single().name)
+        assertEquals(4_000L, state.accountBreakdown.single().amountCents)
+    }
+
+    @Test
+    fun dailyAverage_dividesByElapsedDaysOfTheViewedMonth() = runTest {
+        seed()
+        addExpense(31_000L, "2026-10-05")
+        addExpense(30_000L, "2026-09-10")
+
+        val vm = newViewModel()
+        // 今天 = 2026-10-12 → 当月分母是 12，不是 31
+        assertEquals(2_583L, vm.awaitLoaded().dailyAverageExpenseCents)
+
+        vm.showPreviousMonth()
+        val september = vm.awaitMonth(YearMonth.of(2026, 9))
+        // 已结束的月份按整月天数（30 天）：30_000 / 30 = 1_000
+        assertEquals(1_000L, september.dailyAverageExpenseCents)
     }
 }

@@ -5,7 +5,9 @@ import com.nimo.bookkeeping.domain.model.CategoryKind
 import com.nimo.bookkeeping.domain.model.TransactionRecord
 import com.nimo.bookkeeping.domain.model.TransactionType
 import java.time.LocalDate
+import java.time.YearMonth
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -130,5 +132,59 @@ class StatsCalculatorTest {
         assertEquals(12096L, StatsCalculator.dailyAverage(375000L, 31))  // 向下取整到分
         assertEquals(0L, StatsCalculator.dailyAverage(375000L, 0))       // 非法天数
         assertEquals(0L, StatsCalculator.dailyAverage(0L, 31))
+    }
+
+    @Test
+    fun elapsedDays_cases() {
+        val today = LocalDate.of(2026, 10, 12)
+        // 当月按"今天几号"，用整月天数当分母会把月中看到的日均压低
+        assertEquals(12, StatsCalculator.elapsedDays(YearMonth.of(2026, 10), today))
+        assertEquals(30, StatsCalculator.elapsedDays(YearMonth.of(2026, 9), today))
+        assertEquals(28, StatsCalculator.elapsedDays(YearMonth.of(2026, 2), today))
+        assertEquals(0, StatsCalculator.elapsedDays(YearMonth.of(2026, 11), today))
+    }
+
+    // ---- 账户支出分布（F07） ----
+
+    private val accounts = mapOf(1L to "现金", 2L to "招行卡")
+
+    @Test
+    fun accountBreakdown_groupsByAccountAndSkipsTransfersAndAdjusts() {
+        val records = listOf(
+            tx(1, TransactionType.EXPENSE, 100000, 1, accountId = 1),            // 现金 ¥1,000
+            tx(2, TransactionType.EXPENSE, 50000, 2, accountId = 1),             // 现金 ¥500
+            tx(3, TransactionType.EXPENSE, 70000, 3, accountId = 2),             // 招行卡 ¥700
+            tx(4, TransactionType.TRANSFER, 999999, 4, accountId = 1, toAccountId = 2), // 转账两端都不算
+            tx(5, TransactionType.BALANCE_ADJUST, -50000, 5, accountId = 1),     // 余额调整不算
+            tx(6, TransactionType.INCOME, 888888, 6, categoryId = 101, accountId = 2), // 收入不算
+        )
+        val rows = StatsCalculator.accountBreakdown(records, accounts)
+        assertEquals(listOf("现金", "招行卡"), rows.map { it.name })
+        assertEquals(150000L, rows[0].amountCents)
+        assertEquals(70000L, rows[1].amountCents)
+        assertEquals(150000.0 / 220000.0, rows[0].percent!!, 1e-9)
+        assertEquals(70000.0 / 220000.0, rows[1].percent!!, 1e-9)
+    }
+
+    @Test
+    fun accountBreakdown_respectsDateRangeAndFallsBackForUnknownAccounts() {
+        val records = listOf(
+            tx(1, TransactionType.EXPENSE, 1000, 1, accountId = 1),
+            tx(2, TransactionType.EXPENSE, 2000, 20, accountId = 9),  // 账户已不在表里（历史数据）
+        )
+        val rows = StatsCalculator.accountBreakdown(
+            records,
+            accounts,
+            range = LocalDate.of(2026, 10, 20)..LocalDate.of(2026, 10, 20),
+        )
+        assertEquals(1, rows.size)
+        // 名字查不到给占位，不能整页崩（同分类排行的 "?"）
+        assertEquals("?", rows.single().name)
+        assertEquals(2000L, rows.single().amountCents)
+    }
+
+    @Test
+    fun accountBreakdown_emptyIsEmpty() {
+        assertTrue(StatsCalculator.accountBreakdown(emptyList(), accounts).isEmpty())
     }
 }

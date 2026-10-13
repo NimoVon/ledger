@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.bookkeeping.data.repository.LedgerRepository
-import com.nimo.bookkeeping.domain.stats.CategoryBreakdownRow
 import com.nimo.bookkeeping.ui.components.EmptyState
 import com.nimo.bookkeeping.ui.components.MonthSummaryBar
 import com.nimo.bookkeeping.ui.components.MonthSwitcher
@@ -84,6 +83,7 @@ fun ReportsScreen(
             )
 
             else -> LazyColumn(modifier = contentModifier) {
+                item(key = "daily") { DailyAverageRow(state.dailyAverageExpenseCents) }
                 item(key = "change") { ChangeSection(state) }
                 item(key = "breakdown-header") { SectionHeader("支出排行") }
                 if (state.breakdown.isEmpty()) {
@@ -91,12 +91,45 @@ fun ReportsScreen(
                         HintRow("本月没有支出。转账与余额调整不算收支，所以不会出现在这里。")
                     }
                 } else {
-                    items(items = state.breakdown, key = { it.categoryId }) { row ->
-                        BreakdownRow(row)
+                    items(items = state.breakdown, key = { "cat-${it.categoryId}" }) { row ->
+                        BreakdownRow(name = row.name, amountCents = row.amountCents, percent = row.percent)
+                    }
+                }
+                item(key = "accounts-header") { SectionHeader("账户支出分布") }
+                if (state.accountBreakdown.isEmpty()) {
+                    item(key = "accounts-empty") {
+                        HintRow("本月没有支出，所以没有账户分布。")
+                    }
+                } else {
+                    items(items = state.accountBreakdown, key = { "acct-${it.accountId}" }) { row ->
+                        BreakdownRow(name = row.name, amountCents = row.amountCents, percent = row.percent)
                     }
                 }
             }
         }
+    }
+}
+
+/** 日均支出：一行。除法在 StatsCalculator，页面只负责显示 */
+@Composable
+private fun DailyAverageRow(amountCents: Long) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "日均支出",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = Money.formatCurrency(amountCents),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 
@@ -177,9 +210,9 @@ private fun HintRow(text: String) {
     )
 }
 
-/** 排行一行：分类名 + 占比 + 金额 + 占比条 */
+/** 排行一行（分类排行与账户分布共用）：名字 + 占比 + 金额 + 占比条 */
 @Composable
-private fun BreakdownRow(row: CategoryBreakdownRow) {
+private fun BreakdownRow(name: String, amountCents: Long, percent: Double?) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -187,26 +220,26 @@ private fun BreakdownRow(row: CategoryBreakdownRow) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = row.name,
+                text = name,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = ReportFormatting.percent(row.percent),
+                text = ReportFormatting.percent(percent),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                text = Money.formatCurrency(row.amountCents),
+                text = Money.formatCurrency(amountCents),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        if (row.percent != null) {
+        if (percent != null) {
             Spacer(modifier = Modifier.height(6.dp))
-            BreakdownBar(fraction = row.percent)
+            BreakdownBar(fraction = percent)
         }
     }
 }
