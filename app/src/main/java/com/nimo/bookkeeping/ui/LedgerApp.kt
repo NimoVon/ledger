@@ -1,8 +1,11 @@
 package com.nimo.bookkeeping.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -15,8 +18,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -33,6 +38,7 @@ import com.nimo.bookkeeping.ui.record.RecordScreen
 import com.nimo.bookkeeping.ui.reports.ReportsScreen
 import com.nimo.bookkeeping.ui.settings.SettingsScreen
 import com.nimo.bookkeeping.ui.transactions.TransactionsScreen
+import com.nimo.bookkeeping.ui.transfer.TransferScreen
 import com.nimo.bookkeeping.util.Money
 
 /** 账户管理：从设置页进入的二级页面，不在底部导航里 */
@@ -49,6 +55,18 @@ private const val RECORD_TX_ID_ARG = "txId"
  * 缺省的查询参数由 Navigation 补成 null。
  */
 private const val RECORD_ROUTE_PATTERN = "$RECORD_ROUTE?$RECORD_TX_ID_ARG={$RECORD_TX_ID_ARG}"
+
+/**
+ * 转账（F04）：和记一笔并列的独立表单。
+ * 转账是「两个账户 + 没有分类」，塞进记一笔会丢掉 toAccountId，所以它有自己的路由与页面。
+ */
+private const val TRANSFER_ROUTE = "transfer"
+
+/** 编辑哪一笔转账。与记一笔同款：新建时没有这个参数，带 txId 时是编辑 */
+private const val TRANSFER_TX_ID_ARG = "txId"
+
+/** 导航到 "transfer" 是新建，导航到 "transfer?txId=12" 是编辑第 12 笔 */
+private const val TRANSFER_ROUTE_PATTERN = "$TRANSFER_ROUTE?$TRANSFER_TX_ID_ARG={$TRANSFER_TX_ID_ARG}"
 
 /** 顶层导航目的地：底部三个 Tab（明细 / 统计 / 设置） */
 private enum class TopDestination(
@@ -74,8 +92,14 @@ fun LedgerApp(container: AppContainer) {
     val isTopLevel = TopDestination.entries.any { dest ->
         currentDestination?.hierarchy?.any { it.route == dest.route } == true
     }
-    // 记账页是沉浸式表单：收起底部导航，避免误切页丢掉已填内容
+    // 明细页（转账入口只在这里露出）
+    val isTransactionsPage = currentDestination?.hierarchy
+        ?.any { it.route == TopDestination.TRANSACTIONS.route } == true
+    // 记账页/转账页都是沉浸式表单：收起底部导航，避免误切页丢掉已填内容
     val isRecordPage = currentDestination?.hierarchy?.any { it.route == RECORD_ROUTE_PATTERN } == true
+    val isTransferPage =
+        currentDestination?.hierarchy?.any { it.route == TRANSFER_ROUTE_PATTERN } == true
+    val isFormPage = isRecordPage || isTransferPage
 
     // 延迟物理删除（计划 9.2）：删除后立刻从流水消失，「撤销」提示条挂在这里，
     // 倒计时跑在 Application 级作用域上，切页/返回都不会打断它。
@@ -106,8 +130,8 @@ fun LedgerApp(container: AppContainer) {
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
-            // 记账页是沉浸式表单：收起底部导航，避免误切页丢掉已填内容
-            if (!isRecordPage) {
+            // 记账页/转账页是沉浸式表单：收起底部导航，避免误切页丢掉已填内容
+            if (!isFormPage) {
                 LedgerBottomBar(
                     currentDestination = currentDestination,
                     onNavigate = { route ->
@@ -125,11 +149,31 @@ fun LedgerApp(container: AppContainer) {
         floatingActionButton = {
             // 「记一笔」在三个顶层页面都可达（计划 F03：从任意页面可唤起）
             if (isTopLevel) {
-                ExtendedFloatingActionButton(
-                    onClick = { navController.navigate(RECORD_ROUTE) { launchSingleTop = true } },
-                    icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
-                    text = { Text("记一笔") },
-                )
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    // 「转账」（F04）只在明细页露出：它是主流程动作，藏进设置里等于没有入口；
+                    // 但统计/设置页的高频动作是「记一笔」，不必让两个按钮同时占着视线
+                    if (isTransactionsPage) {
+                        ExtendedFloatingActionButton(
+                            onClick = {
+                                navController.navigate(TRANSFER_ROUTE) { launchSingleTop = true }
+                            },
+                            icon = {
+                                Icon(imageVector = LedgerIcons.Transfer, contentDescription = null)
+                            },
+                            text = { Text("转账") },
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                    ExtendedFloatingActionButton(
+                        onClick = { navController.navigate(RECORD_ROUTE) { launchSingleTop = true } },
+                        icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
+                        text = { Text("记一笔") },
+                    )
+                }
             }
         },
     ) { innerPadding ->
@@ -144,6 +188,12 @@ fun LedgerApp(container: AppContainer) {
                     // 点某一行 → 进编辑页（删除入口也在那页）。保存/删除后返回，列表同源自动刷新
                     onTransactionClick = { id ->
                         navController.navigate("$RECORD_ROUTE?$RECORD_TX_ID_ARG=$id") {
+                            launchSingleTop = true
+                        }
+                    },
+                    // 点转账行 → 转账页；剩下的才进记一笔
+                    onTransferClick = { id ->
+                        navController.navigate("$TRANSFER_ROUTE?$TRANSFER_TX_ID_ARG=$id") {
                             launchSingleTop = true
                         }
                     },
@@ -204,6 +254,31 @@ fun LedgerApp(container: AppContainer) {
                     onSaved = { navController.popBackStack() },
                     onDeleted = { entity ->
                         // 先暂存（流水页立刻看不到它），再返回；倒计时内可撤销
+                        pendingDeletion.schedule(entity)
+                        navController.popBackStack()
+                    },
+                )
+            }
+            composable(
+                route = TRANSFER_ROUTE_PATTERN,
+                arguments = listOf(
+                    navArgument(TRANSFER_TX_ID_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) { entry ->
+                TransferScreen(
+                    repository = container.repository,
+                    // 缺省（新建）时是 null；形如 "12" 时是编辑第 12 笔
+                    editingId = entry.arguments?.getString(TRANSFER_TX_ID_ARG)?.toLongOrNull(),
+                    onBack = { navController.popBackStack() },
+                    // 保存成功即返回；明细页观察的是同一份 Room Flow，会自动刷新余额与流水
+                    onSaved = { navController.popBackStack() },
+                    // 撤销窗口内那几笔数据库里还在：余额推导要和流水页一样当它们不存在
+                    pendingDeletionIds = pendingDeletion.pendingIds,
+                    onDeleted = { entity ->
                         pendingDeletion.schedule(entity)
                         navController.popBackStack()
                     },

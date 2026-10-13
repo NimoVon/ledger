@@ -63,6 +63,8 @@ import kotlinx.coroutines.flow.flowOf
 fun TransactionsScreen(
     repository: LedgerRepository,
     onTransactionClick: (Long) -> Unit = {},
+    /** 点转账行：转账走自己那套表单（F04），落到记一笔会变成"这一笔不能在这里改" */
+    onTransferClick: (Long) -> Unit = {},
     pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
     drillDown: DrillDownRequests? = null,
 ) {
@@ -117,7 +119,14 @@ fun TransactionsScreen(
                     items(items = group.rows, key = { it.id }) { row ->
                         TransactionRowItem(
                             row = row,
-                            onClick = { onTransactionClick(row.id) },
+                            // 转账和收支是两种表单：按类型分流，各进各的编辑页
+                            onClick = {
+                                if (row.type == TransactionType.TRANSFER) {
+                                    onTransferClick(row.id)
+                                } else {
+                                    onTransactionClick(row.id)
+                                }
+                            },
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 52.dp))
                     }

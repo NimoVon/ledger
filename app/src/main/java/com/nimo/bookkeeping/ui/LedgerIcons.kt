@@ -107,6 +107,29 @@ object LedgerIcons {
             vBar(12f, 5f, 19f, 2.2f)
         }
     }
+
+    /** 转账：两条反向的箭头（上排向右、下排向左） */
+    val Transfer: ImageVector = ledgerIcon("LedgerTransfer") {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2.2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            // 上排：向右的箭头
+            moveTo(5f, 9f)
+            lineTo(19f, 9f)
+            moveTo(16f, 6f)
+            lineTo(19f, 9f)
+            lineTo(16f, 12f)
+            // 下排：向左的箭头
+            moveTo(19f, 15f)
+            lineTo(5f, 15f)
+            moveTo(8f, 12f)
+            lineTo(5f, 15f)
+            lineTo(8f, 18f)
+        }
+    }
 }
 
 private fun ledgerIcon(name: String, content: ImageVector.Builder.() -> Unit): ImageVector =
