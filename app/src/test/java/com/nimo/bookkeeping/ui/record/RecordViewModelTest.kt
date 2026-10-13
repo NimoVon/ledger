@@ -594,5 +594,69 @@ class RecordViewModelTest {
         assertTrue(editingViewModel(transferId).awaitLoaded().isEditingUnsupportedType)
         assertTrue(editingViewModel(adjustId).awaitLoaded().isEditingUnsupportedType)
     }
+
+    // ---- 页面该画哪一屏：唯一的展示决策点（防止"空状态把整张表单顶掉"复发）----
+
+    @Test
+    fun screen_isLoadingBeforeAnythingIsRead() {
+        // 组合流还没发出第一帧：只该转圈，不能先闪一屏"还没有可用账户"
+        assertEquals(RecordScreenState.Loading, RecordUiState().screen)
+    }
+
+    @Test
+    fun screen_isFormOnANormalRecordPage() = runTest {
+        seed()
+
+        assertEquals(RecordScreenState.Form, newViewModel().awaitLoaded().screen)
+    }
+
+    @Test
+    fun screen_isNoAccountWhenThereIsNoUsableAccount() = runTest {
+        expenseCategoryId = db.categoryDao()
+            .upsert(CategoryEntity(name = "餐饮", kind = CategoryKind.EXPENSE, sortOrder = 0))
+
+        assertEquals(RecordScreenState.NoAccount, newViewModel().awaitLoaded().screen)
+    }
+
+    @Test
+    fun screen_staysOnTheFormWhenEditingARowOnAnArchivedAccount() = runTest {
+        // 真机踩过的坑：唯一账户被归档后编辑这一笔，整张表单（连同"恢复账户并编辑"）被空状态顶掉，
+        // 用户没有任何出路。编辑模式必须落在 Form。
+        seed()
+        val id = existingExpense(amount = 60_000L)
+        repository.setAccountArchived(accountId, archived = true).getOrThrow()
+
+        val state = editingViewModel(id).awaitLoaded()
+
+        assertTrue(state.accounts.isEmpty())
+        assertEquals(RecordScreenState.Form, state.screen)
+    }
+
+    @Test
+    fun screen_isLoadErrorWhenTheEditedRowIsGone() = runTest {
+        seed()
+
+        assertEquals(RecordScreenState.LoadError, editingViewModel(999_999L).awaitLoaded().screen)
+    }
+
+    @Test
+    fun screen_isUnsupportedTypeForTransferAndBalanceAdjust() = runTest {
+        seed()
+        val cardId = repository.createAccount("招行卡", AccountType.DEBIT, 0L).getOrThrow()
+        val transferId = repository.addTransaction(
+            TransactionInput(
+                type = TransactionType.TRANSFER,
+                amountCents = 10_000L,
+                accountId = accountId,
+                toAccountId = cardId,
+                occurredOn = "2026-10-05",
+            ),
+        ).getOrThrow()
+
+        assertEquals(
+            RecordScreenState.UnsupportedType,
+            editingViewModel(transferId).awaitLoaded().screen,
+        )
+    }
 }
 

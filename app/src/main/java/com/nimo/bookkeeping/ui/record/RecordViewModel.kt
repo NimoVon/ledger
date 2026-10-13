@@ -29,6 +29,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
+ * 本页该画哪一屏（计划 4.4：加载、内容、空状态与可理解的错误提示）。
+ *
+ * 写成一个显式状态，是因为展示条件一旦散在页面的 when 里各写一遍，分支顺序就成了唯一的正确性来源——
+ * 上次「编辑页被空状态整张顶掉、连恢复入口都看不到」就是这么来的。现在顺序只在这里定义一次，
+ * 页面 `when (state.screen)` 且不留 else 兜底：以后新增一屏，编译器会把每处该改的地方都提醒到。
+ */
+enum class RecordScreenState { Loading, LoadError, UnsupportedType, NoAccount, Form }
+
+/**
  * 记账页状态（计划 4.4：至少覆盖加载、内容、空状态和可理解的错误提示）。
  */
 data class RecordUiState(
@@ -83,6 +92,20 @@ data class RecordUiState(
      */
     val isEditingUnsupportedType: Boolean
         get() = isEditing && editingTransaction != null && !form.isSupportedType
+
+    /**
+     * 页面该画哪一屏：**唯一的展示决策点**。页面按它分支，顶栏「保存」也只看它是不是
+     * [RecordScreenState.Form]，否则又会出现"按钮在、表单却被顶掉"的错位。
+     * 顺序即优先级：先加载中，再读取失败，再"这一笔不该在这儿改"，最后才是无账户/正常表单。
+     */
+    val screen: RecordScreenState
+        get() = when {
+            isLoading -> RecordScreenState.Loading
+            loadErrorMessage != null -> RecordScreenState.LoadError
+            isEditingUnsupportedType -> RecordScreenState.UnsupportedType
+            hasNoAccount -> RecordScreenState.NoAccount
+            else -> RecordScreenState.Form
+        }
 }
 
 /** 提交态：把"保存中 / 表单错误 / 保存失败 / 保存成功信号"收在一起，避免 combine 参数爆炸 */
