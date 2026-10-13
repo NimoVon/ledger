@@ -12,6 +12,7 @@ import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.filter.TransactionFilter
 import com.nimo.bookkeeping.domain.stats.BalanceCalculator
 import com.nimo.bookkeeping.domain.stats.StatsCalculator
+import com.nimo.bookkeeping.ui.reports.ReportDrillDown
 import com.nimo.bookkeeping.data.local.entity.BudgetEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -23,6 +24,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.LocalDate
+import java.time.YearMonth
 
 /**
  * 万级数据性能基准（计划 M1 验收：1 万笔交易下账户余额聚合 ≤ 200ms）。
@@ -163,5 +165,36 @@ class TenThousandBenchmark {
             summary.expenseCents,
         )
         assertTrue("筛选+统计 ${totalMs}ms 超标", totalMs < 2_000)
+    }
+
+    @Test
+    fun drillDownFromReport_10kTransactions_underBudget() = runTest {
+        seed10k()
+        // 用户点统计页「支出排行」里的一行 = 把该分类 + 报表当月做成筛选条件，跳明细查一次。
+        // 走的是真实链路：ReportDrillDown 造的 filter → queryBounds() 日期区间 → DAO 范围查询
+        // → TransactionFilter.matches（父分类连子分类）→ StatsCalculator。
+        val month = YearMonth.of(2026, 8)
+        val filter = ReportDrillDown.byCategory(month = month, categoryId = 1L)
+        val (from, to) = filter.queryBounds()!!
+
+        val t0 = System.currentTimeMillis()
+        val rows = db.transactionDao().observeBetween(from, to).first()
+        val filtered = rows.map { it.toRecord() }.filter { filter.matches(it, mapOf(3L to 1L)) }
+        val summary = StatsCalculator.summarize(filtered)
+        val totalMs = System.currentTimeMillis() - t0
+
+        println("BENCHMARK-DRILLDOWN: monthQuery(${rows.size}笔) 下钻后(${filtered.size}笔) 支出=${summary.expenseCents}分 合计=${totalMs}ms")
+
+        // 区间只能是 2026-08（半开：8/1 ≤ d < 9/1），下钻后每行都在这个月里
+        assertEquals(from, "2026-08-01")
+        assertEquals(to, "2026-09-01")
+        assertTrue("下钻区间应命中该月数据: ${rows.size}", rows.isNotEmpty())
+        assertTrue("下钻区间外不允许有行", rows.all { it.occurredOn < "2026-09-01" })
+        assertTrue("下钻应命中父分类及其子分类", filtered.isNotEmpty())
+        assertEquals(
+            filtered.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountCents },
+            summary.expenseCents,
+        )
+        assertTrue("下钻查询+${filtered.size}笔统计 ${totalMs}ms 超标", totalMs < 2_000)
     }
 }
