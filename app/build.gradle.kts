@@ -15,6 +15,8 @@ android {
         unitTests {
             isIncludeAndroidResources = true
             all { test ->
+                // Compose UI Test（Robolectric）要渲染整棵语义树，默认 512m 堆会 OOM
+                test.maxHeapSize = "4g"
                 test.jvmArgs(
                     "--add-opens=java.base/java.io=ALL-UNNAMED",
                     "--add-opens=java.base/java.lang=ALL-UNNAMED",
@@ -92,7 +94,11 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+    // ui-test-manifest 提供 createComposeRule() 需要的宿主 Activity（仅 debug/测试变体）
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)

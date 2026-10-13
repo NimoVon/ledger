@@ -3,6 +3,7 @@ package com.nimo.bookkeeping.ui.transactions
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -73,14 +74,7 @@ fun TransactionFilterDialog(
         onDismissRequest = onDismiss,
         title = { Text("筛选") },
         text = {
-            Column(
-                modifier = Modifier
-                    // 顺序不能反：heightIn 必须在 verticalScroll 外面，先把视口限高，
-                    // 滚动容器才会拿到真实内容高度并拥有滚动范围；反过来会把内容裁成 420dp 且滚不动。
-                    .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            FilterDialogBody {
                 SectionTitle("账户（可多选）")
                 if (options.accounts.isEmpty()) {
                     HintText("还没有账户。")
@@ -238,22 +232,22 @@ fun TransactionFilterDialog(
     }
 }
 
-private sealed interface ValidationOutcome
+internal sealed interface ValidationOutcome
 
-private data class Validated(
+internal data class Validated(
     val minAmountCents: Long?,
     val maxAmountCents: Long?,
     val from: LocalDate?,
     val to: LocalDate?,
 ) : ValidationOutcome
 
-private data class ValidationError(val message: String) : ValidationOutcome
+internal data class ValidationError(val message: String) : ValidationOutcome
 
 /**
  * 校验并归一化输入。金额与日期都允许留空（表示不限）；
  * 上下限/起止写反了就互换，让"面板里填的"与"实际用于筛选的"永远一致。
  */
-private fun validate(
+internal fun validate(
     minText: String,
     maxText: String,
     fromText: String,
@@ -299,6 +293,31 @@ private fun optionLabel(name: String, archived: Boolean, icon: String?): String 
     val prefix = icon?.takeIf { it.isNotBlank() }?.let { "$it " }.orEmpty()
     val suffix = if (archived) "（已停用）" else ""
     return prefix + name + suffix
+}
+
+/** 面板内容区的最大高度（真机上约等于半屏多一点） */
+internal val FILTER_DIALOG_MAX_HEIGHT = 420.dp
+
+/**
+ * 筛选面板的内容容器：**先限高、再挂滚动，顺序不能反**。
+ *
+ * 反过来（verticalScroll 在外、heightIn 在内）滚动容器会先以无限高度测量内容、再被裁成
+ * [FILTER_DIALOG_MAX_HEIGHT]，于是它自身高度就等于内容高度、滚动范围恒为 0：金额、日期、
+ * 关键词这半截既看不见也点不到。真机上出过这个缺陷，抽成独立函数就是为了让
+ * TransactionFilterDialogUiTest 能用 UI 测试把它钉住。
+ */
+@Composable
+internal fun FilterDialogBody(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .heightIn(max = FILTER_DIALOG_MAX_HEIGHT)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        content = content,
+    )
 }
 
 @Composable
