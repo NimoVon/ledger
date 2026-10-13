@@ -2,6 +2,7 @@ package com.nimo.bookkeeping.domain.backup
 
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -157,6 +158,29 @@ class BackupCodecTest {
     @Test
     fun nonObjectTopLevel_isRejected() {
         assertTrue(errorTextOfJson("[1,2,3]").contains("顶层必须是 JSON 对象"))
+    }
+
+    @Test
+    fun missingField_isReportedByNameWithoutKotlinClassNames() {
+        // 真机验证时发现的文案问题：坏文件缺字段，对话框里出现了
+        // "Field 'occurredOn' is required for type with serial name 'com.nimo.bookkeeping...'"
+        val text = errorTextOfJson(
+            """{"app":"ledger","schemaVersion":1,"data":{"accounts":[],"categories":[],""" +
+                """"transactions":[{"id":1,"type":"EXPENSE","amount":100}],"budgets":[]}}"""
+        )
+        assertTrue(text, text.contains("缺少必需字段"))
+        assertFalse(text, text.contains("com.nimo.bookkeeping"))
+        assertFalse(text, text.contains("serial name"))
+    }
+
+    @Test
+    fun wrongFieldType_isReportedInPlainChinese() {
+        val text = errorTextOfJson(
+            """{"app":"ledger","schemaVersion":1,"data":{"accounts":[],"categories":[],"transactions":[""" +
+                """{"id":"一","type":"EXPENSE","amount":100,"accountId":1,"categoryId":1,"occurredOn":"2026-10-01",""" +
+                """"createdAt":0,"updatedAt":0}],"budgets":[]}}"""
+        )
+        assertTrue(text, text.contains("无法识别的内容") || text.contains("结构不符合本应用格式"))
     }
 
     // ---- 行层：金额 ----

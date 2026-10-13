@@ -6,6 +6,8 @@ import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.util.Dates
 import com.nimo.bookkeeping.util.Money
+import kotlinx.serialization.MissingFieldException
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -62,6 +64,15 @@ object BackupCodec {
         if (structural.isNotEmpty()) return BackupDecodeResult.Failure(cap(structural))
         val file = try {
             json.decodeFromJsonElement(BackupFile.serializer(), root)
+        } catch (e: MissingFieldException) {
+            // 缺字段是最常见的坏文件：直接把缺哪个字段告诉用户，不暴露 Kotlin 类名
+            return BackupDecodeResult.Failure(
+                listOf("备份文件缺少必需字段：" + e.missingFields.joinToString("、"))
+            )
+        } catch (e: SerializationException) {
+            return BackupDecodeResult.Failure(
+                listOf("备份文件里有无法识别的内容或字段类型不对（" + brief(e) + "）")
+            )
         } catch (t: Throwable) {
             return BackupDecodeResult.Failure(listOf("备份文件的结构不符合本应用格式（" + brief(t) + "）"))
         }

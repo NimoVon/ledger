@@ -322,12 +322,30 @@ private suspend fun readBackupText(context: Context, uri: Uri): String = withCon
 private suspend fun writeCsvFiles(context: Context, treeUri: Uri, files: Map<String, String>): List<String> =
     withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
+        // 真机踩坑：createDocument 要的是「父文档」URI，直接把 ACTION_OPEN_DOCUMENT_TREE 拿到的
+        // tree URI 塞进去，系统会抛 Invalid URI；必须先用 getTreeDocumentId 把它转成文档 URI。
+        val parent = DocumentsContract.buildDocumentUriUsingTree(
+            treeUri,
+            DocumentsContract.getTreeDocumentId(treeUri),
+        )
         files.map { (name, content) ->
-            val document = DocumentsContract.createDocument(resolver, treeUri, "text/csv", name)
-                ?: throw IOException("无法创建文件：" + name)
+            val document = try {
+                DocumentsContract.createDocument(resolver, parent, "text/csv", name)
+            } catch (t: Throwable) {
+                if (t.looksLikeAlreadyExists()) {
+                    throw IOException("这个文件夹里已经有 " + name + " 了，请换一个文件夹，或先删掉旧文件再导出")
+                }
+                throw t
+            } ?: throw IOException("无法创建文件：" + name)
             val stream = resolver.openOutputStream(document, "wt")
                 ?: throw IOException("无法写入文件：" + name)
             stream.use { BackupFileIO.writeText(it, content) }
             name
         }
     }
+
+/** 同名文件在部分 ROM 上是 FileAlreadyExistsException，部分只是 ErrnoException/IllegalStateException，统一认一下 */
+private fun Throwable.looksLikeAlreadyExists(): Boolean =
+    this is java.nio.file.FileAlreadyExistsException ||
+        javaClass.simpleName.contains("FileAlreadyExists") ||
+        message?.contains("already exists", ignoreCase = true) == true
