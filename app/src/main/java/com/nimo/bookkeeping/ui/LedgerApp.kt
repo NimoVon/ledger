@@ -150,7 +150,13 @@ fun LedgerApp(container: AppContainer) {
                     pendingDeletionIds = pendingDeletion.pendingIds,
                 )
             }
-            composable(TopDestination.REPORTS.route) { ReportsScreen() }
+            composable(TopDestination.REPORTS.route) {
+                ReportsScreen(
+                    repository = container.repository,
+                    // 撤销窗口内那几笔数据库里还在：月报要和明细页、账户页一样当它们不存在
+                    pendingDeletionIds = pendingDeletion.pendingIds,
+                )
+            }
             composable(TopDestination.SETTINGS.route) {
                 SettingsScreen(
                     container = container,
