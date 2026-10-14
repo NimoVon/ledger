@@ -92,6 +92,21 @@ class MoneyTest {
         assertNull(Money.parseCents("1,234.567"))
     }
 
+    @Test
+    fun parse_semicolonLikeFullWidthSeparator_isRejected() {
+        // 口径（用户 2026-10-14 拍板）：小数点只认半角「.」。
+        // 手机数字键盘 6 右边那个点打出来的就是半角，用户输入没有障碍，
+        // 所以全角「。」「．」和全角数字一律当非法输入：不做"贴心的"自动转换——
+        // 猜错了会把 49。99 悄悄记成 4999 分，那才是真丢钱。
+        assertNull(Money.parseCents("49。99"))
+        assertNull(Money.parseCents("49．99"))
+        assertNull(Money.parseCents("100。"))
+        assertNull(Money.parseCents("１２３"))
+        assertNull(Money.parseCents("12。345"))
+        // 对照：同一个数字，半角点照常解析
+        assertEquals(63450L, Money.parseCents("634.5"))
+    }
+
     // ---- 格式化 ----
 
     @Test
