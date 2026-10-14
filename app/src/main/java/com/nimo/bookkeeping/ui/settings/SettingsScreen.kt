@@ -4,24 +4,33 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nimo.bookkeeping.AppContainer
+import com.nimo.bookkeeping.ui.theme.ThemePreference
+import kotlinx.coroutines.launch
 
 /**
  * 设置页（计划 4.3 ui/settings）。
@@ -88,6 +97,33 @@ fun SettingsScreen(
             Text(text = "预算管理", style = MaterialTheme.typography.bodyLarge)
             Text(text = "›", style = MaterialTheme.typography.titleMedium)
         }
+        HorizontalDivider()
+        Text(text = "外观", style = MaterialTheme.typography.titleMedium)
+        // DataStore 是真异步：先按「跟随系统」画一帧，读到盘上的真值再纠正
+        val themePreference by container.themePreference.preference
+            .collectAsStateWithLifecycle(initialValue = ThemePreference.SYSTEM)
+        val scope = rememberCoroutineScope()
+        ThemePreference.entries.forEach { option ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(
+                        selected = option == themePreference,
+                        role = Role.RadioButton,
+                        onClick = { scope.launch { container.themePreference.write(option) } },
+                    )
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = option == themePreference, onClick = null)
+                Spacer(Modifier.width(8.dp))
+                Text(text = option.label, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        Text(
+            text = "跟随系统时随手机的深浅色切换；选浅色 / 深色则一直用这一套。",
+            style = MaterialTheme.typography.bodySmall,
+        )
         HorizontalDivider()
         Text(text = "导入与导出", style = MaterialTheme.typography.titleMedium)
         BackupSettingsSection(

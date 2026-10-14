@@ -8,6 +8,7 @@ import com.nimo.bookkeeping.data.repository.BackupRepository
 import com.nimo.bookkeeping.data.repository.LedgerRepository
 import java.io.File
 import com.nimo.bookkeeping.ui.DrillDownRequests
+import com.nimo.bookkeeping.ui.theme.ThemePreferenceStore
 import com.nimo.bookkeeping.ui.transactions.PendingTransactionDeletion
 import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +44,13 @@ class AppContainer(context: android.content.Context) {
      */
     val autoBackupStore: AutoBackupStore =
         AutoBackupStore(File(context.applicationContext.filesDir, "auto-backup"))
+
+    /**
+     * F12：外观偏好（跟随系统 / 浅色 / 深色）。
+     * 只落一个 SharedPreferences 文件，不进 Room —— 换主题不值得动 schema、更不值得迁移。
+     */
+    val themePreference: ThemePreferenceStore =
+        ThemePreferenceStore.from(context.applicationContext)
 
     /** 页面销毁不该打断的活儿放这里：预置分类、删除倒计时（计划 9.2） */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

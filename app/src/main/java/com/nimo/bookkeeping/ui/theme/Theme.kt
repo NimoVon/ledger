@@ -30,17 +30,27 @@ private val DarkColors = darkColorScheme(
     background = DarkBackground,
 )
 
+/**
+ * 应用根主题（F12）。
+ *
+ * @param preference 外观偏好：SYSTEM 跟随系统深色开关（默认，与 F12 之前的行为一致），
+ *   LIGHT / DARK 手动覆盖。由 [ThemePreference.isDark] 归一成「这次到底要不要深色」，
+ *   避免「偏好」与「实际深浅」两个概念在各处各判一次。
+ * @param darkTheme 系统当前的深色开关（[isSystemInDarkTheme]）；手动覆盖时它只是输入，不作准。
+ */
 @Composable
 fun LedgerTheme(
+    preference: ThemePreference = ThemePreference.SYSTEM,
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
+    val dark = preference.isDark(darkTheme)
     val colorScheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColors
+        dark -> DarkColors
         else -> LightColors
     }
     MaterialTheme(colorScheme = colorScheme, content = content)
