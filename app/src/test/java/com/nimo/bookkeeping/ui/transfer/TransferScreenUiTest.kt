@@ -21,6 +21,7 @@ import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.model.TransactionType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import com.nimo.bookkeeping.awaitUntil
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -87,26 +88,26 @@ class TransferScreenUiTest {
 
     /** 等表单渲染出来（账户和余额都是异步读的，页面先停在加载态） */
     private fun awaitAmountField() {
-        composeRule.waitUntil(10_000) {
+        composeRule.awaitUntil {
             composeRule.onAllNodesWithTag(AMOUNT_FIELD_TAG).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     private fun awaitTag(tag: String) {
-        composeRule.waitUntil(10_000) {
+        composeRule.awaitUntil {
             composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     private fun awaitText(text: String) {
-        composeRule.waitUntil(10_000) {
+        composeRule.awaitUntil {
             composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     /** 等库里真的多出 expected 行：保存是 ViewModel 里的协程 + Room 后台线程，顺手把主线程待办跑掉 */
     private fun awaitTransferRows(expected: Int) {
-        composeRule.waitUntil(10_000) {
+        composeRule.awaitUntil {
             shadowOf(Looper.getMainLooper()).idle()
             runBlocking { db.transactionDao().count() } == expected
         }
@@ -126,7 +127,7 @@ class TransferScreenUiTest {
 
         awaitTransferRows(1)
         // 页面必须把 id 交回调，调用方才能返回明细页
-        composeRule.waitUntil(10_000) { savedId != null }
+        composeRule.awaitUntil { savedId != null }
         val saved = runBlocking { db.transactionDao().getById(savedId!!) }!!
         assertEquals(TransactionType.TRANSFER, saved.type)
         assertEquals(3_000L, saved.amount)

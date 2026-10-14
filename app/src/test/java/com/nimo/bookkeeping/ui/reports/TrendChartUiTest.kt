@@ -25,6 +25,7 @@ import com.nimo.bookkeeping.domain.model.TransactionInput
 import com.nimo.bookkeeping.domain.model.TransactionType
 import java.time.YearMonth
 import kotlinx.coroutines.runBlocking
+import com.nimo.bookkeeping.awaitUntil
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -94,7 +95,7 @@ class TrendChartUiTest {
     }
 
     private fun awaitText(text: String) {
-        composeRule.waitUntil(timeoutMillis = 10_000) {
+        composeRule.awaitUntil {
             composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
     }
@@ -106,7 +107,7 @@ class TrendChartUiTest {
     }
 
     private fun awaitDescription(description: String) {
-        composeRule.waitUntil(timeoutMillis = 10_000) {
+        composeRule.awaitUntil {
             composeRule.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty()
         }
     }

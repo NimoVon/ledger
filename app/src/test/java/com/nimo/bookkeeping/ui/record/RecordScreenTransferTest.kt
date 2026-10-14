@@ -26,6 +26,7 @@ import com.nimo.bookkeeping.ui.transfer.TO_ACCOUNT_TAG_PREFIX
 import com.nimo.bookkeeping.util.Dates
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import com.nimo.bookkeeping.awaitUntil
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -148,14 +149,14 @@ class RecordScreenTransferTest {
 
     /** 写库是协程干的，等 UI 副作用不如直接轮询数据库（Compose+Robolectric 的坑，见 TransferScreenUiTest） */
     private fun awaitRows(expected: Int) {
-        composeRule.waitUntil(10_000) {
+        composeRule.awaitUntil {
             shadowOf(Looper.getMainLooper()).idle()
             runBlocking { db.transactionDao().count() } == expected
         }
     }
 
     private fun awaitText(text: String) {
-        composeRule.waitUntil(10_000) {
+        composeRule.awaitUntil {
             composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
     }

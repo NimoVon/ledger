@@ -17,6 +17,7 @@ import java.time.YearMonth
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -213,7 +214,7 @@ class ReportsTrendTest {
         val viewModel = newViewModel()
 
         val seen = mutableListOf<ReportsUiState>()
-        val job = launch { viewModel.uiState.collect { seen += it } }
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { seen += it } }
         try {
             viewModel.awaitTrend()
             viewModel.setTrendSpan(TrendSpan.FULL_YEAR)

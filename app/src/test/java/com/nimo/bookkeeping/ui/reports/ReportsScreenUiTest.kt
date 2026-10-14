@@ -25,6 +25,7 @@ import com.nimo.bookkeeping.domain.model.TransactionType
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlinx.coroutines.runBlocking
+import com.nimo.bookkeeping.awaitUntil
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -98,7 +99,7 @@ class ReportsScreenUiTest {
     }
 
     private fun awaitText(text: String) {
-        composeRule.waitUntil(timeoutMillis = 10_000) {
+        composeRule.awaitUntil {
             composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
     }

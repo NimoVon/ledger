@@ -437,9 +437,12 @@ class RecordViewModelTest {
         vm.setAmount("66.00")
         vm.restoreOriginalAccount()
 
-        // 账户回到选择器并弹回原值选中、提示消失——不必把这一笔挪到别的账户
+        // 账户回到选择器并弹回原值选中、提示消失——不必把这一笔挪到别的账户。
+        // 等待条件必须和下面的断言同口径：只等"账户回到列表"会在负载下抢在
+        // submit.isRestoringAccount 复位之前返回，于是后面的 assertFalse 假失败。
         val restored = vm.awaitState {
-            !it.originalAccountUnavailable && it.accounts.any { account -> account.id == accountId }
+            !it.isRestoringAccount && !it.originalAccountUnavailable &&
+                it.accounts.any { account -> account.id == accountId }
         }
         assertEquals(accountId, restored.effectiveAccountId)
         assertNull(restored.originalAccountName)
@@ -477,9 +480,11 @@ class RecordViewModelTest {
 
         vm.restoreOriginalCategory()
 
-        // 分类回到选择器、原值重新选中、提示消失——不必把这一笔挪到别的分类上
+        // 分类回到选择器、原值重新选中、提示消失——不必把这一笔挪到别的分类上。
+        // 同上：分类热流先回列表、isRestoringCategory 还没复位的那一帧不能算"好了"。
         val restored = vm.awaitState {
-            !it.originalCategoryUnavailable && it.categories.any { c -> c.id == expenseCategoryId }
+            !it.isRestoringCategory && !it.originalCategoryUnavailable &&
+                it.categories.any { c -> c.id == expenseCategoryId }
         }
         assertEquals(expenseCategoryId, restored.form.categoryId)
         assertNull(restored.originalCategoryName)
