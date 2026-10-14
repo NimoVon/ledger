@@ -43,8 +43,21 @@ internal const val DONUT_TEST_TAG = "report-category-donut"
 /** 环心（合计）也是一个可断言的节点：它是"支出合计 + 金额"两行合成的一句话 */
 internal const val DONUT_CENTER_TEST_TAG = "report-donut-center"
 
-/** 无障碍与测试共用同一句描述（画布上没有可读文字，读屏靠这句） */
+/** 无障碍描述的头一句（画布上没有可读文字）：读屏听到的是带数字的整句，测试用前缀匹配 */
 internal const val DONUT_DESCRIPTION = "本月支出分类占比"
+
+/**
+ * 无障碍描述：环形图 + 环心合计读出来，再补金额最大的前三个分类（名字、金额、占比）——
+ * 与看「支出排行」拿到的信息一致。占比文案走 [ReportFormatting.percent]，不在这里另写一套。
+ */
+internal fun donutDescription(rows: List<CategoryBreakdownRow>, totalCents: Long): String {
+    if (rows.isEmpty() || totalCents <= 0L) return DONUT_DESCRIPTION
+    val top = rows.take(3).joinToString("，") {
+        "${it.name} ${Money.formatCurrency(it.amountCents)}（${ReportFormatting.percent(it.percent)}）"
+    }
+    val rest = if (rows.size > 3) "，其余 ${rows.size - 3} 个分类" else ""
+    return "$DONUT_DESCRIPTION，合计 ${Money.formatCurrency(totalCents)}：$top$rest"
+}
 
 /**
  * 分类配色：暖色调，与 App 的主色系同族。
@@ -100,7 +113,7 @@ private fun CategoryDonutCanvas(rows: List<CategoryBreakdownRow>, totalCents: Lo
         modifier = Modifier
             .size(DONUT_SIZE)
             .testTag(DONUT_TEST_TAG)
-            .semantics { contentDescription = DONUT_DESCRIPTION },
+            .semantics { contentDescription = donutDescription(rows, totalCents) },
     ) {
         if (totalCents <= 0L) return@Canvas
         val strokePx = DONUT_STROKE.toPx()

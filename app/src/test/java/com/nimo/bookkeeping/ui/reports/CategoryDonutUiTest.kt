@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -145,7 +146,7 @@ class CategoryDonutUiTest {
         composeRule.onNodeWithText("分类占比").assertIsDisplayed()
 
         list.performScrollToNode(hasTestTag(DONUT_TEST_TAG))
-        composeRule.onNodeWithContentDescription(DONUT_DESCRIPTION).assertIsDisplayed()
+        composeRule.onNode(hasContentDescription(DONUT_DESCRIPTION, substring = true)).assertIsDisplayed()
         // 环心 = 两个分类之和，和顶部「支出」是同一个数
         composeRule.onNodeWithTag(DONUT_CENTER_TEST_TAG).assertTextContains("支出合计")
         composeRule.onNodeWithTag(DONUT_CENTER_TEST_TAG).assertTextContains("¥800.00", substring = true)
@@ -168,6 +169,6 @@ class CategoryDonutUiTest {
         composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(hint))
         composeRule.onNodeWithText(hint).assertIsDisplayed()
         composeRule.onAllNodesWithText("分类占比").assertCountEquals(0)
-        composeRule.onAllNodesWithContentDescription(DONUT_DESCRIPTION).assertCountEquals(0)
+        composeRule.onAllNodes(hasContentDescription(DONUT_DESCRIPTION, substring = true)).assertCountEquals(0)
     }
 }

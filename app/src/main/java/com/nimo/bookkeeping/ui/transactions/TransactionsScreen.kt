@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +38,7 @@ import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.model.TransactionType
 import com.nimo.bookkeeping.ui.LedgerIcons
 import com.nimo.bookkeeping.ui.components.EmptyState
+import com.nimo.bookkeeping.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.bookkeeping.ui.DrillDownRequests
 import com.nimo.bookkeeping.ui.components.MonthSummaryBar
 import com.nimo.bookkeeping.ui.components.MonthSwitcher
@@ -113,7 +115,10 @@ fun TransactionsScreen(
                 modifier = contentModifier,
             )
 
-            else -> LazyColumn(modifier = contentModifier) {
+            else -> LazyColumn(
+                modifier = contentModifier,
+                contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
+            ) {
                 state.groups.forEach { group ->
                     item(key = "day-" + group.date) { DayHeader(group) }
                     items(items = group.rows, key = { it.id }) { row ->

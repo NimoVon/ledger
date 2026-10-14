@@ -49,8 +49,24 @@ private val CHART_HEIGHT = 160.dp
 
 internal const val TREND_CHART_TEST_TAG = "report-trend-chart"
 
-/** 无障碍与测试共用同一句描述：切到全年之后它必须变成 12 个月 */
-internal fun trendDescription(span: TrendSpan): String = "近${span.months}个月收支趋势"
+/** 折线图的头一句（切到全年之后必须变成 12 个月）：读屏听到的是带数字的整句，测试用前缀匹配 */
+internal fun trendHead(span: TrendSpan): String = "近${span.months}个月收支趋势"
+
+/**
+ * 无障碍描述：只说"近半年收支趋势"读屏用户拿不到任何数据，所以把窗口里的钱读出来——
+ * 窗口合计与最近一个月（折线上最靠右那个点）。数字全部来自 StatsCalculator 的 [MonthlyTotal]。
+ */
+internal fun trendDescription(points: List<MonthlyTotal>, span: TrendSpan): String {
+    val head = trendHead(span)
+    if (points.isEmpty()) return "$head：暂无数据"
+    val income = points.sumOf { it.incomeCents }
+    val expense = points.sumOf { it.expenseCents }
+    val last = points.last()
+    return "$head，共 ${points.size} 个月：收入 ${Money.formatCurrency(income)}，" +
+        "支出 ${Money.formatCurrency(expense)}；最近一个月 " +
+        "${last.month.year}年${last.month.monthValue}月：收入 ${Money.formatCurrency(last.incomeCents)}，" +
+        "支出 ${Money.formatCurrency(last.expenseCents)}"
+}
 
 /**
  * 收支趋势（F10）：近半年 / 近全年的按月收入、支出折线。
@@ -163,7 +179,7 @@ private fun TrendCanvas(points: List<MonthlyTotal>, maxCents: Long, span: TrendS
             .fillMaxWidth()
             .height(CHART_HEIGHT)
             .testTag(TREND_CHART_TEST_TAG)
-            .semantics { contentDescription = trendDescription(span) },
+            .semantics { contentDescription = trendDescription(points, span) },
     ) {
         // 上下各留一点：折线画在最上/最下时描边不会被裁掉
         val inset = 4f

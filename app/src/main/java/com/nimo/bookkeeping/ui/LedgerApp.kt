@@ -17,6 +17,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -49,6 +51,15 @@ private const val BUDGETS_ROUTE = "budgets"
 
 /** 记一笔（F03）：全屏表单，由顶层页面的「记一笔」按钮唤起（计划 F03「从任意页面可唤起」） */
 private const val RECORD_ROUTE = "record"
+
+/**
+ * 「记一笔」按钮的文字：按钮文字与读屏名共用这一份。
+ *
+ * 真机实测（F15）：这个悬浮按钮在整个无障碍树上既没有 text 也没有 content-desc，
+ * Android 自己给它标了 NAF="true"，TalkBack 读出来只有"按钮"两个字、说不出是干什么的，
+ * 所以在这里显式补一条语义。三处悬浮按钮（记一笔 / 新建账户 / 新建分类）同一处理。
+ */
+private const val RECORD_FAB_LABEL = "记一笔"
 
 /** 编辑哪一笔。挂在同一个目的地上作为可选参数：表单、校验、返回逻辑全部复用一套 */
 private const val RECORD_TX_ID_ARG = "txId"
@@ -153,8 +164,9 @@ fun LedgerApp(container: AppContainer) {
             if (isTopLevel) {
                 ExtendedFloatingActionButton(
                     onClick = { navController.navigate(RECORD_ROUTE) { launchSingleTop = true } },
+                    modifier = Modifier.semantics { contentDescription = RECORD_FAB_LABEL },
                     icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
-                    text = { Text("记一笔") },
+                    text = { Text(RECORD_FAB_LABEL) },
                 )
             }
         },

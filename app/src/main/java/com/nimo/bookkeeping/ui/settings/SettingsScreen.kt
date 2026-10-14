@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -29,6 +30,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nimo.bookkeeping.AppContainer
+import com.nimo.bookkeeping.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.bookkeeping.ui.theme.ThemePreference
 import kotlinx.coroutines.launch
 
@@ -141,5 +143,7 @@ fun SettingsScreen(
             text = "记账本 0.1.0 · 已完成 M1（数据层）",
             style = MaterialTheme.typography.bodySmall,
         )
+        // 悬浮的「记一笔」会盖住页面最后一行，底部留出按钮的高度（F15）
+        Spacer(Modifier.height(FAB_BOTTOM_RESERVE))
     }
 }

@@ -2,14 +2,14 @@ package com.nimo.bookkeeping.ui.reports
 
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -106,9 +106,17 @@ class TrendChartUiTest {
         }
     }
 
-    private fun awaitDescription(description: String) {
+    /**
+     * 折线图的描述现在带真实数字（F15）：按头一句 [trendHead] 做前缀匹配——
+     * 金额随数据变，测试不写死一串钱；窗口月数（6 / 12）仍是断言的重点。
+     */
+    private fun trendNode(span: TrendSpan): SemanticsNodeInteraction =
+        composeRule.onNode(hasContentDescription(trendHead(span), substring = true))
+
+    private fun awaitTrend(span: TrendSpan) {
         composeRule.awaitUntil {
-            composeRule.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodes(hasContentDescription(trendHead(span), substring = true))
+                .fetchSemanticsNodes().isNotEmpty()
         }
     }
 
@@ -117,8 +125,8 @@ class TrendChartUiTest {
         val month = seedInCurrentMonth()
         showReports()
 
-        awaitDescription(trendDescription(TrendSpan.HALF_YEAR))
-        composeRule.onNodeWithContentDescription(trendDescription(TrendSpan.HALF_YEAR)).performScrollTo().assertIsDisplayed()
+        awaitTrend(TrendSpan.HALF_YEAR)
+        trendNode(TrendSpan.HALF_YEAR).performScrollTo().assertIsDisplayed()
         // 图例 + 纵轴最高值（本月唯一一笔支出 ¥600.00）
         composeRule.onNodeWithText("最高 ¥600.00").performScrollTo().assertIsDisplayed()
         // 横轴最后一个月就是当前查看的月份
@@ -128,8 +136,8 @@ class TrendChartUiTest {
 
         composeRule.onNode(hasClickAction() and hasText(TrendSpan.FULL_YEAR.label)).performScrollTo().performClick()
 
-        awaitDescription(trendDescription(TrendSpan.FULL_YEAR))
-        composeRule.onNodeWithContentDescription(trendDescription(TrendSpan.FULL_YEAR)).performScrollTo().assertIsDisplayed()
+        awaitTrend(TrendSpan.FULL_YEAR)
+        trendNode(TrendSpan.FULL_YEAR).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -137,14 +145,14 @@ class TrendChartUiTest {
         seedInCurrentMonth()
         showReports()
 
-        awaitDescription(trendDescription(TrendSpan.HALF_YEAR))
+        awaitTrend(TrendSpan.HALF_YEAR)
         composeRule.onNode(hasClickAction() and hasText(TrendSpan.FULL_YEAR.label)).performScrollTo().performClick()
-        awaitDescription(trendDescription(TrendSpan.FULL_YEAR))
+        awaitTrend(TrendSpan.FULL_YEAR)
 
         composeRule.onNode(hasClickAction() and hasText(TrendSpan.HALF_YEAR.label)).performScrollTo().performClick()
 
-        awaitDescription(trendDescription(TrendSpan.HALF_YEAR))
-        composeRule.onNodeWithContentDescription(trendDescription(TrendSpan.HALF_YEAR)).performScrollTo().assertIsDisplayed()
+        awaitTrend(TrendSpan.HALF_YEAR)
+        trendNode(TrendSpan.HALF_YEAR).performScrollTo().assertIsDisplayed()
     }
 
     /** 本月没记账、但窗口内有数据：趋势图不能被空状态挡掉（F10 的可达性） */
@@ -155,8 +163,8 @@ class TrendChartUiTest {
 
         awaitText("本月还没有记录")
         composeRule.onNodeWithText("本月还没有记录").assertIsDisplayed()
-        awaitDescription(trendDescription(TrendSpan.HALF_YEAR))
-        composeRule.onNodeWithContentDescription(trendDescription(TrendSpan.HALF_YEAR))
+        awaitTrend(TrendSpan.HALF_YEAR)
+        trendNode(TrendSpan.HALF_YEAR)
             .performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("最高 ¥600.00").performScrollTo().assertIsDisplayed()
     }
@@ -169,7 +177,7 @@ class TrendChartUiTest {
 
         awaitText("本月还没有记录")
         composeRule.onNodeWithText("本月还没有记录").assertIsDisplayed()
-        composeRule.onAllNodesWithContentDescription(trendDescription(TrendSpan.HALF_YEAR))
+        composeRule.onAllNodes(hasContentDescription(trendHead(TrendSpan.HALF_YEAR), substring = true))
             .assertCountEquals(0)
     }
 }

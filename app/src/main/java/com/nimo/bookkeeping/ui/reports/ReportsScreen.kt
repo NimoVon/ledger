@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.filter.TransactionFilter
 import com.nimo.bookkeeping.ui.components.EmptyState
+import com.nimo.bookkeeping.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.bookkeeping.ui.components.MonthSummaryBar
 import com.nimo.bookkeeping.ui.components.MonthSwitcher
 import com.nimo.bookkeeping.util.Money
@@ -86,7 +88,10 @@ fun ReportsScreen(
 
             // 本月没记账、但趋势窗口里有数据：空状态照旧，下面把趋势图也放出来。
             // 不放的话，用户一切到空月份就看不到刚做好的趋势折线（F10）。
-            state.isEmpty && state.trendHasData -> LazyColumn(modifier = contentModifier) {
+            state.isEmpty && state.trendHasData -> LazyColumn(
+                modifier = contentModifier,
+                contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
+            ) {
                 item(key = "empty-month") {
                     EmptyState(
                         title = "本月还没有记录",
@@ -112,7 +117,10 @@ fun ReportsScreen(
                 modifier = contentModifier,
             )
 
-            else -> LazyColumn(modifier = contentModifier) {
+            else -> LazyColumn(
+                modifier = contentModifier,
+                contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
+            ) {
                 item(key = "daily") { DailyAverageRow(state.dailyAverageExpenseCents) }
                 item(key = "change") { ChangeSection(state) }
                 item(key = "trend-header") { SectionHeader("收支趋势", hint = "近半年 / 近全年") }

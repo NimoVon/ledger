@@ -55,56 +55,101 @@ fun BudgetEditDialog(
         mutableStateOf(currentAmountCents?.let { Money.format(it) } ?: "")
     }
     var localError by remember { mutableStateOf<String?>(null) }
+    // 删除预算不可撤销、也不进撤销队列，所以要求二次确认：点「删除」先切到确认态，确认态再点「删除」才真删。
+    var confirmingDelete by remember { mutableStateOf(false) }
 
+    if (confirmingDelete) {
+        BudgetDeleteConfirmDialog(
+            saving = saving,
+            onDismiss = { confirmingDelete = false },
+            onConfirm = {
+                confirmingDelete = false
+                onDelete?.invoke()
+            },
+        )
+    } else {
+        AlertDialog(
+            onDismissRequest = { if (!saving) onDismiss() },
+            title = { Text(title) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = amount,
+                        onValueChange = {
+                            amount = it
+                            localError = null
+                        },
+                        label = { Text("预算金额") },
+                        singleLine = true,
+                        enabled = !saving,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    )
+                    val shown = localError ?: errorMessage
+                    if (shown != null) {
+                        Text(
+                            text = shown,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !saving,
+                    onClick = {
+                        val cents = Money.parseCents(amount)
+                        if (cents == null) {
+                            localError = if (Money.exceedsMaxAmount(amount)) "预算金额超过上限" else "请输入大于 0 的金额"
+                            return@TextButton
+                        }
+                        onSave(cents)
+                    },
+                ) {
+                    Text(if (saving) "保存中…" else "保存")
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (onDelete != null) {
+                        TextButton(onClick = { confirmingDelete = true }, enabled = !saving) { Text("删除") }
+                    }
+                    TextButton(onClick = onDismiss, enabled = !saving) { Text("取消") }
+                }
+            },
+        )
+    }
+}
+
+/**
+ * 删除预算的二次确认（F15）。
+ *
+ * 单独抽出来是为了能在 Robolectric 里测：AlertDialog 只要套着 OutlinedTextField 就永远不 idle
+ * （TransactionFilterDialogUiTest 的注释记着这条），编辑态渲染不了；确认态没有输入框，渲染得了。
+ * 编辑态点「删除」进确认态这一步由真机流程验证覆盖。
+ */
+@Composable
+internal fun BudgetDeleteConfirmDialog(
+    saving: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
-        title = { Text(title) },
+        title = { Text("删除这条预算？") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(
-                    value = amount,
-                    onValueChange = {
-                        amount = it
-                        localError = null
-                    },
-                    label = { Text("预算金额") },
-                    singleLine = true,
-                    enabled = !saving,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                )
-                val shown = localError ?: errorMessage
-                if (shown != null) {
-                    Text(
-                        text = shown,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
+            Text(
+                text = "删除后这个月不再有预算上限，超支提示也会一起消失。" +
+                    "已经记下的流水不受影响，之后可以重新设置。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
         },
         confirmButton = {
-            TextButton(
-                enabled = !saving,
-                onClick = {
-                    val cents = Money.parseCents(amount)
-                    if (cents == null) {
-                        localError = if (Money.exceedsMaxAmount(amount)) "预算金额超过上限" else "请输入大于 0 的金额"
-                        return@TextButton
-                    }
-                    onSave(cents)
-                },
-            ) {
-                Text(if (saving) "保存中…" else "保存")
-            }
+            TextButton(enabled = !saving, onClick = onConfirm) { Text("删除") }
         },
         dismissButton = {
-            Row {
-                if (onDelete != null) {
-                    TextButton(onClick = onDelete, enabled = !saving) { Text("删除") }
-                }
-                TextButton(onClick = onDismiss, enabled = !saving) { Text("取消") }
-            }
+            TextButton(onClick = onDismiss, enabled = !saving) { Text("取消") }
         },
     )
 }

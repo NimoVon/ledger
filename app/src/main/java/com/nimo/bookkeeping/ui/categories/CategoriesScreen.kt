@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +29,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,7 +38,11 @@ import com.nimo.bookkeeping.data.repository.LedgerRepository
 import com.nimo.bookkeeping.domain.model.MoveDirection
 import com.nimo.bookkeeping.ui.LedgerIcons
 import com.nimo.bookkeeping.ui.components.EmptyState
+import com.nimo.bookkeeping.ui.components.FAB_BOTTOM_RESERVE
 import kotlinx.coroutines.launch
+
+/** 「新建分类」按钮的文字：按钮文字与读屏名共用（F15 补语义，悬浮按钮的文字在无障碍树上读不出来） */
+private const val NEW_CATEGORY_LABEL = "新建分类"
 
 /**
  * 分类管理（F02）：支出 / 收入两套独立分类树，一级 / 二级单层父子，上下移排序，停用不删除。
@@ -79,8 +86,9 @@ fun CategoriesScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { openDialog(CategoryDialogTarget.Create) },
+                modifier = Modifier.semantics { contentDescription = NEW_CATEGORY_LABEL },
                 icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
-                text = { Text("新建分类") },
+                text = { Text(NEW_CATEGORY_LABEL) },
             )
         },
     ) { innerPadding ->
@@ -102,7 +110,10 @@ fun CategoriesScreen(
                 modifier = contentModifier,
             )
 
-            else -> LazyColumn(modifier = contentModifier) {
+            else -> LazyColumn(
+                modifier = contentModifier,
+                contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
+            ) {
                 state.sections.forEach { section ->
                     item(key = "header-" + section.kind.name) {
                         Text(
