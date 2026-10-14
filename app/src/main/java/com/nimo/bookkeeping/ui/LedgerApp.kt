@@ -33,6 +33,7 @@ import com.nimo.bookkeeping.ui.categories.CategoriesScreen
 import com.nimo.bookkeeping.ui.record.RecordScreen
 import com.nimo.bookkeeping.ui.reports.ReportsScreen
 import com.nimo.bookkeeping.ui.settings.SettingsScreen
+import com.nimo.bookkeeping.ui.budgets.BudgetsScreen
 import com.nimo.bookkeeping.ui.transactions.TransactionsScreen
 import com.nimo.bookkeeping.ui.transfer.TransferScreen
 import com.nimo.bookkeeping.util.Money
@@ -42,6 +43,9 @@ private const val ACCOUNTS_ROUTE = "accounts"
 
 /** 分类管理（F02）：同样从设置页进入，不在底部导航里 */
 private const val CATEGORIES_ROUTE = "categories"
+
+/** 预算管理（F09）：同样从设置页进入，不在底部导航里 */
+private const val BUDGETS_ROUTE = "budgets"
 
 /** 记一笔（F03）：全屏表单，由顶层页面的「记一笔」按钮唤起（计划 F03「从任意页面可唤起」） */
 private const val RECORD_ROUTE = "record"
@@ -204,11 +208,20 @@ fun LedgerApp(container: AppContainer) {
                     container = container,
                     onOpenAccounts = { navController.navigate(ACCOUNTS_ROUTE) },
                     onOpenCategories = { navController.navigate(CATEGORIES_ROUTE) },
+                    onOpenBudgets = { navController.navigate(BUDGETS_ROUTE) },
                 )
             }
             composable(CATEGORIES_ROUTE) {
                 CategoriesScreen(
                     repository = container.repository,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(BUDGETS_ROUTE) {
+                BudgetsScreen(
+                    repository = container.repository,
+                    // 撤销窗口内那几笔数据库里还在：预算口径要和流水页一样当它们不存在（计划 9.2）
+                    pendingDeletionIds = pendingDeletion.pendingIds,
                     onBack = { navController.popBackStack() },
                 )
             }

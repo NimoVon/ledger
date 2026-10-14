@@ -32,6 +32,7 @@ fun SettingsScreen(
     container: AppContainer,
     onOpenAccounts: () -> Unit,
     onOpenCategories: () -> Unit,
+    onOpenBudgets: () -> Unit,
 ) {
     var lines by remember { mutableStateOf(listOf("自检运行中…")) }
     LaunchedEffect(Unit) {
@@ -74,6 +75,17 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text = "分类管理", style = MaterialTheme.typography.bodyLarge)
+            Text(text = "›", style = MaterialTheme.typography.titleMedium)
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenBudgets)
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "预算管理", style = MaterialTheme.typography.bodyLarge)
             Text(text = "›", style = MaterialTheme.typography.titleMedium)
         }
         HorizontalDivider()

@@ -182,6 +182,13 @@ object StatsCalculator {
         }
     }
 
-    private fun inRange(date: LocalDate, range: ClosedRange<LocalDate>?): Boolean =
-        range == null || (date >= range.start && date <= range.endInclusive)
 }
+
+/**
+ * 区间判定（闭区间）：range 为 null 表示"不过滤"。
+ *
+ * 放在顶层是为了让同包的 [BudgetCalculator] 复用同一份区间口径——
+ * 预算与统计必须按同样的日期边界归类，两处各写一份迟早会漂移。
+ */
+internal fun inRange(date: LocalDate, range: ClosedRange<LocalDate>?): Boolean =
+    range == null || (date >= range.start && date <= range.endInclusive)

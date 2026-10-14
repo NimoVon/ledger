@@ -15,11 +15,14 @@ import com.nimo.bookkeeping.domain.model.MoveDirection
 import com.nimo.bookkeeping.domain.model.TransactionInput
 import com.nimo.bookkeeping.domain.validate.AccountValidationException
 import com.nimo.bookkeeping.domain.validate.AccountValidator
+import com.nimo.bookkeeping.domain.validate.BudgetValidationException
+import com.nimo.bookkeeping.domain.validate.BudgetValidator
 import com.nimo.bookkeeping.domain.validate.CategorySnapshot
 import com.nimo.bookkeeping.domain.validate.CategoryValidationException
 import com.nimo.bookkeeping.domain.validate.CategoryValidator
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.domain.validate.TxValidationException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -322,24 +325,46 @@ class LedgerRepository(private val db: AppDatabase) {
 
     // ---- 预算 ----
 
+    /**
+     * 设置（或更新）某月的一条预算：categoryId 为 null 表示当月总预算。
+     *
+     * 写路径是 find → @Insert / 按 id @Update，**不用 @Upsert**：budgets 上有「每月总预算唯一」的部分
+     * 唯一索引与 amount > 0 触发器，@Upsert 遇到这类非主键冲突会被 Room 转成"按主键 UPDATE 0 行"的
+     * 静默无操作——用户以为设上了，其实什么都没发生。这里让失败变成 Result.failure。
+     */
     suspend fun setBudget(month: String, categoryId: Long?, amountCents: Long): Result<Unit> =
         withContext(Dispatchers.IO) {
-            if (amountCents <= 0) {
-                return@withContext Result.failure(IllegalArgumentException("预算必须大于 0"))
+            val errors = BudgetValidator.validate(month, amountCents)
+            if (errors.isNotEmpty()) {
+                return@withContext Result.failure(BudgetValidationException(errors))
             }
-            val existing = budgetDao.find(month, categoryId)
-            budgetDao.upsert(
-                BudgetEntity(
-                    id = existing?.id ?: 0L,
-                    month = month,
-                    categoryId = categoryId,
-                    amount = amountCents,
-                ),
-            )
-            Result.success(Unit)
+            try {
+                val existing = budgetDao.find(month, categoryId)
+                if (existing == null) {
+                    budgetDao.insert(
+                        BudgetEntity(month = month, categoryId = categoryId, amount = amountCents),
+                    )
+                } else {
+                    budgetDao.updateAmount(existing.id, amountCents)
+                }
+                Result.success(Unit)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 约束冲突等写失败必须让用户看到，不能静默
+                Result.failure(e)
+            }
         }
 
-    suspend fun deleteBudget(id: Long): Unit = withContext(Dispatchers.IO) {
-        budgetDao.deleteById(id)
+    /** 删除一条预算。失败同样回 Result，页面据此提示而不是崩溃。 */
+    suspend fun deleteBudget(id: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            budgetDao.deleteById(id)
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

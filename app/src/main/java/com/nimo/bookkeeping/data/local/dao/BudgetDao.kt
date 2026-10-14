@@ -38,4 +38,16 @@ interface BudgetDao {
 
     @Query("DELETE FROM budgets WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /**
+     * 新建单条。用 @Insert 而不是 @Upsert：budgets 上有「每月总预算唯一」的部分唯一索引，
+     * @Upsert 撞上非主键约束会被 Room 转成"按主键 UPDATE 0 行"的静默无操作（本工程的已知陷阱），
+     * 插入失败必须抛出来，不能假装设上了。
+     */
+    @Insert
+    suspend fun insert(budget: BudgetEntity): Long
+
+    /** 改金额：按显式 id 更新，不再重复判断唯一性。 */
+    @Query("UPDATE budgets SET amount = :amount WHERE id = :id")
+    suspend fun updateAmount(id: Long, amount: Long)
 }
