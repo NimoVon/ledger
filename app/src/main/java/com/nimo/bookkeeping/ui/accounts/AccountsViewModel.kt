@@ -102,6 +102,13 @@ class AccountsViewModel(
     suspend fun toggleArchive(id: Long, archived: Boolean): Result<Unit> =
         repository.setAccountArchived(id, archived)
 
+    /**
+     * 余额校准（F11）：把账户余额调到 [targetBalanceCents]。差额由 Repository 在事务内用库里
+     * 真实的流水重新推导并写成一笔 BALANCE_ADJUST——UI 只传目标，不自己算差额（铁律 2）。
+     */
+    suspend fun adjustBalance(accountId: Long, targetBalanceCents: Long): Result<Long> =
+        repository.adjustBalanceTo(accountId, targetBalanceCents)
+
     companion object {
         fun factory(
             repository: LedgerRepository,

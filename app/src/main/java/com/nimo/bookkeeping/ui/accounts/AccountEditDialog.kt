@@ -27,6 +27,8 @@ import com.nimo.bookkeeping.data.local.entity.AccountEntity
 import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.validate.AccountValidationError
 import com.nimo.bookkeeping.domain.validate.AccountValidator
+import com.nimo.bookkeeping.domain.validate.TxValidationException
+import com.nimo.bookkeeping.ui.record.toMessage
 import com.nimo.bookkeeping.util.Money
 
 /** 校验错误 → 中文提示 */
@@ -40,6 +42,10 @@ internal fun AccountValidationError.toMessage(): String = when (this) {
 internal fun Throwable.toAccountMessage(): String = when (this) {
     is com.nimo.bookkeeping.domain.validate.AccountValidationException ->
         errors.joinToString("；") { it.toMessage() }
+
+    // 余额校准（F11）走的是交易校验：文案必须与记账页同一套，不能让"交易校验失败: ..."漏到界面
+    is TxValidationException -> errors.joinToString("；") { it.toMessage() }
+
     else -> message ?: "保存失败"
 }
 

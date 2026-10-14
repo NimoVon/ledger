@@ -6,13 +6,17 @@ import com.nimo.bookkeeping.data.local.entity.AccountEntity
 import com.nimo.bookkeeping.data.local.entity.BudgetEntity
 import com.nimo.bookkeeping.data.local.entity.CategoryEntity
 import com.nimo.bookkeeping.data.local.entity.TransactionEntity
+import com.nimo.bookkeeping.data.local.toBalanceInput
 import com.nimo.bookkeeping.data.local.toEntity
+import com.nimo.bookkeeping.data.local.toRecordOrNull
 import com.nimo.bookkeeping.domain.model.AccountRef
 import com.nimo.bookkeeping.domain.model.AccountType
 import com.nimo.bookkeeping.domain.model.CategoryKind
 import com.nimo.bookkeeping.domain.model.CategoryRef
 import com.nimo.bookkeeping.domain.model.MoveDirection
 import com.nimo.bookkeeping.domain.model.TransactionInput
+import com.nimo.bookkeeping.domain.model.TransactionType
+import com.nimo.bookkeeping.domain.stats.BalanceCalculator
 import com.nimo.bookkeeping.domain.validate.AccountValidationException
 import com.nimo.bookkeeping.domain.validate.AccountValidator
 import com.nimo.bookkeeping.domain.validate.BudgetValidationException
@@ -22,6 +26,8 @@ import com.nimo.bookkeeping.domain.validate.CategoryValidationException
 import com.nimo.bookkeeping.domain.validate.CategoryValidator
 import com.nimo.bookkeeping.domain.validate.TransactionValidator
 import com.nimo.bookkeeping.domain.validate.TxValidationException
+import com.nimo.bookkeeping.util.Dates
+import com.nimo.bookkeeping.util.Money
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -322,6 +328,61 @@ class LedgerRepository(private val db: AppDatabase) {
     suspend fun deleteTransaction(entity: TransactionEntity): Unit = withContext(Dispatchers.IO) {
         txDao.delete(entity)
     }
+
+    // ---- 余额校准（F11）----
+
+    /**
+     * 把某账户的余额校准到 [targetBalanceCents]：**追加**一笔 BALANCE_ADJUST，差额 = 实际 − 账面。
+     *
+     * 余额是推导值（铁律 2），所以"校准"唯一正确的做法就是补一笔差额交易——历史一行都不动，
+     * 也因此不存在"删除流水"这种危险操作。推导与写入在同一个事务里：并发写入改了账面时，
+     * 事务隔离保证"读到的账面"与"写下去的差额"来自同一个快照。
+     *
+     * 差额为 0 直接失败：数据库触发器不允许 amount = 0（铁律 1），不能让用户拿到校准成功的假象。
+     */
+    suspend fun adjustBalanceTo(accountId: Long, targetBalanceCents: Long): Result<Long> =
+        withContext(Dispatchers.IO) {
+            try {
+                val result: Result<Long> = db.withTransaction {
+                    val accounts = accountDao.listAll()
+                    val account = accounts.firstOrNull { it.id == accountId }
+                        ?: return@withTransaction Result.failure(
+                            IllegalStateException("账户不存在"),
+                        )
+                    // 与账户页同一套口径：BalanceCalculator 从 initial_balance + 全部流水推导（铁律 2）
+                    val current = BalanceCalculator.computeBalances(
+                        accounts = accounts.map { it.toBalanceInput() },
+                        records = txDao.listAll().mapNotNull { it.toRecordOrNull() },
+                    )[accountId] ?: account.initialBalance
+
+                    val delta = targetBalanceCents - current
+                    if (delta == 0L) {
+                        return@withTransaction Result.failure(
+                            IllegalStateException("账面余额与实际一致，无需校准"),
+                        )
+                    }
+                    val input = TransactionInput(
+                        type = TransactionType.BALANCE_ADJUST,
+                        amountCents = delta,
+                        accountId = accountId,
+                        categoryId = null,
+                        occurredOn = Dates.today(),
+                        // 备注写清来龙去脉：几个月后回看流水，要知道这笔差额是怎么来的
+                        note = "余额校准：账面 " + Money.formatCurrency(current) +
+                            " → 实际 " + Money.formatCurrency(targetBalanceCents),
+                    )
+                    validateOrThrow(input)
+                    Result.success(txDao.insert(input.toEntity(System.currentTimeMillis())))
+                }
+                result
+            } catch (e: TxValidationException) {
+                Result.failure(e)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
 
     // ---- 预算 ----
 

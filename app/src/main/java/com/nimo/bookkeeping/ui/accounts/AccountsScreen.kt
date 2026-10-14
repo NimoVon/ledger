@@ -41,7 +41,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 /**
- * 账户管理（F01）：列表 / 新建 / 编辑 / 归档（归档不删除历史数据）。
+ * 账户管理（F01 + F11）：列表 / 新建 / 编辑 / 归档（归档不删除历史数据）+ 余额校准。
+ *
+ * 余额校准（F11）在行尾的「校准」按钮里：填一个实际余额，追加一笔余额调整把账面补齐，
+ * 历史一行都不动（差额由 [LedgerRepository.adjustBalanceTo] 在事务内推导，UI 不自己算）。
  *
  * 列表展示的是**当前余额**：初始余额 + 全部交易变动，由 [AccountsViewModel] 交给
  * BalanceCalculator 推导（铁律 2）。初始余额只在编辑对话框里出现——它是建账当时的快照，
@@ -65,6 +68,11 @@ fun AccountsScreen(
     var dialogVisible by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var dialogError by remember { mutableStateOf<String?>(null) }
+
+    // 余额校准（F11）的对话框状态：独立于编辑对话框，两者不会同时打开
+    var adjustAccount by remember { mutableStateOf<AccountEntity?>(null) }
+    var adjusting by remember { mutableStateOf(false) }
+    var adjustError by remember { mutableStateOf<String?>(null) }
 
     fun openDialog(account: AccountEntity?) {
         dialogAccount = account
@@ -119,6 +127,12 @@ fun AccountsScreen(
                         account = account,
                         balanceCents = state.balanceOf(account),
                         onClick = { openDialog(account) },
+                        // 归档账户不能再写新交易（校验器会拒），所以不给校准入口
+                        onAdjust = if (account.isArchived) {
+                            null
+                        } else {
+                            { adjustAccount = account; adjustError = null }
+                        },
                     )
                     HorizontalDivider()
                 }
@@ -159,6 +173,25 @@ fun AccountsScreen(
             },
         )
     }
+
+    adjustAccount?.let { target ->
+        BalanceAdjustDialog(
+            accountName = target.name,
+            currentBalanceCents = state.balanceOf(target),
+            saving = adjusting,
+            errorMessage = adjustError,
+            onDismiss = { if (!adjusting) adjustAccount = null },
+            onConfirm = { targetCents ->
+                scope.launch {
+                    adjusting = true
+                    viewModel.adjustBalance(target.id, targetCents)
+                        .onSuccess { adjustAccount = null; adjustError = null }
+                        .onFailure { adjustError = it.toAccountMessage() }
+                    adjusting = false
+                }
+            },
+        )
+    }
 }
 
 /** 净资产合计：只统计"未归档且计入净资产"的账户（信用卡欠款以负余额体现，计划 3.4） */
@@ -177,7 +210,13 @@ private fun NetWorthRow(netWorthCents: Long) {
 }
 
 @Composable
-private fun AccountRow(account: AccountEntity, balanceCents: Long, onClick: () -> Unit) {
+private fun AccountRow(
+    account: AccountEntity,
+    balanceCents: Long,
+    onClick: () -> Unit,
+    /** 余额校准入口（F11）；归档账户传 null，整个按钮不显示 */
+    onAdjust: (() -> Unit)?,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -192,6 +231,14 @@ private fun AccountRow(account: AccountEntity, balanceCents: Long, onClick: () -
                 text = account.type.label + if (account.isArchived) " · 已归档" else "",
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+        if (onAdjust != null) {
+            IconButton(onClick = onAdjust) {
+                Icon(
+                    imageVector = LedgerIcons.Scale,
+                    contentDescription = "校准 ${account.name} 的余额",
+                )
+            }
         }
         // 当前余额（推导值），不是建账时的初始余额
         Text(

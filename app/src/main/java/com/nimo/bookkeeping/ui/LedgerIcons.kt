@@ -162,6 +162,25 @@ object LedgerIcons {
             lineTo(17.5f, 13f)
         }
     }
+
+    /** 校准（F11 余额校准）：天平——横梁 + 立柱 + 底座 + 两个托盘 */
+    val Scale: ImageVector = ledgerIcon("LedgerScale") {
+        path(fill = SolidColor(Color.Black)) {
+            hBar(3.5f, 20.5f, 6.5f, 1.8f)
+            vBar(12f, 6.5f, 18.5f, 1.8f)
+            hBar(7.5f, 16.5f, 19f, 1.8f)
+            // 左托盘
+            moveTo(3.5f, 9.5f)
+            lineTo(8.5f, 9.5f)
+            lineTo(6f, 13.5f)
+            close()
+            // 右托盘
+            moveTo(15.5f, 9.5f)
+            lineTo(20.5f, 9.5f)
+            lineTo(18f, 13.5f)
+            close()
+        }
+    }
 }
 
 private fun ledgerIcon(name: String, content: ImageVector.Builder.() -> Unit): ImageVector =
