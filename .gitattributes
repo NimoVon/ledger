@@ -1,0 +1,5 @@
+# 示例数据的 CSV 是「交付格式契约」的一部分：UTF-8 BOM + CRLF（Excel 友好）。
+# 钉住行尾，保证在任何平台（Windows / Linux / macOS）检出的工作区都是 CRLF，
+# 而不是把这条契约留给各机器的 core.autocrlf 决定。
+# 校验测试：app/src/test/java/com/nimo/bookkeeping/docs/SampleDataFilesTest.kt
+docs/示例数据/*.csv text eol=crlf
