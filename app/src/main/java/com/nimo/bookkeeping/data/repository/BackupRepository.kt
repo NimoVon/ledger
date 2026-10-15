@@ -18,6 +18,7 @@ import com.nimo.bookkeeping.domain.backup.CsvImportCounts
 import com.nimo.bookkeeping.domain.backup.CsvImportOutcome
 import com.nimo.bookkeeping.domain.backup.CsvImportParse
 import com.nimo.bookkeeping.domain.backup.CsvImportParser
+import com.nimo.bookkeeping.domain.backup.CsvImportPreview
 import com.nimo.bookkeeping.domain.backup.CsvRowProblem
 import com.nimo.bookkeeping.domain.backup.TransactionBackup
 import com.nimo.bookkeeping.domain.model.AccountType
@@ -101,18 +102,34 @@ class BackupRepository(private val db: AppDatabase) {
                         if (plan.budgetsToUpdate.isNotEmpty()) budgetDao.updateAll(plan.budgetsToUpdate)
                     }
                 }
-                Result.success(
-                    CsvImportOutcome(
-                        inserted = plan.insertedCounts,
-                        updated = plan.updatedCounts,
-                        problems = CsvImportParser.foldProblems(parsed.problems + plan.problems),
-                        missingFiles = parsed.missingFiles,
-                    ),
-                )
+                Result.success(summarize(parsed, plan).toOutcome())
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Result.failure(
                     IllegalStateException("导入失败，本机数据未改动：" + (e.message ?: e.javaClass.simpleName), e),
+                )
+            }
+        }
+
+    /**
+     * 导入前的预览（计划 line 312）：**只算不写**，返回"此刻按下去会发生什么"。
+     *
+     * 与 [importCsv] 共用同一套计划算法（[summarize]），所以预览的条数就是导入的条数；
+     * 用户确认后再走 [importCsv]，那时会重新解析并对当时的数据重算，预览不会被当成写入凭据。
+     */
+    suspend fun previewCsvImport(files: Map<String, String>): Result<CsvImportPreview> =
+        withContext(Dispatchers.IO) {
+            try {
+                val parsed = CsvImportParser.parse(files)
+                val plan = planImport(parsed, readAll())
+                Result.success(summarize(parsed, plan).toPreview())
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Result.failure(
+                    IllegalStateException(
+                        "导入失败，本机数据未改动：" + (e.message ?: e.javaClass.simpleName),
+                        e,
+                    ),
                 )
             }
         }
@@ -215,6 +232,27 @@ class BackupRepository(private val db: AppDatabase) {
                 budgets = budgetsToUpdate.size,
             )
     }
+
+    /**
+     * 预览与结果共用的一份汇总：口径只有一处，免得"预览说 3 行、导入写 4 行"。
+     */
+    private class ImportSummary(
+        val inserted: CsvImportCounts,
+        val updated: CsvImportCounts,
+        val problems: List<CsvRowProblem>,
+        val missingFiles: List<String>,
+    ) {
+        fun toOutcome() = CsvImportOutcome(inserted, updated, problems, missingFiles)
+
+        fun toPreview() = CsvImportPreview(inserted, updated, problems, missingFiles)
+    }
+
+    private fun summarize(parsed: CsvImportParse, plan: ImportPlan) = ImportSummary(
+        inserted = plan.insertedCounts,
+        updated = plan.updatedCounts,
+        problems = CsvImportParser.foldProblems(parsed.problems + plan.problems),
+        missingFiles = parsed.missingFiles,
+    )
 
     private class Snapshot(
         val accounts: List<AccountEntity>,

@@ -38,6 +38,7 @@ import com.nimo.bookkeeping.domain.backup.BackupFile
 import com.nimo.bookkeeping.domain.backup.CsvExporter
 import com.nimo.bookkeeping.domain.backup.CsvImportCounts
 import com.nimo.bookkeeping.domain.backup.CsvImportOutcome
+import com.nimo.bookkeeping.domain.backup.CsvImportPreview
 import com.nimo.bookkeeping.domain.backup.CsvRowProblem
 import com.nimo.bookkeeping.ui.transactions.PendingTransactionDeletion
 import java.io.IOException
@@ -82,6 +83,7 @@ fun BackupSettingsSection(
     var importCandidateName by remember { mutableStateOf("") }
     var explainImport by remember { mutableStateOf(false) }
     var importOutcome by remember { mutableStateOf<CsvImportOutcome?>(null) }
+    var csvCandidate by remember { mutableStateOf<CsvImportCandidate?>(null) }
     var lastAutoBackup by remember { mutableStateOf<AutoBackupInfo?>(null) }
     var autoBackupRefresh by remember { mutableStateOf(0) }
 
@@ -135,7 +137,11 @@ fun BackupSettingsSection(
         }
     }
 
-    /** 导入 CSV：让用户选一个目录，读回 4 个文件后做增量合并（同 id 覆盖、新 id 追加） */
+    /**
+     * 导入 CSV：让用户选一个目录，先读回 4 个文件算一份**预览**（不写库），
+     * 用户在 [CsvImportConfirmDialog] 里按下「导入」之后才做增量合并（同 id 覆盖、新 id 追加）。
+     * 计划 line 312：导入前提供预览/确认。
+     */
     val csvImport = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
@@ -152,19 +158,12 @@ fun BackupSettingsSection(
                         "这个文件夹里没有 accounts.csv、categories.csv、transactions.csv、budgets.csv 中的任何一个",
                     )
                 }
-                backupRepository.importCsv(files).getOrThrow()
+                CsvImportCandidate(files, backupRepository.previewCsvImport(files).getOrThrow())
             }
             busy = false
             result
-                .onSuccess { outcome ->
-                    status = "已导入：" + writtenSummary(outcome)
-                    importOutcome = outcome
-                }
-                .onFailure {
-                    val message = describe(it)
-                    errorText = (if (message.startsWith("导入失败")) message else "导入没有完成：" + message) +
-                        "\n本机数据未被改动。"
-                }
+                .onSuccess { csvCandidate = it }
+                .onFailure { errorText = csvImportFailure(it) }
         }
     }
 
@@ -296,7 +295,8 @@ fun BackupSettingsSection(
                         "· 本机独有的数据不会被删除。\n\n" +
                         "如果你要导入的是一份全新数据，请先用「导入 JSON（覆盖替换）」清空本机数据，" +
                         "否则新旧数据会混在一起。\n" +
-                        "看不明白的行会跳过，导入完成后会告诉你是哪个文件的第几行、为什么。",
+                        "看不明白的行会跳过，导入完成后会告诉你是哪个文件的第几行、为什么。\n" +
+                        "选完文件夹会先给你看一遍将写入多少行，确认之后才真的写。",
                 )
             },
             confirmButton = {
@@ -335,6 +335,29 @@ fun BackupSettingsSection(
             },
             confirmButton = {
                 TextButton(onClick = { importOutcome = null }) { Text(text = "知道了") }
+            },
+        )
+    }
+
+    // 导入 CSV 确认（计划 line 312）：把"将写入多少行、跳过哪些行"摊开，按下去才真的写库
+    csvCandidate?.let { candidate ->
+        CsvImportConfirmDialog(
+            preview = candidate.preview,
+            fileNames = candidate.files.keys.sorted(),
+            onDismiss = { csvCandidate = null },
+            onConfirm = {
+                csvCandidate = null
+                scope.launch {
+                    busy = true
+                    val result = runCatching { backupRepository.importCsv(candidate.files).getOrThrow() }
+                    busy = false
+                    result
+                        .onSuccess { outcome ->
+                            status = "已导入：" + writtenSummary(outcome)
+                            importOutcome = outcome
+                        }
+                        .onFailure { errorText = csvImportFailure(it) }
+                }
             },
         )
     }
@@ -536,3 +559,74 @@ private fun Throwable.looksLikeAlreadyExists(): Boolean =
     this is java.nio.file.FileAlreadyExistsException ||
         javaClass.simpleName.contains("FileAlreadyExists") ||
         message?.contains("already exists", ignoreCase = true) == true
+
+/** 选好文件夹、算完预览、还没确认的那一次 CSV 导入 */
+private class CsvImportCandidate(
+    val files: Map<String, String>,
+    val preview: CsvImportPreview,
+)
+
+/**
+ * CSV 导入前的确认（计划 line 312）。抽成独立 composable 是为了能在 JVM 里测
+ * 「只有按下确认才写库」（与 BudgetDeleteConfirmDialog 同款做法）。
+ *
+ * 没有可写入的行时「导入」按钮直接禁用：按下去也只是把同样的结果再讲一遍。
+ */
+@Composable
+internal fun CsvImportConfirmDialog(
+    preview: CsvImportPreview,
+    fileNames: List<String>,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = if (preview.hasAnythingToWrite) "确认导入这些 CSV？" else "这些 CSV 没有可写入的行",
+            )
+        },
+        text = { Text(text = previewText(preview, fileNames)) },
+        confirmButton = {
+            TextButton(enabled = preview.hasAnythingToWrite, onClick = onConfirm) { Text(text = "导入") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(text = "取消") }
+        },
+    )
+}
+
+/** 预览文案：读到哪些文件、将写入多少行、跳过哪些行（带文件名与行号）、哪些文件没找到 */
+internal fun previewText(preview: CsvImportPreview, fileNames: List<String>): String {
+    val lines = mutableListOf<String>()
+    lines += if (fileNames.isEmpty()) "没有读到 CSV 文件。" else "读到的文件：" + fileNames.joinToString("、")
+    lines += ""
+    if (preview.hasAnythingToWrite) {
+        lines += "将写入 " + preview.rowsToWrite + " 行（新增 " + preview.inserted.total +
+            "、覆盖 " + preview.updated.total + "）"
+        lines += "新增：" + countsLine(preview.inserted)
+        lines += "覆盖：" + countsLine(preview.updated)
+        lines += ""
+        lines += "导入规则：文件里的 id 本机已经有 → 覆盖那一行；本机没有 → 追加一行新的；" +
+            "本机独有的数据不会被删除。"
+    } else {
+        lines += "没有需要写入的行：这个目录里的 CSV 不会改动本机任何数据。"
+    }
+    if (preview.problems.isNotEmpty()) {
+        lines += ""
+        lines += "会跳过 " + preview.skippedRows + " 行："
+        lines += preview.problems.joinToString("\n") { it.describeLine() }
+    }
+    if (preview.missingFiles.isNotEmpty()) {
+        lines += ""
+        lines += "没找到的文件：" + preview.missingFiles.joinToString("、")
+    }
+    return lines.joinToString("\n")
+}
+
+/** 导入失败的提示口径：保留 repository 的「未改动」结论，且绝不把文件内容带进界面（计划 4.5） */
+private fun csvImportFailure(t: Throwable): String {
+    val message = describe(t)
+    return (if (message.startsWith("导入失败")) message else "导入没有完成：" + message) +
+        "\n本机数据未被改动。"
+}

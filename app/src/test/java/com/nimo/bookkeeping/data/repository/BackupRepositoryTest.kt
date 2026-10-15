@@ -509,5 +509,81 @@ class BackupRepositoryTest {
         assertEquals(4, db.transactionDao().count())
         assertEquals(2, db.budgetDao().listAll().size)
     }
+
+    // ---- 导入前预览（计划 line 312：导入前提供预览/确认，预览不写库） ----
+
+    @Test
+    fun previewCsvImport_writesNothingAndPredictsWhatTheImportWillDo() = runTest {
+        seedSample()
+        val before = exportedData()
+        val files = mapOf(
+            CsvExporter.ACCOUNTS_FILE to csv(
+                CsvExporter.ACCOUNTS_HEADER,
+                listOf("9", "余额宝（改）", "ALIPAY", "7.77", "true", "false", "1", "1", "2"),
+                listOf("20", "现金", "CASH", "88.00", "true", "false", "9", "31", "31"),
+            ),
+            CsvExporter.TRANSACTIONS_FILE to csv(
+                CsvExporter.TRANSACTIONS_HEADER,
+                listOf("7", "EXPENSE", "9.99", "2", "", "5", "2026-10-13", "改过的午饭", "21", "99"),
+                listOf("40", "EXPENSE", "5.00", "404", "", "5", "2026-10-14", "", "1", "1"),
+                listOf("41", "EXPENSE", "6.00", "2", "", "5", "2026-10-14", "好的那笔", "1", "1"),
+            ),
+        )
+
+        val preview = repo.previewCsvImport(files).getOrThrow()
+
+        // 预览一个字节都不许写：连"同 id 覆盖"的值也还是旧的
+        assertEquals(before, exportedData())
+        assertEquals("余额宝", db.accountDao().getById(9L)?.name)
+        assertEquals(2, db.accountDao().count())
+        assertEquals(null, db.transactionDao().getById(40L))
+
+        // 第 3 行引用不存在的账户 → 跳过；第 4 行是可用新行 → 算新增
+        assertEquals(CsvImportCounts(accounts = 1, transactions = 1), preview.inserted)
+        assertEquals(CsvImportCounts(accounts = 1, transactions = 1), preview.updated)
+        assertEquals(4, preview.rowsToWrite)
+        assertTrue(preview.hasAnythingToWrite)
+        assertEquals(1, preview.skippedRows)
+        assertEquals(CsvExporter.TRANSACTIONS_FILE, preview.problems.single().file)
+        assertEquals(3, preview.problems.single().line)
+        assertEquals(
+            setOf(CsvExporter.CATEGORIES_FILE, CsvExporter.BUDGETS_FILE),
+            preview.missingFiles.toSet(),
+        )
+
+        // 确认之后真导入：结果必须与预览一字不差
+        val outcome = repo.importCsv(files).getOrThrow()
+        assertEquals(preview.inserted, outcome.inserted)
+        assertEquals(preview.updated, outcome.updated)
+        assertEquals(preview.problems, outcome.problems)
+        assertEquals(preview.missingFiles, outcome.missingFiles)
+        assertEquals("余额宝（改）", db.accountDao().getById(9L)?.name)
+    }
+
+    @Test
+    fun previewCsvImport_ofOurOwnExport_predictsOverwritesOnly() = runTest {
+        seedSample()
+
+        val preview = repo.previewCsvImport(repo.exportCsvFiles()).getOrThrow()
+
+        assertEquals(0, preview.inserted.total)
+        assertEquals(11, preview.updated.total)
+        assertEquals(11, preview.rowsToWrite)
+        assertEquals(0, preview.skippedRows)
+        assertEquals(emptyList<CsvRowProblem>(), preview.problems)
+        assertEquals(emptyList<String>(), preview.missingFiles)
+    }
+
+    @Test
+    fun previewCsvImport_withNoFiles_saysNothingToWriteAndListsWhatIsMissing() = runTest {
+        seedSample()
+
+        val preview = repo.previewCsvImport(emptyMap()).getOrThrow()
+
+        assertFalse(preview.hasAnythingToWrite)
+        assertEquals(0, preview.rowsToWrite)
+        assertEquals(0, preview.skippedRows)
+        assertEquals(4, preview.missingFiles.size)
+    }
 }
 
