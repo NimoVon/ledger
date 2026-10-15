@@ -2,40 +2,70 @@
 
 离线、纯手动、支持多账户余额的 Android 个人记账应用。
 
-- 无 `INTERNET` 权限（数据不上云的物理保证），无账号体系
+- 无 `INTERNET` 权限（数据不上云的物理保证），无账号体系、无遥测
 - 金额全程 `Long` 整数分，杜绝浮点误差
 - 账户余额由交易推导（`初始余额 + Σ变动`），不维护可变余额字段
 - 转账影响双账户余额、不计入收支统计
 - 数据库层触发器兜底所有硬约束（金额正负、转账双账户、分类归属）
+- 无障碍（TalkBack 可读）、深色模式、预算告警、图表趋势
 
 开发计划（产品范围 / 数据铁律 / 统计口径的唯一权威来源）：
 `D:/AIworkspace/记账/个人记账App开发计划V2.2.md`
 
+## 功能
+
+| 编号 | 功能 | 状态 |
+| --- | --- | --- |
+| F01 | 账户管理（CRUD、6 种类型、初始余额、归档不删数据） | 已实现 |
+| F02 | 分类体系（支出/收入两套、预置 + 自定义、单层父子、排序、停用） | 已实现 |
+| F03 | 记一笔（支出/收入，金额/分类/账户/日期/备注，任意页面可唤起，可改可删可撤销） | 已实现 |
+| F04 | 转账（双账户、不影响收支统计、余额不足警示） | 已实现 |
+| F05 | 流水列表（按日分组时间线、按月切换、同日稳定倒序） | 已实现 |
+| F06 | 筛选与搜索（账户/分类含父子/金额区间/日期区间/备注关键词） | 已实现 |
+| F07 | 月度报表（收入/支出/结余、分类排行、账户分布、环比、日均） | 已实现 |
+| F08 | 备份与导出（JSON 全量导出/恢复 + 恢复前自动备份；CSV 导出 UTF-8-BOM） | 已实现 |
+| F09 | 预算管理（月度总预算 / 分类预算、80% 与 100% 告警） | 已实现 |
+| F10 | 统计图表（趋势折线、分类环形图、账户分布、下钻） | 已实现 |
+| F11 | 余额校准（生成一笔余额调整交易，不删历史） | 已实现 |
+| F12 | 深色模式（跟随系统 + 手动切换） | 已实现 |
+| F13 | SQLCipher 加密（条件式） | 已评估，**决定不纳入**（见 `docs/F13-SQLCipher评估.md`） |
+| F14 | CSV 导入（同 id 覆盖、新 id 追加，导入前预览确认，坏行跳过并报文件名与行号） | 已实现 |
+| F15 | 无障碍与体验打磨（TalkBack 可读、字体缩放、关键操作二次确认） | 已实现 |
+
+P2（记账提醒、常用组合记忆、多账本、账单附件等）为 V2.x 选做，当前不做。
+
 ## 环境版本（2026-10-12 定版）
 
 | 组件 | 版本 |
-|---|---|
+| --- | --- |
 | Gradle | 9.8.1 |
 | Android Gradle Plugin | 9.4.1（内置 Kotlin） |
 | Kotlin | 2.4.21 |
 | KSP | 2.3.12 |
 | Room | 2.8.5 |
 | Compose BOM | 2026.09.00 |
-| compileSdk / targetSdk / minSdk | 36 / 36 / 26 |
+| compileSdk / targetSdk / minSdk | 37 / 36 / 26 |
 | JDK | Android Studio 自带 JBR（`C:\Program Files\Android\Android Studio\jbr`） |
 | Android SDK | `C:\Users\nimo\AppData\Local\Android\Sdk`（local.properties，勿提交） |
 
-依赖版本集中管理在 `gradle/libs.versions.toml`。
+依赖版本集中管理在 `gradle/libs.versions.toml`；不在 `build.gradle.kts` 里写死版本号。
 
 ## 构建与测试（Windows / Git Bash）
 
 ```bash
 export JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
 cd /d/git/ledger
-./gradlew.bat --console=plain assembleDebug        # 构建 debug APK
-./gradlew.bat --console=plain testDebugUnitTest    # JVM 单元测试
-./gradlew.bat --console=plain lint                 # 静态检查
+./gradlew.bat --console=plain assembleDebug          # 构建 debug APK
+./gradlew.bat --console=plain testDebugUnitTest      # JVM 单元测试（Robolectric）
+./gradlew.bat --console=plain jacocoTestReport       # 覆盖率报告（HTML/XML）
+./gradlew.bat --console=plain lint                   # 静态检查
+# 一次跑全绿门禁：
+./gradlew.bat --console=plain testDebugUnitTest --rerun jacocoTestReport lint assembleDebug
 ```
+
+最近一次门禁（2026-10-16）：**62 套 562 例，0 失败 0 错误 0 跳过**；lint 6 项、0 error；
+APK `app/build/outputs/apk/debug/app-debug.apk` = 14,215,684 字节（13.6 MiB，计划上限 20MB）。
+详细数据见 [`docs/测试报告.md`](docs/测试报告.md)。
 
 首次执行 `gradlew.bat` 会下载一次 Gradle 发行包（约 140MB）。
 本机 `tools/gradle-9.8.1/` 下已有解压版可直接用（已 gitignore）。
@@ -45,9 +75,9 @@ cd /d/git/ledger
 ## 工程结构
 
 ```
-app/src/main/java/com/app/ledger/
-├── LedgerApplication.kt        # 入口 + 手动 DI 容器（AppContainer）+ M0 自检
-├── MainActivity.kt             # M0 自检界面（阶段2起替换为正式首页）
+app/src/main/java/com/nimo/bookkeeping/
+├── LedgerApplication.kt        # Application + 手动 DI 容器（AppContainer）
+├── MainActivity.kt             # 单 Activity + Compose 导航宿主
 ├── data/
 │   ├── local/
 │   │   ├── entity/Entities.kt  # accounts / categories / transactions / budgets
@@ -56,13 +86,48 @@ app/src/main/java/com/app/ledger/
 │   │   ├── SchemaHardening.kt  # 触发器 + 部分唯一索引（数据库层硬约束）
 │   │   ├── DefaultCategories.kt# 预置分类（支出11 + 收入7）
 │   │   └── Mappers.kt          # Entity <-> 领域模型
-│   └── repository/LedgerRepository.kt  # 唯一数据入口（校验后落库）
+│   ├── repository/
+│   │   ├── LedgerRepository.kt # 账目唯一数据入口（校验后落库）
+│   │   └── BackupRepository.kt # 备份导出/恢复、CSV 导入（含导入前预览）
+│   └── backup/                 # 自动备份文件 IO（AutoBackupStore / BackupFileIO）
 ├── domain/
 │   ├── model/                  # 枚举 + 纯 Kotlin 领域模型
-│   ├── stats/                  # 统计口径 / 余额计算（纯函数，可 JVM 单测）
-│   └── validate/               # 交易校验器（第二道防线）
+│   ├── stats/                  # 统计口径 / 余额 / 预算计算（纯函数，可 JVM 单测）
+│   ├── filter/                 # 筛选条件与命中规则
+│   ├── validate/               # 账户/分类/预算/交易校验器（第二道防线）
+│   └── backup/                 # 备份模型、JSON 编解码、CSV 导出/解析
+├── ui/                         # Compose 屏幕 + ViewModel（record/transfer/transactions/
+│                               # reports/budgets/accounts/categories/settings/theme/components）
 └── util/                       # Money（金额解析/格式化）、Dates
 ```
+
+测试在 `app/src/test/java/com/nimo/bookkeeping/`，与主源码同包分层；
+`app/src/test/java/com/nimo/bookkeeping/docs/SampleDataFilesTest.kt` 负责校验 `docs/示例数据/` 不被改坏。
+Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试的基础）。
+
+## 数据与备份
+
+数据库只有一个：应用私有目录下的 `ledger.db`（Room v1，`allowBackup="false"`，不参与系统云备份）。
+
+| 操作 | 位置 | 行为 |
+| --- | --- | --- |
+| 导出 JSON | 设置 → 导出与导入 | 一份完整备份（账户/分类/交易/预算），金额为整数分 |
+| 导入 JSON | 设置 → 导入 JSON（覆盖替换） | **整机数据被它替换**；替换前自动写一份自动备份，可回退 |
+| 导出 CSV | 设置 → 导出 CSV（4 个文件） | `accounts/categories/transactions/budgets.csv`，UTF-8-BOM + CRLF，金额为元、两位小数，Excel 直开 |
+| 导入 CSV | 设置 → 导入 CSV（增量合并） | 选中放着 4 个 CSV 的文件夹；**先预览「将写入多少行/跳过多少行」，确认后才写库**；同 id 覆盖、新 id 追加，本机独有数据不删；坏行跳过并报文件名与行号 |
+
+**换手机迁移**：旧机「导出 JSON 完整备份」→ 把文件拷到新机 → 新机「导入 JSON（覆盖替换）」。
+或直接拷 `ledger.db` 文件到新机应用私有目录（同包名、同 schema 版本）。
+
+**想先试用再录入**：[`docs/示例数据/`](docs/示例数据/README.md) 下有一份合成脱敏的完整示例（1 份 JSON + 4 份 CSV），用上面的导入流程即可装进来。
+
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [`docs/测试报告.md`](docs/测试报告.md) | 门禁结果、562 例分布、JaCoCo 覆盖率、性能实测、打包体积、数据安全、未覆盖项 |
+| [`docs/F13-SQLCipher评估.md`](docs/F13-SQLCipher评估.md) | SQLCipher 兼容性/密钥恢复/迁移/体积评估与「不纳入」决策记录 |
+| [`docs/示例数据/README.md`](docs/示例数据/README.md) | 示例备份与 CSV 的格式约定、导入用法 |
 
 ## 关键设计决策（改代码前必读）
 
@@ -76,18 +141,24 @@ app/src/main/java/com/app/ledger/
 5. **Room schema**：`app/schemas/` 随 Git 提交，是未来迁移测试的基础。
 6. **排序**：所有流水查询 `ORDER BY occurredOn DESC, id DESC`（同日稳定）。
 7. **月度查询**：`occurredOn >= from AND occurredOn < to` 范围比较，命中索引。
+8. **Room `@Upsert` 陷阱**：非主键约束冲突会被 Room 转成按主键 UPDATE（0 行 = 静默无操作）；
+   验证约束要用 raw SQL，写路径需感知失败时用 `@Insert`/`@Update`。
+9. **UI 不直接访问 DAO**：一律经 Repository；转账在数据库事务内完成。
 
 ## 当前状态
 
-- [x] 阶段 0：工程脚手架（M0 可编译空壳 + 自检界面）
-- [x] 阶段 1（部分）：4 张表 + DAO + Repository + 统计纯函数 + JVM 单测
-- [ ] 阶段 1（剩余）：DAO 层测试（Robolectric）、万级数据性能基准
-- [ ] 阶段 2：记账闭环 UI
-- [ ] 阶段 3：报表 ｜ 阶段 4：预算/图表 ｜ 阶段 5：打磨发布
+- [x] 阶段 0：工程脚手架
+- [x] 阶段 1：数据库 + DAO + Repository + 统计/余额纯函数 + JVM 单测
+- [x] 阶段 2：记账闭环 UI（记一笔 / 转账 / 流水列表）
+- [x] 阶段 3：月度报表与筛选搜索
+- [x] 阶段 4：预算、图表、深色模式、余额校准
+- [x] 阶段 5：性能实测、无障碍打磨、隐私权限审计、测试报告、示例数据
+- [ ] 待办：签名 release APK（需确认密钥库方案，尚未创建 keystore）
 
 ## 已知限制
 
-- M0 界面仅为链路自检，正式 UI 从阶段 2 开始
-- 未启用 minify；release 混淆规则待补充
+- 未产出签名 release APK；未启用 minify，release 混淆规则待补充
 - 无自定义应用图标（用系统默认）
-- DAO 层测试尚未接入（计划 M1 验收项）
+- 数据库仍为 v1，暂无 Migration 对象（v1→v2 迁移验证待有 v2 后进行）
+- 真机 1 万笔性能与 Android 8.0（API 26）真机兼容性尚未实测；覆盖率无门禁阈值
+- UI 屏幕层覆盖率偏低（SAF/系统对话框不可单测），详见 `docs/测试报告.md` §10
