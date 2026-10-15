@@ -4,6 +4,25 @@
 > 结论先行：**技术上可用（编译/打包/16 KB/权限全部实测通过），但真正成本不在接入，在密钥管理与存量库迁移。建议按“条件式”继续挂起，等用户明确威胁模型后再启动。**
 > 本报告数字均为本机实测；未实测项在「待真机/待验证清单」单列，不作为已证事实。
 
+## 0. 决策记录（2026-10-16，用户拍板）
+
+**决策：不纳入 SQLCipher，维持条件式挂起（即第 8 节的「路 A」）。**
+
+用户给出的理由（原话）：「不用密钥，也没有云端需求，数据只在本地」。
+
+- 不引入任何密钥/口令机制 → 不存在「密钥丢失即数据永久不可读」的风险。
+- 无云端需求 → 不存在「备份上云被读取」的威胁；`allowBackup="false"` 已把系统自动备份关掉。
+- 数据只在本机 → SQLCipher 只剩「防 root / 物理镜像 / 维修人员 / 提权恶意软件」这一条威胁，不在用户的威胁模型内。
+
+**当前实际防护（已实测，见 §11）**：应用私有目录 + 合并 Manifest 无 INTERNET 权限 + `allowBackup="false"` + JSON 完整备份/恢复 + CSV 四文件导出（用户可自行把数据搬走）。
+
+**再评估触发条件**（命中任一条再启动第 8 节的路 B）：
+
+1. 用户明确要求防 root / 物理镜像 / 设备维修期间的读取；
+2. App 要存比记账更敏感的数据；
+3. 出现真实的数据外泄事件反馈；
+4. 引入云同步（当前明确不做）。
+
 ## 1. 一句话结论
 
 | 维度 | 实测结论 | 判定 |
@@ -84,7 +103,7 @@ SQLCipher 的密钥必须来自某处，而每一条来源都有丢失场景：
 
 ## 8. 两条路
 
-### 路 A（推荐）：保持条件式，暂不纳入
+### 路 A（推荐）：保持条件式，暂不纳入 —— **已选，见 §0**
 
 - 现状已满足计划要求：应用私有目录隔离 + `allowBackup=false` + JSON 备份/恢复 + CSV 导出（用户可自行把数据搬走）。
 - 把本报告的实测数字与「再评估触发条件」记录在案：**用户明确要求防 root/物理提取**、或 **App 要存更敏感的数据**、或 **有用户反馈设备被维修/越狱后数据外泄**。
@@ -116,3 +135,15 @@ SQLCipher 的密钥必须来自某处，而每一条来源都有丢失场景：
 - 制品：Maven Central `net.zetetic:sqlcipher-android`（AAR/ELF/classes.jar 解析）、官方 README、zetetic.net/sqlcipher/license 与 /design 页面。
 - 本机实测：`./gradlew.bat clean assembleDebug testDebugUnitTest --rerun`、`:app:dependencies --configuration debugRuntimeClasspath`、`aapt2 badging`、ELF/zip 头部解析。
 - 取证脚本：`C:/Users/nimo/AppData/Local/Temp/ledger-verify/` 下 `aar_probe.py`、`apk_libs.py`、`apk_align.py`、`jar_list.py`、`jar_driver.py`、`test_fail_probe.py`、`count_tests.py`。
+
+## 11. 「数据只在本机」的核验（2026-10-16 实测）
+
+| 检查 | 命令 / 位置 | 结果 |
+| --- | --- | --- |
+| 应用清单声明 | `app/src/main/AndroidManifest.xml:4` | 注释明写「无 INTERNET 权限：对『数据不上云』的物理保证（计划 4.5）」 |
+| 合并后清单 | `app/build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml` | 只有 `com.nimo.bookkeeping.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`，**无 INTERNET / ACCESS_NETWORK_STATE** |
+| 系统备份 | 合并清单 `android:allowBackup="false"` | 禁止系统自动把数据库备份到云 |
+| 源码网络调用 | grep `java.net|okhttp|retrofit|HttpURLConnection|Socket(|URL(` over `app/src/main/java` | **0 命中** |
+| 依赖里的网络库 | grep `okhttp|retrofit|ktor|volley|network` over `gradle/libs.versions.toml` | **0 命中** |
+
+结论：这三条本地性保证是**编译产物级别的事实**，不是口头承诺。
