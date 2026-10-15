@@ -1,5 +1,9 @@
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     alias(libs.plugins.android.application)
+    jacoco
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -17,6 +21,10 @@ android {
             all { test ->
                 // Compose UI Test（Robolectric）要渲染整棵语义树，默认 512m 堆会 OOM
                 test.maxHeapSize = "4g"
+                test.extensions.configure(JacocoTaskExtension::class.java) {
+                    isIncludeNoLocationClasses = true
+                    excludes = listOf("jdk.internal.*")
+                }
                 test.jvmArgs(
                     "--add-opens=java.base/java.io=ALL-UNNAMED",
                     "--add-opens=java.base/java.lang=ALL-UNNAMED",
@@ -104,4 +112,23 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.room.testing)
+}
+
+// 覆盖率 spike：统计单元测试对 main 源码的行覆盖（临时接线，是否入库待定）
+tasks.register<JacocoReport>("jacocoTestReport") {
+    group = "verification"
+    dependsOn("testDebugUnitTest")
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+    val appClasses = layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")
+    classDirectories.setFrom(
+        files(appClasses).asFileTree.matching {
+            exclude("**/R.class", "**/R$*.class", "**/BuildConfig.*", "**/*_Factory.*", "**/*_Impl.*")
+        }
+    )
+    sourceDirectories.setFrom(files("src/main/java", "src/main/kotlin"))
+    executionData.setFrom(layout.buildDirectory.file("jacoco/testDebugUnitTest.exec"))
 }
