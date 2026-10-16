@@ -663,5 +663,75 @@ class RecordViewModelTest {
             editingViewModel(transferId).awaitLoaded().screen,
         )
     }
+
+    // ---- 内联新建分类（附.1 R3）：记账记到一半也能加分类 ----
+
+    @Test
+    fun createCategory_addsItToTheCurrentTreeAndSelectsIt() = runTest {
+        seed()
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        vm.createCategory("咖啡")
+
+        // 建好就选中：用户是"记这一笔时缺分类"，不该再让他回去点一下
+        val state = vm.awaitState { it.createdCategoryId != null && it.form.categoryId == it.createdCategoryId }
+        val created = db.categoryDao().getById(state.createdCategoryId!!)!!
+        assertEquals("咖啡", created.name)
+        assertEquals(CategoryKind.EXPENSE, created.kind)
+        assertNull(created.parentId)
+        assertNull(state.categoryCreateErrorMessage)
+        assertFalse(state.isCreatingCategory)
+        // 新分类立刻出现在选择器里（分类流是 Room 推的，等它到位再断言）
+        val withNewCategory = vm.awaitState { it.categories.any { row -> row.id == created.id } }
+        assertEquals(
+            listOf(expenseCategoryId, created.id),
+            withNewCategory.categories.map { it.id }.sorted(),
+        )
+    }
+
+    @Test
+    fun createCategory_followsTheCurrentDirection() = runTest {
+        seed()
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        vm.setType(TransactionType.INCOME)
+        vm.createCategory("年终奖")
+
+        val state = vm.awaitState { it.createdCategoryId != null }
+        assertEquals(CategoryKind.INCOME, db.categoryDao().getById(state.createdCategoryId!!)!!.kind)
+    }
+
+    @Test
+    fun createCategory_withADuplicateName_reportsItAndKeepsTheFormAsIs() = runTest {
+        seed()
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        vm.createCategory("餐饮")
+
+        val state = vm.awaitState { it.categoryCreateErrorMessage != null }
+        assertEquals("同一层级下已经有同名分类", state.categoryCreateErrorMessage)
+        assertNull(state.createdCategoryId)
+        assertNull(state.form.categoryId)
+        assertEquals(2, db.categoryDao().count())
+    }
+
+    @Test
+    fun consumeCreatedCategory_clearsTheOneShotSignalAndTheError() = runTest {
+        seed()
+        val vm = newViewModel()
+        vm.awaitLoaded()
+        vm.createCategory("咖啡")
+        val created = vm.awaitState { it.createdCategoryId != null }
+        assertNull(created.categoryCreateErrorMessage)
+
+        vm.consumeCreatedCategory()
+
+        val cleared = vm.awaitState { it.createdCategoryId == null && it.categoryCreateErrorMessage == null }
+        // 选中的分类是表单状态，不跟着一次性信号一起清
+        assertEquals(created.form.categoryId, cleared.form.categoryId)
+    }
 }
 

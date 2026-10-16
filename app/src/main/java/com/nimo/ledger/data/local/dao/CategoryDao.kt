@@ -84,4 +84,24 @@ interface CategoryDao {
 
     @Query("SELECT COUNT(*) FROM categories")
     suspend fun count(): Int
+
+    /** 子分类数（附.1 R3：有子分类就不能删——删父会让子分类变成孤儿） */
+    @Query("SELECT COUNT(*) FROM categories WHERE parentId = :id")
+    suspend fun countChildren(id: Long): Int
+
+    /** 挂在这个分类上的流水数（本分类自己的；子分类由 [countChildren] 单独把关） */
+    @Query("SELECT COUNT(*) FROM transactions WHERE categoryId = :id")
+    suspend fun countTransactions(id: Long): Int
+
+    /** 挂在这个分类上的预算数（附.1 R3：无预算绑定才可删） */
+    @Query("SELECT COUNT(*) FROM budgets WHERE categoryId = :id")
+    suspend fun countBudgets(id: Long): Int
+
+    /**
+     * 物理删除（附.1 R3 / 附.2：删除不可恢复，只用来清理从未被引用过的错误创建）。
+     * 调用方（[com.nimo.ledger.data.repository.LedgerRepository.deleteCategory]）必须先确认零引用：
+     * 库里没有"禁止删除被引用分类"的触发器，这里不做兜底。
+     */
+    @Query("DELETE FROM categories WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }

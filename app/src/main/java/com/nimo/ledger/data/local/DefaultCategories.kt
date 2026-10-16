@@ -36,4 +36,15 @@ object DefaultCategories {
     fun all(): List<CategoryEntity> =
         expense.map { (name, icon) -> CategoryEntity(name = name, kind = CategoryKind.EXPENSE, icon = icon) } +
             income.map { (name, icon) -> CategoryEntity(name = name, kind = CategoryKind.INCOME, icon = icon) }
+
+    /**
+     * 相对 [existing] 缺失的预置分类（附.4「恢复默认分类」按钮用）。
+     *
+     * 判重按「同 kind + 同名」，忽略首尾空格与大小写：同名分类不管是谁建的、是否已停用，
+     * 都算"已经有"——恢复默认是加法，绝不覆盖、改名或复活用户主动停用的分类。
+     */
+    fun missingFrom(existing: List<CategoryEntity>): List<CategoryEntity> {
+        val present = existing.mapTo(mutableSetOf()) { it.kind to it.name.trim().lowercase() }
+        return all().filterNot { (it.kind to it.name.trim().lowercase()) in present }
+    }
 }

@@ -9,6 +9,7 @@ import com.nimo.ledger.data.local.entity.CategoryEntity
 import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.domain.model.MoveDirection
+import com.nimo.ledger.domain.validate.CategoryReferences
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -85,6 +86,23 @@ class CategoriesViewModel(private val repository: LedgerRepository) : ViewModel(
 
     suspend fun moveCategory(id: Long, direction: MoveDirection): Result<Unit> =
         repository.moveCategory(id, direction)
+
+    /**
+     * 删除前的引用明细（附.1 R3）：页面用它决定「删除」按钮可不可点。
+     * 数数这件事只有仓库会做（UI 不碰 DAO），这里只是一层转交。
+     */
+    suspend fun categoryReferences(id: Long): CategoryReferences = repository.categoryReferences(id)
+
+    /**
+     * 删除分类（附.1 R3）：仓库会再数一遍引用，有引用直接失败并回带原因。
+     * 页面拿失败原因引导用户改用「停用」，而不是只显示"删除失败"。
+     */
+    suspend fun deleteCategory(id: Long): Result<Unit> = repository.deleteCategory(id)
+
+    /**
+     * 恢复默认分类（附.4）：按名称补种缺失的预置分类，不覆盖已有。返回实际补种数量。
+     */
+    suspend fun restoreDefaultCategories(): Result<Int> = repository.restoreDefaultCategories()
 
     companion object {
         fun factory(repository: LedgerRepository): ViewModelProvider.Factory = viewModelFactory {

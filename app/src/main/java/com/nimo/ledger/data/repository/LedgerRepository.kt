@@ -2,6 +2,7 @@ package com.nimo.ledger.data.repository
 
 import androidx.room.withTransaction
 import com.nimo.ledger.data.local.AppDatabase
+import com.nimo.ledger.data.local.DefaultCategories
 import com.nimo.ledger.data.local.entity.AccountEntity
 import com.nimo.ledger.data.local.entity.BudgetEntity
 import com.nimo.ledger.data.local.entity.CategoryEntity
@@ -21,6 +22,9 @@ import com.nimo.ledger.domain.validate.AccountValidationException
 import com.nimo.ledger.domain.validate.AccountValidator
 import com.nimo.ledger.domain.validate.BudgetValidationException
 import com.nimo.ledger.domain.validate.BudgetValidator
+import com.nimo.ledger.domain.validate.CategoryDeletionException
+import com.nimo.ledger.domain.validate.CategoryDeletionPolicy
+import com.nimo.ledger.domain.validate.CategoryReferences
 import com.nimo.ledger.domain.validate.CategorySnapshot
 import com.nimo.ledger.domain.validate.CategoryValidationException
 import com.nimo.ledger.domain.validate.CategoryValidator
@@ -247,6 +251,56 @@ class LedgerRepository(private val db: AppDatabase) {
             ?: return@withContext Result.failure(IllegalStateException("分类不存在"))
         categoryDao.archiveWithChildren(existing.id)
         Result.success(Unit)
+    }
+
+    /**
+     * 分类当前的引用情况（附.1 R3）：页面用它决定「删除」按钮可不可点。
+     * 判断本身在 [CategoryDeletionPolicy]，这里只负责数数（UI 不碰 DAO，计划 4.3）。
+     */
+    suspend fun categoryReferences(id: Long): CategoryReferences = withContext(Dispatchers.IO) {
+        CategoryReferences(
+            childCount = categoryDao.countChildren(id),
+            transactionCount = categoryDao.countTransactions(id),
+            budgetCount = categoryDao.countBudgets(id),
+        )
+    }
+
+    /**
+     * 删除分类（附.1 R3 / 附.2）：只清理"从未被引用"的错误创建，不可恢复。
+     *
+     * 页面已经按同一份引用明细置灰了按钮，这里仍要再数一遍——写路径不靠 UI 的自律（计划 4.3 第二道防线）。
+     * 有引用就失败（[CategoryDeletionException]），引导用户改用「停用」：停用保留历史与统计。
+     */
+    suspend fun deleteCategory(id: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        val existing = categoryDao.getById(id)
+            ?: return@withContext Result.failure(IllegalStateException("分类不存在"))
+        val references = categoryReferences(existing.id)
+        val blockers = CategoryDeletionPolicy.blockers(references)
+        if (blockers.isNotEmpty()) {
+            return@withContext Result.failure(CategoryDeletionException(references, blockers))
+        }
+        db.withTransaction { categoryDao.deleteById(existing.id) }
+        Result.success(Unit)
+    }
+
+    /**
+     * 恢复默认分类（附.4）：按名称补种缺失的预置分类，不覆盖已有（用户自建、已停用的都算已有）。
+     * 加法操作、不破坏现有数据，因此无需二次确认；返回实际补种数量（0 = 一个都不缺）。
+     */
+    suspend fun restoreDefaultCategories(): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            db.withTransaction {
+                val missing = DefaultCategories.missingFrom(categoryDao.listAll())
+                missing.groupBy { it.kind }.forEach { (kind, items) ->
+                    var order = categoryDao.maxSortOrder(kind, null) + 1
+                    items.forEach { item ->
+                        categoryDao.insert(item.copy(sortOrder = order))
+                        order += 1
+                    }
+                }
+                missing.size
+            }
+        }
     }
 
     /**

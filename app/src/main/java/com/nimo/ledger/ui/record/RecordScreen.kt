@@ -88,6 +88,8 @@ fun RecordScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     var showDatePicker by remember { mutableStateOf(false) }
+    // 内联新建分类（附.1 R3）：对话框开着时不让重入，保存成功由 createdCategoryId 信号收掉
+    var showCreateCategory by remember { mutableStateOf(false) }
 
     // 「转账」是记一笔页里的第三个分段（用户要求：转账入口放进记一笔，不再占一个悬浮按钮）：
     // 切过去就地渲染转账表单。转账有自己的 ViewModel 与校验（两个账户、没有分类）。
@@ -252,6 +254,7 @@ fun RecordScreen(
                         state = state,
                         viewModel = viewModel,
                         onPickDate = { showDatePicker = true },
+                        onCreateCategory = { showCreateCategory = true },
                         modifier = bodyModifier,
                     )
                 }
@@ -280,6 +283,28 @@ fun RecordScreen(
             },
         ) { DatePicker(state = pickerState) }
     }
+
+    // 内联新建分类（附.1 R3）：kind 锁定当前收支方向，名称 + 可选上级；建好由 ViewModel 自动选中
+    if (showCreateCategory) {
+        CategoryCreateDialog(
+            kindLabel = if (state.form.type == TransactionType.INCOME) "收入" else "支出",
+            parentOptions = state.categories.filter { it.parentId == null },
+            creating = state.isCreatingCategory,
+            errorMessage = state.categoryCreateErrorMessage,
+            onDismiss = {
+                showCreateCategory = false
+                viewModel.consumeCreatedCategory()
+            },
+            onCreate = viewModel::createCategory,
+        )
+    }
+    // 建好就收掉对话框：选中动作在 ViewModel 里已经做完，页面只负责"关窗口"
+    LaunchedEffect(state.createdCategoryId) {
+        if (state.createdCategoryId != null) {
+            showCreateCategory = false
+            viewModel.consumeCreatedCategory()
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -288,6 +313,7 @@ private fun RecordFormBody(
     state: RecordUiState,
     viewModel: RecordViewModel,
     onPickDate: () -> Unit,
+    onCreateCategory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val amountFocus = remember { FocusRequester() }
@@ -379,23 +405,29 @@ private fun RecordFormBody(
                     text = "这个方向下还没有可用分类（停用的分类不会出现在这里）",
                     style = MaterialTheme.typography.bodySmall,
                 )
-            } else {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    state.categories.forEach { category ->
-                        FilterChip(
-                            selected = state.form.categoryId == category.id,
-                            onClick = { viewModel.setCategory(category.id) },
-                            label = {
-                                Text(
-                                    listOfNotNull(category.icon, category.name).joinToString(" "),
-                                )
-                            },
-                        )
-                    }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                state.categories.forEach { category ->
+                    FilterChip(
+                        selected = state.form.categoryId == category.id,
+                        onClick = { viewModel.setCategory(category.id) },
+                        label = {
+                            Text(
+                                listOfNotNull(category.icon, category.name).joinToString(" "),
+                            )
+                        },
+                    )
                 }
+                // 内联新建（附.1 R3）：记到一半发现没合适分类，不用退出这一笔；建好自动选中。
+                // 一个可用分类都没有时它也在：否则用户会以为"这里没救"
+                FilterChip(
+                    selected = false,
+                    onClick = onCreateCategory,
+                    label = { Text(CREATE_CATEGORY_LABEL) },
+                )
             }
         }
 

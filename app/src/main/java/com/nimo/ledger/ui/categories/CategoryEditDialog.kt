@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -17,11 +18,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.model.CategoryKind
+import com.nimo.ledger.domain.validate.CategoryDeletionBlocker
+import com.nimo.ledger.domain.validate.CategoryDeletionException
+import com.nimo.ledger.domain.validate.CategoryReferences
 import com.nimo.ledger.domain.validate.CategoryValidationError
 import com.nimo.ledger.domain.validate.CategoryValidationException
 import com.nimo.ledger.domain.validate.CategoryValidator
+
+/** 「删除」按钮的 UI 测试 tag（附.1 R3） */
+internal const val CATEGORY_DELETE_TEST_TAG = "category-edit-delete"
+
+/** 删除二次确认对话框的确认按钮 tag */
+internal const val CATEGORY_DELETE_CONFIRM_TEST_TAG = "category-edit-delete-confirm"
+
+/** 引用明细那行文字的 tag：测试断言"删除被什么挡住了" */
+internal const val CATEGORY_REFERENCE_HINT_TEST_TAG = "category-edit-reference-hint"
 
 /** 校验错误 → 中文提示 */
 internal fun CategoryValidationError.toMessage(): String = when (this) {
@@ -34,19 +49,49 @@ internal fun CategoryValidationError.toMessage(): String = when (this) {
     CategoryValidationError.ParentArchived -> "所选上级分类已停用，请先恢复它"
 }
 
-/** 保存失败 → 中文提示 */
+/** 删除被挡下的原因 → 中文提示（附.1 R3：有引用只能停用） */
+internal fun CategoryDeletionBlocker.toMessage(): String = when (this) {
+    CategoryDeletionBlocker.HasChildren -> "还有子分类"
+    CategoryDeletionBlocker.HasTransactions -> "还有交易记录"
+    CategoryDeletionBlocker.HasBudgets -> "还绑着预算"
+}
+
+/** 保存 / 删除失败 → 中文提示 */
 internal fun Throwable.toCategoryMessage(): String = when (this) {
     is CategoryValidationException -> errors.joinToString("；") { it.toMessage() }
+    is CategoryDeletionException ->
+        "分类已被引用，不能删除（" + blockers.joinToString("、") { it.toMessage() } + "）。请改用「停用」"
     else -> message ?: "保存失败"
 }
 
 /**
- * 新建 / 编辑分类（F02）。
+ * 「删除 / 停用」的判断依据（附.1 R3）：零引用可以删，有引用只能停用，并且要说清被什么挡住了。
+ *
+ * [references] 为 null = 还在数引用，这一刻「删除」按钮不给点——避免"看着能点、点了才说不行"。
+ */
+internal fun categoryReferenceHint(references: CategoryReferences?): String {
+    if (references == null) return "正在检查引用…"
+    if (references.isZeroReference) return "没有任何流水、预算或子分类：可以删除（删除不可恢复）"
+    val used = buildList {
+        if (references.transactionCount > 0) add("${references.transactionCount} 笔流水")
+        if (references.budgetCount > 0) add("${references.budgetCount} 个预算")
+        if (references.childCount > 0) add("${references.childCount} 个子分类")
+    }
+    return "已被使用（" + used.joinToString("、") + "），不能删除，请改用「停用」"
+}
+
+/**
+ * 新建 / 编辑分类（F02），并在编辑时提供「删除」（附.1 R3）。
  *
  * @param editing null 表示新建
  * @param topLevelOptions 可选的上级分类：只列一级且未停用的（过滤在页面侧完成，对话框再按 kind 收窄）
+ * @param references 该分类当前的引用明细；null = 还在数，"删除"不可点
+ * @param deleting 删除进行中（与保存共用页面的 saving 闸门）
+ * @param onDelete 非空表示这个分类可以走删除流程（新建时传 null，按钮不出现）
  *
  * 编辑只改名字：换父级会让既有历史流水落到另一棵树里，F02 不做跨树移动（要换就停用旧的、新建一个）。
+ * 删除只用于"从未被引用过"的错误创建，必须二次确认（附.2：不可恢复）；有引用时按钮置灰并说明原因，
+ * 引导用户改用「停用」——停用保留历史与统计，可恢复。
  */
 @Composable
 fun CategoryEditDialog(
@@ -57,12 +102,16 @@ fun CategoryEditDialog(
     onDismiss: () -> Unit,
     onSave: (name: String, kind: CategoryKind, parentId: Long?) -> Unit,
     onToggleArchived: (() -> Unit)?,
+    references: CategoryReferences? = null,
+    deleting: Boolean = false,
+    onDelete: (() -> Unit)? = null,
 ) {
     var name by remember(editing) { mutableStateOf(editing?.name.orEmpty()) }
     var kind by remember(editing) { mutableStateOf(editing?.kind ?: CategoryKind.EXPENSE) }
     var parentId by remember(editing) { mutableStateOf(editing?.parentId) }
     var parentExpanded by remember { mutableStateOf(false) }
     var localError by remember(editing) { mutableStateOf<String?>(null) }
+    var confirmingDelete by remember(editing) { mutableStateOf(false) }
 
     // 只能挂到同一棵树的一级分类下；编辑自己时不能把自己当父级
     val parentCandidates = topLevelOptions.filter { it.kind == kind && it.id != editing?.id }
@@ -122,6 +171,19 @@ fun CategoryEditDialog(
                         }
                     }
                 }
+                // 引用明细（附.1 R3）：说清"能不能删、不能删是被什么挡住的"
+                if (editing != null) {
+                    Text(
+                        text = categoryReferenceHint(references),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (references?.isZeroReference == false) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.testTag(CATEGORY_REFERENCE_HINT_TEST_TAG),
+                    )
+                }
                 val shown = localError ?: errorMessage
                 if (shown != null) {
                     Text(
@@ -134,7 +196,7 @@ fun CategoryEditDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = !saving,
+                enabled = !saving && !deleting,
                 onClick = {
                     // 名称先本地拦一道（空 / 过长）；重名与父级合法性要对着全量数据看，
                     // 由 Repository 判定后经 errorMessage 回显，不在这里猜
@@ -153,13 +215,48 @@ fun CategoryEditDialog(
         },
         dismissButton = {
             Row {
+                if (onDelete != null) {
+                    TextButton(
+                        onClick = { confirmingDelete = true },
+                        enabled = !saving && !deleting && references?.isZeroReference == true,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                        modifier = Modifier.testTag(CATEGORY_DELETE_TEST_TAG),
+                    ) { Text(if (deleting) "删除中…" else "删除") }
+                }
                 if (onToggleArchived != null) {
-                    TextButton(onClick = onToggleArchived, enabled = !saving) {
+                    TextButton(onClick = onToggleArchived, enabled = !saving && !deleting) {
                         Text(if (editing?.isArchived == true) "恢复" else "停用")
                     }
                 }
-                TextButton(onClick = onDismiss, enabled = !saving) { Text("取消") }
+                TextButton(onClick = onDismiss, enabled = !saving && !deleting) { Text("取消") }
             }
         },
     )
+
+    // 二次确认（附.2：删除不可恢复，必须确认一次）
+    if (confirmingDelete && editing != null) {
+        AlertDialog(
+            onDismissRequest = { confirmingDelete = false },
+            title = { Text("删除分类「${editing.name}」？") },
+            text = { Text("删除不可恢复。这个分类没有任何流水、预算或子分类，删掉后不会再出现在选择器里。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmingDelete = false
+                        onDelete?.invoke()
+                    },
+                    enabled = !deleting,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    modifier = Modifier.testTag(CATEGORY_DELETE_CONFIRM_TEST_TAG),
+                ) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingDelete = false }) { Text("取消") }
+            },
+        )
+    }
 }

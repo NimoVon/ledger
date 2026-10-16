@@ -14,6 +14,7 @@ import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.domain.validate.TransactionValidator
 import com.nimo.ledger.domain.validate.TxValidationError
 import com.nimo.ledger.domain.validate.TxValidationException
+import com.nimo.ledger.ui.categories.toCategoryMessage
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,6 +77,12 @@ data class RecordUiState(
     val isRestoringCategory: Boolean = false,
     /** 删除入口的一次性信号：非空表示用户要求删掉这一笔（真正的物理删除交给延迟删除策略，计划 9.2） */
     val deleteRequested: TransactionEntity? = null,
+    /** 内联新建分类（附.1 R3）：正在建 */
+    val isCreatingCategory: Boolean = false,
+    /** 内联新建分类失败的原因（重名、父级已停用等），页面在对话框里回显 */
+    val categoryCreateErrorMessage: String? = null,
+    /** 刚建好并已自动选中的分类 id（非空 = 页面关掉新建对话框） */
+    val createdCategoryId: Long? = null,
 ) {
     /**
      * 一个可用账户都没有：引导用户先去建账户，而不是给一张空白表单。
@@ -118,6 +125,10 @@ private data class SubmitState(
     val isRestoringAccount: Boolean = false,
     /** 正在把原分类取消停用：按钮防连点 */
     val isRestoringCategory: Boolean = false,
+    /** 内联新建分类（附.1 R3）：进行中 / 失败原因 / 刚建好的 id（一次性信号） */
+    val isCreatingCategory: Boolean = false,
+    val categoryCreateErrorMessage: String? = null,
+    val createdCategoryId: Long? = null,
 )
 
 /** 页面数据来源：外部列表 + 被编辑的整笔 + 读取错误，凑齐后才知道页面能不能画 */
@@ -273,6 +284,9 @@ class RecordViewModel(
             saveErrorMessage = submit.saveErrorMessage,
             savedTransactionId = submit.savedTransactionId,
             deleteRequested = deleteRequest,
+            isCreatingCategory = submit.isCreatingCategory,
+            categoryCreateErrorMessage = submit.categoryCreateErrorMessage,
+            createdCategoryId = submit.createdCategoryId,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordUiState())
 
@@ -285,6 +299,42 @@ class RecordViewModel(
     fun setAccount(id: Long) = updateForm { it.copy(accountId = id) }
 
     fun setCategory(id: Long) = updateForm { it.copy(categoryId = id) }
+
+    // ---- 内联新建分类（附.1 R3）：记账记到一半也能加分类 ----
+
+    /**
+     * 在当前收支方向下新建分类，并自动选中它（附.1 R3）。
+     *
+     * kind 跟随表单当前方向（对话框里不给选，免得建到另一棵树上去）；名称规则在对话框里先拦一道，
+     * 重名与父级合法性由 Repository 对着全量分类裁决，这里只把结果搬回界面。
+     */
+    fun createCategory(name: String, parentId: Long? = null) {
+        if (submit.value.isCreatingCategory) return
+        submit.update { it.copy(isCreatingCategory = true, categoryCreateErrorMessage = null) }
+        viewModelScope.launch {
+            val result = repository.createCategory(name, form.value.type.toCategoryKind(), parentId)
+            submit.update { state ->
+                result.fold(
+                    onSuccess = { id ->
+                        state.copy(isCreatingCategory = false, createdCategoryId = id)
+                    },
+                    onFailure = { error ->
+                        state.copy(
+                            isCreatingCategory = false,
+                            categoryCreateErrorMessage = error.toCategoryMessage(),
+                        )
+                    },
+                )
+            }
+            // 建好就选中：用户是"记这一笔时缺分类"，不该再让他回去点一下
+            result.onSuccess { id -> updateForm { it.copy(categoryId = id) } }
+        }
+    }
+
+    /** 页面关掉新建对话框后调用：清掉一次性信号，避免重组时反复触发 */
+    fun consumeCreatedCategory() {
+        submit.update { it.copy(createdCategoryId = null, categoryCreateErrorMessage = null) }
+    }
 
     fun setDate(isoDate: String) = updateForm { it.copy(occurredOn = isoDate) }
 

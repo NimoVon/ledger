@@ -19,9 +19,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -36,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.domain.model.MoveDirection
+import com.nimo.ledger.domain.validate.CategoryReferences
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
@@ -43,6 +49,9 @@ import kotlinx.coroutines.launch
 
 /** 「新建分类」按钮的文字：按钮文字与读屏名共用（F15 补语义，悬浮按钮的文字在无障碍树上读不出来） */
 private const val NEW_CATEGORY_LABEL = "新建分类"
+
+/** 「恢复默认分类」按钮（附.4）：顶栏动作，UI 测试按这个 tag 找它 */
+internal const val RESTORE_DEFAULTS_TEST_TAG = "categories-restore-defaults"
 
 /**
  * 分类管理（F02）：支出 / 收入两套独立分类树，一级 / 二级单层父子，上下移排序，停用不删除。
@@ -66,6 +75,17 @@ fun CategoriesScreen(
     var dialogTarget by remember { mutableStateOf<CategoryDialogTarget?>(null) }
     var saving by remember { mutableStateOf(false) }
     var dialogError by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 删除前的引用明细（附.1 R3）：对话框一打开就数一遍，决定「删除」可不可点。
+    // null = 还在数，页面这时不给点删除，避免"看着能点、点了才说不行"。
+    val editingRow = (dialogTarget as? CategoryDialogTarget.Edit)?.row
+    var editingReferences by remember { mutableStateOf<CategoryReferences?>(null) }
+    LaunchedEffect(editingRow?.id) {
+        editingReferences = editingRow?.let { row ->
+            runCatching { viewModel.categoryReferences(row.id) }.getOrNull()
+        }
+    }
 
     fun openDialog(target: CategoryDialogTarget) {
         dialogTarget = target
@@ -73,6 +93,7 @@ fun CategoriesScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("分类管理") },
@@ -80,6 +101,24 @@ fun CategoriesScreen(
                     IconButton(onClick = onBack) {
                         Icon(imageVector = LedgerIcons.Back, contentDescription = "返回")
                     }
+                },
+                actions = {
+                    // 恢复默认分类（附.4）：加法操作（按名称补种缺失的预置分类，不覆盖已有），
+                    // 所以不做二次确认；补了 0 个也要说清楚，免得用户以为按钮坏了
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                viewModel.restoreDefaultCategories()
+                                    .onSuccess { count ->
+                                        snackbarHostState.showSnackbar(
+                                            if (count > 0) "已补种 $count 个默认分类" else "默认分类都在，无需补种",
+                                        )
+                                    }
+                                    .onFailure { snackbarHostState.showSnackbar(it.toCategoryMessage()) }
+                            }
+                        },
+                        modifier = Modifier.testTag(RESTORE_DEFAULTS_TEST_TAG),
+                    ) { Text("恢复默认分类") }
                 },
             )
         },
@@ -171,6 +210,25 @@ fun CategoriesScreen(
                         saving = false
                         result
                             .onSuccess { dialogTarget = null }
+                            .onFailure { dialogError = it.toCategoryMessage() }
+                    }
+                }
+            },
+            references = editingReferences.takeIf { editing != null },
+            deleting = saving,
+            // 删除（附.1 R3）：对话框里已经二次确认过，这里只管落库 + 反馈
+            onDelete = editing?.let { row ->
+                {
+                    scope.launch {
+                        saving = true
+                        val result = viewModel.deleteCategory(row.id)
+                        saving = false
+                        result
+                            .onSuccess {
+                                dialogTarget = null
+                                dialogError = null
+                                snackbarHostState.showSnackbar("已删除分类「${row.name}」")
+                            }
                             .onFailure { dialogError = it.toCategoryMessage() }
                     }
                 }

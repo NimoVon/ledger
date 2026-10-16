@@ -4,6 +4,8 @@ import android.app.Application
 import com.nimo.ledger.data.backup.AutoBackupStore
 import com.nimo.ledger.data.local.AppDatabase
 import com.nimo.ledger.data.local.DefaultCategories
+import com.nimo.ledger.data.local.DefaultCategorySeedStore
+import com.nimo.ledger.data.local.DefaultCategorySeeder
 import com.nimo.ledger.data.repository.BackupRepository
 import com.nimo.ledger.data.repository.LedgerRepository
 import java.io.File
@@ -52,6 +54,13 @@ class AppContainer(context: android.content.Context) {
     val themePreference: ThemePreferenceStore =
         ThemePreferenceStore.from(context.applicationContext)
 
+    /**
+     * 附.4：「预置分类已播种」标记。有了它，用户把分类删光后不再自动复活默认分类——
+     * 要回来走分类管理页的「恢复默认分类」（加法、不覆盖）。
+     */
+    val defaultCategorySeed: DefaultCategorySeedStore =
+        DefaultCategorySeedStore.from(context.applicationContext)
+
     /** 页面销毁不该打断的活儿放这里：预置分类、删除倒计时（计划 9.2） */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -68,14 +77,12 @@ class AppContainer(context: android.content.Context) {
      */
     val drillDownRequests: DrillDownRequests = DrillDownRequests()
 
-    /** 首次启动播种预置分类；分类表非空（如恢复备份后）则跳过 */
+    /**
+     * 首次启动播种预置分类（附.4）：判断逻辑在 [DefaultCategorySeeder]，这里只把真实依赖接上。
+     * 标记一旦打下就不再自动播种——用户删光了就是删光了，要回来走「恢复默认分类」。
+     */
     suspend fun seedDefaultCategoriesIfEmpty() {
-        val dao = database.categoryDao()
-        if (dao.count() == 0) {
-            DefaultCategories.all().forEachIndexed { index, entity ->
-                dao.upsert(entity.copy(sortOrder = index))
-            }
-        }
+        DefaultCategorySeeder.seedIfNeeded(defaultCategorySeed, database.categoryDao())
     }
 
     /** M0 自检：验证 Room / KSP / 触发器 / 部分索引在真实运行时全部生效（IO 线程执行） */
