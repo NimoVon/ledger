@@ -139,6 +139,40 @@ class MoneyTest {
         assertEquals("¥99,999,999.99", Money.formatCurrency(Money.MAX_AMOUNT_CENTS))
     }
 
+    // ---- 图表纵轴刻度文本 ----
+
+    @Test
+    fun formatAxisLabel_dropsTrailingCentsAndKeepsGrouping() {
+        assertEquals("¥0", Money.formatAxisLabel(0))
+        assertEquals("¥1", Money.formatAxisLabel(100))
+        assertEquals("¥50", Money.formatAxisLabel(5000))
+        assertEquals("¥600", Money.formatAxisLabel(60000))
+        assertEquals("¥1,000", Money.formatAxisLabel(100000))
+        assertEquals("¥9,999", Money.formatAxisLabel(999900))
+        assertEquals("-¥6", Money.formatAxisLabel(-600))
+        // 不是整元就保留两位：刻度不能"看着像整数其实不是"
+        assertEquals("¥12.34", Money.formatAxisLabel(1234))
+        assertEquals("¥9,999.99", Money.formatAxisLabel(999999))   // 差一分不到 1 万，仍走元
+        assertEquals("¥0.05", Money.formatAxisLabel(5))
+    }
+
+    @Test
+    fun formatAxisLabel_compressesToWanAboveTenThousandYuan() {
+        assertEquals("¥1万", Money.formatAxisLabel(1_000_000))
+        assertEquals("¥1.1万", Money.formatAxisLabel(1_000_001))     // 向上取到 0.1 万：刻度不低报（1.000001 万 → 1.1 万）
+        assertEquals("¥1.1万", Money.formatAxisLabel(1_010_000))     // 不低报实际值
+        assertEquals("¥1.2万", Money.formatAxisLabel(1_150_000))
+        assertEquals("¥4万", Money.formatAxisLabel(4_000_000))
+        assertEquals("¥10万", Money.formatAxisLabel(10_000_000))
+        assertEquals("¥100万", Money.formatAxisLabel(100_000_000))
+        assertEquals("-¥1.2万", Money.formatAxisLabel(-1_150_000))
+        // niceCeiling 的常见档位都是整数万，标签必须干净
+        for (step in listOf(1_000_000L, 2_000_000L, 4_000_000L, 5_000_000L, 10_000_000L)) {
+            assertTrue(Money.formatAxisLabel(step).endsWith("万"))
+            assertFalse(Money.formatAxisLabel(step).contains("."))
+        }
+    }
+
     @Test
     fun parseFormat_roundtrip() {
         for (text in listOf("0.01", "12.30", "99999999.99", "1.05")) {

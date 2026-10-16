@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -85,7 +86,7 @@ fun BackupSettingsSection(
     var importOutcome by remember { mutableStateOf<CsvImportOutcome?>(null) }
     var csvCandidate by remember { mutableStateOf<CsvImportCandidate?>(null) }
     var lastAutoBackup by remember { mutableStateOf<AutoBackupInfo?>(null) }
-    var autoBackupRefresh by remember { mutableStateOf(0) }
+    var autoBackupRefresh by remember { mutableIntStateOf(0) }
 
     // 最近一次自动备份：首次进入读一次，导入成功后（那一刻会写一份新的）再读一次
     LaunchedEffect(autoBackupRefresh) {

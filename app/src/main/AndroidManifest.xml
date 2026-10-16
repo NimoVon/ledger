@@ -12,9 +12,13 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- windowSoftInputMode：键盘弹起时让窗口真正缩小（adjustResize）。
+             Compose 的 imePadding() 依赖窗口 insets，API<30 只有 adjustResize 才会分发 ime inset；
+             不改这里，记一笔页的备注/删除按钮会被键盘压在下面点不到。 -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

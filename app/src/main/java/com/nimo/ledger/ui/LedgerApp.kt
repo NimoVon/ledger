@@ -1,5 +1,7 @@
 package com.nimo.ledger.ui
 
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -174,7 +176,12 @@ fun LedgerApp(container: AppContainer) {
         NavHost(
             navController = navController,
             startDestination = TopDestination.TRANSACTIONS.route,
-            modifier = Modifier.padding(innerPadding),
+            // 键盘弹起时整栈内容跟着缩（记一笔页表单不再被输入法压住），
+            // 并把外层已经吃掉的系统栏 insets 标记为已消费：各页面自带的 Scaffold 不会再加一遍状态栏高度
+            modifier = Modifier
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding(),
         ) {
             composable(TopDestination.TRANSACTIONS.route) {
                 TransactionsScreen(

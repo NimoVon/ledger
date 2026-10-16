@@ -3,6 +3,7 @@ package com.nimo.ledger.ui.reports
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,9 +14,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -23,8 +26,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -33,17 +42,24 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.stats.DailyTotal
 import com.nimo.ledger.domain.stats.MonthlyTotal
 import com.nimo.ledger.util.Money
 import java.time.LocalDate
 import java.time.YearMonth
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /**
  * 趋势区的跨度（R2 三段：本月｜半年｜全年）。「本月」按天画柱状（只画已过天数），
@@ -63,6 +79,30 @@ internal const val TREND_CHART_TEST_TAG = "report-trend-chart"
 
 /** 逐日柱状图的 testTag（R2「本月」视图） */
 internal const val DAILY_CHART_TEST_TAG = "report-daily-chart"
+
+/** 逐日柱状图的纵轴刻度栏（R2 优化：刻度与网格线对齐） */
+internal const val CHART_Y_AXIS_TEST_TAG = "report-chart-y-axis"
+
+/** 点柱子后弹出的金额气泡（R2 优化：先看数，再点进当日明细） */
+internal const val DAY_TOOLTIP_TEST_TAG = "report-day-tooltip"
+
+/** 横轴太挤时的提示语：柱子可以左右滑 */
+internal const val DAY_LABEL_SCROLL_HINT = "左右滑动看整月"
+
+/** 纵轴刻度栏宽度：放得下「¥1,000」「¥1.2万」这类刻度 */
+private val Y_AXIS_WIDTH = 52.dp
+
+/** 绘图区上下留白：刻度文字、网格线、柱子与折线共用同一条基准 */
+private val PLOT_INSET = 8.dp
+
+/** 逐日柱的最小格子宽度：比它还窄（月底 31 天）就横向滚动 */
+internal val DAY_CELL_MIN_WIDTH = 18.dp
+
+/** 相邻日期标签的最小间距（dp）：[dayLabelInterval] 按它反推"隔几天标一次" */
+internal const val DAY_LABEL_MIN_SPACING_DP = 44f
+
+/** 金额气泡宽度 */
+private val DAY_TOOLTIP_WIDTH = 172.dp
 
 /** 图表的头一句（切到全年之后必须变成 12 个月）：读屏听到的是带数字的整句，测试用前缀匹配 */
 internal fun trendHead(span: TrendSpan): String =
@@ -84,6 +124,35 @@ internal fun dailyDescription(daily: List<DailyTotal>, month: YearMonth): String
 internal fun dayDescription(total: DailyTotal): String {
     val label = "${total.date.monthValue}月${total.date.dayOfMonth}日"
     return "$label：支出 ${Money.formatCurrency(total.expenseCents)}，收入 ${Money.formatCurrency(total.incomeCents)}"
+}
+
+/** 金额气泡的标题：「10月16日」（与柱子的无障碍描述同一套日期写法） */
+internal fun tooltipHead(total: DailyTotal): String =
+    "${total.date.monthValue}月${total.date.dayOfMonth}日"
+
+/** 金额气泡的金额摘要：「支出 ¥2.00 · 收入 ¥0.00」 */
+internal fun tooltipSummary(total: DailyTotal): String =
+    "支出 ${Money.formatCurrency(total.expenseCents)} · 收入 ${Money.formatCurrency(total.incomeCents)}"
+
+/**
+ * 横轴日期标签的间隔（天）：按格子的实际宽度反推，保证相邻标签至少隔 [DAY_LABEL_MIN_SPACING_DP]。
+ * 例：格子 44dp 宽 → 每天标；格子 11dp 宽（月底 31 天）→ 每 4 天标一次。
+ */
+internal fun dayLabelInterval(cellWidthDp: Float): Int =
+    if (cellWidthDp <= 0f) 1 else maxOf(1, ceil(DAY_LABEL_MIN_SPACING_DP / cellWidthDp).toInt())
+
+/**
+ * 该标出日期的日子：1 号必标、每隔 interval 天标一次；最后一天只有在离上一个标签至少 2 天时才标
+ * （否则 30 日与 31 日会挤在一起）。
+ */
+internal fun labeledDays(days: List<Int>, interval: Int): Set<Int> {
+    if (days.isEmpty()) return emptySet()
+    val step = maxOf(1, interval)
+    val labels = mutableSetOf(days.first())
+    days.forEach { day -> if (day % step == 0) labels += day }
+    val last = days.last()
+    if (last !in labels && last - labels.max() >= 2) labels += last
+    return labels
 }
 
 /**
@@ -163,15 +232,22 @@ private fun DailySection(
     onDayClick: (LocalDate) -> Unit,
 ) {
     val maxCents = daily.maxOfOrNull { maxOf(it.incomeCents, it.expenseCents) } ?: 0L
+    // 点某天的柱子先弹金额气泡，再点气泡才进当日明细（R2 优化）
+    var selectedDay by remember(daily) { mutableStateOf<LocalDate?>(null) }
     when {
         isLoading -> ChartPlaceholder()
         maxCents <= 0L -> EmptyChartText("本月还没有收支记录。")
         else -> {
             TrendLegend(maxCents)
             Spacer(modifier = Modifier.height(8.dp))
-            DailyBars(daily = daily, month = month, maxCents = maxCents, onDayClick = onDayClick)
-            Spacer(modifier = Modifier.height(6.dp))
-            DayLabels(daily = daily)
+            DailyPlot(
+                daily = daily,
+                month = month,
+                top = niceCeiling(maxCents),
+                selectedDay = selectedDay,
+                onSelectDay = { day -> selectedDay = if (selectedDay == day) null else day },
+                onOpenDayDetail = onDayClick,
+            )
         }
     }
 }
@@ -187,9 +263,21 @@ private fun MonthlySection(points: List<MonthlyTotal>, span: TrendSpan, isLoadin
         else -> {
             TrendLegend(maxCents)
             Spacer(modifier = Modifier.height(8.dp))
-            TrendCanvas(points = points, maxCents = maxCents, span = span)
+            // 折线区与纵轴刻度并排：刻度文字要对上网格线，横轴月份要跟折线同宽（左边空出刻度栏）
+            Row(modifier = Modifier.fillMaxWidth()) {
+                ChartYAxis(top = niceCeiling(maxCents))
+                TrendCanvas(
+                    points = points,
+                    maxCents = maxCents,
+                    span = span,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             Spacer(modifier = Modifier.height(6.dp))
-            MonthLabels(points = points, span = span)
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Spacer(modifier = Modifier.width(Y_AXIS_WIDTH))
+                MonthLabels(points = points, span = span, modifier = Modifier.weight(1f))
+            }
         }
     }
 }
@@ -216,38 +304,55 @@ private fun EmptyChartText(text: String) {
 }
 
 /**
- * 逐日柱状图（R2）：一天两根柱子（支出在前、收入在后），高度按当天金额占纵轴上界的比例。
+ * 逐日柱状图 + 纵轴刻度（R2 优化）：柱子 + 与刻度对齐的网格线；格子够宽时平铺，
+ * 月底 31 天格子太窄就横向滚动并默认停在"今天"。
  *
- * 特意用可点击的 Box 而不是 Canvas 画：Canvas 里的每一根柱子对无障碍和测试都是不可区分的，
- * 而「点某一天的柱子看当日流水」要求每一天都是独立的可点目标。金额全程 Long，
- * 比例只在布局时用 Float。
+ * 特意用可点击的 Box 而不是 Canvas 画柱子：Canvas 里的每一根柱子对无障碍和测试都是不可区分的，
+ * 而「点某一天的柱子看当天金额」要求每一天都是独立的可点目标。金额全程 Long，比例只在布局时用 Float。
+ *
+ * @param top 纵轴上界（[niceCeiling] 的结果），刻度文字与柱子高度共用这一个值
+ * @param selectedDay 当前弹着气泡的那一天（再点一下同一天就收起）
  */
 @Composable
 private fun DailyBars(
     daily: List<DailyTotal>,
     month: YearMonth,
-    maxCents: Long,
-    onDayClick: (LocalDate) -> Unit,
+    top: Long,
+    selectedDay: LocalDate?,
+    onSelectDay: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val expenseColor = MaterialTheme.colorScheme.error
     val incomeColor = MaterialTheme.colorScheme.primary
-    val top = niceCeiling(maxCents)
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
 
     BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .height(CHART_HEIGHT)
             .testTag(DAILY_CHART_TEST_TAG)
             .semantics { contentDescription = dailyDescription(daily, month) },
     ) {
-        val available = maxHeight
+        // 与纵轴刻度、折线图同一套留白：0 分贴最下面那条网格线，上界贴最上面那条
+        val available = (maxHeight - PLOT_INSET * 2).coerceAtLeast(0.dp)
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val inset = PLOT_INSET.toPx()
+            val usable = size.height - inset * 2
+            for (i in 0..2) {
+                val y = inset + usable * i / 2f
+                drawLine(color = gridColor, start = Offset(0f, y), end = Offset(size.width, y), strokeWidth = 1f)
+            }
+        }
         Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
             daily.forEach { total ->
+                val isSelected = total.date == selectedDay
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clickable { onDayClick(total.date) }
+                        .background(if (isSelected) highlight else Color.Transparent, RoundedCornerShape(4.dp))
+                        .padding(vertical = PLOT_INSET)
+                        .clickable { onSelectDay(total.date) }
                         .semantics(mergeDescendants = true) { contentDescription = dayDescription(total) },
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(1.dp),
@@ -272,6 +377,173 @@ private fun DailyBars(
     }
 }
 
+/**
+ * 纵轴刻度（R2 优化）：上界 / 一半 / 0 三个刻度贴在绘图区左侧。
+ *
+ * 用自绘 [Layout] 而不是 Column：刻度文字要压在自己那条网格线的中线上，Column 会按文字高度
+ * 往下堆叠而错位。文字按"不限宽"测量后再右对齐，长刻度宁可往左溢出也不被裁成半截。
+ */
+@Composable
+private fun ChartYAxis(top: Long) {
+    val values = listOf(top, top / 2, 0L)
+    Layout(
+        modifier = Modifier
+            .width(Y_AXIS_WIDTH)
+            .height(CHART_HEIGHT)
+            .testTag(CHART_Y_AXIS_TEST_TAG),
+        content = {
+            values.forEach { value ->
+                Text(
+                    text = Money.formatAxisLabel(value),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.padding(end = 4.dp),
+                )
+            }
+        },
+    ) { measurables, constraints ->
+        val placeables = measurables.map { measurable ->
+            measurable.measure(
+                Constraints(
+                    minWidth = 0,
+                    maxWidth = Constraints.Infinity,
+                    minHeight = 0,
+                    maxHeight = Constraints.Infinity,
+                ),
+            )
+        }
+        val inset = PLOT_INSET.roundToPx()
+        val usable = constraints.maxHeight - inset * 2
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            placeables.forEachIndexed { index, placeable ->
+                val lineY = inset + usable * index / 2
+                placeable.place(
+                    x = constraints.maxWidth - placeable.width,
+                    y = (lineY - placeable.height / 2f).roundToInt(),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 「本月」视图的绘图区（R2 优化）：左边是纵轴刻度，右边是柱状图。
+ *
+ * 格子够宽时柱子平铺；月底 31 天格子太窄（< [DAY_CELL_MIN_WIDTH]）就横向滚动，进页面先滚到"今天"，
+ * 并在图下方提示可以左右滑。横轴标签与柱子在同一个滚动容器里，保证标签永远对自己那一天；
+ * 金额气泡在滚动容器外，按当前滚动位置算 x，滚到哪都贴着对应的柱子。
+ */
+@Composable
+private fun DailyPlot(
+    daily: List<DailyTotal>,
+    month: YearMonth,
+    top: Long,
+    selectedDay: LocalDate?,
+    onSelectDay: (LocalDate) -> Unit,
+    onOpenDayDetail: (LocalDate) -> Unit,
+) {
+    val days = daily.map { it.date.dayOfMonth }
+    Row(modifier = Modifier.fillMaxWidth()) {
+        ChartYAxis(top = top)
+        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+            val cell = maxWidth / daily.size
+            val needsScroll = cell < DAY_CELL_MIN_WIDTH
+            val cellWidth = if (needsScroll) DAY_CELL_MIN_WIDTH else cell
+            // 先算成像素：BoxWithConstraintsScope 不是 Density，再嵌进 Box / let 就取不到 maxWidth 了
+            val density = LocalDensity.current
+            val cellWidthPx = with(density) { cellWidth.toPx() }
+            val viewportPx = with(density) { maxWidth.toPx() }
+            val bubblePx = with(density) { DAY_TOOLTIP_WIDTH.toPx() }
+            val scrollState = rememberScrollState()
+            // 月底进页面先停在"今天"那一格：最近的钱最该先看见
+            LaunchedEffect(scrollState.maxValue, needsScroll) {
+                if (needsScroll) scrollState.scrollTo(scrollState.maxValue)
+            }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    // 只有真挤了才挂横向滚动：平时多一个可滚动节点会让"滚到某处"的测试和读屏都变歧义
+                    Box(modifier = if (needsScroll) Modifier.horizontalScroll(scrollState) else Modifier) {
+                        Column(modifier = Modifier.width(cellWidth * daily.size)) {
+                            DailyBars(
+                                daily = daily,
+                                month = month,
+                                top = top,
+                                selectedDay = selectedDay,
+                                onSelectDay = onSelectDay,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            DayLabels(days = days, interval = dayLabelInterval(cellWidth.value))
+                        }
+                    }
+                    selectedDay?.let { day ->
+                        val index = daily.indexOfFirst { it.date == day }
+                        if (index >= 0) {
+                            DayTooltip(
+                                total = daily[index],
+                                onClick = { onOpenDayDetail(day) },
+                                // 滚动偏移在 offset 的 lambda 里读：布局期取值，滚动时只重排不重组
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .offset {
+                                        val centerPx = cellWidthPx * index + cellWidthPx / 2f - scrollState.value
+                                        val x = (centerPx - bubblePx / 2f)
+                                            .coerceIn(0f, (viewportPx - bubblePx).coerceAtLeast(0f))
+                                        IntOffset(x.roundToInt(), 0)
+                                    },
+                            )
+                        }
+                    }
+                }
+                if (needsScroll) {
+                    Text(
+                        text = DAY_LABEL_SCROLL_HINT,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(top = 4.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 点柱子后弹的金额气泡（R2 优化）：先给一眼能看见的数字，再点一下才进当日明细。
+ * 整块可点，并且自己带「查看明细」的提示文字。
+ */
+@Composable
+private fun DayTooltip(total: DailyTotal, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier
+            .width(DAY_TOOLTIP_WIDTH)
+            .testTag(DAY_TOOLTIP_TEST_TAG)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shadowElevation = 4.dp,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = tooltipHead(total), style = MaterialTheme.typography.labelMedium)
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "查看明细",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = tooltipSummary(total),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 /** 一根柱子：高度 = 上界可用高度 × 金额比例；有金额但比例太小时至少留 2dp，否则等于没画 */
 @Composable
 private fun DailyBar(cents: Long, top: Long, available: Dp, color: Color, modifier: Modifier = Modifier) {
@@ -284,19 +556,23 @@ private fun DailyBar(cents: Long, top: Long, available: Dp, color: Color, modifi
     )
 }
 
-/** 横轴日期：格子一样宽，放不下时只标 1 号、5 的倍数与最后一天 */
+/**
+ * 横轴日期：格子一样宽，按 [interval] 稀疏标注（月底 31 天时每 4~5 天才一个标签，不再挤成一团）。
+ * 标签允许溢出自己的窄格子画出来（[TextOverflow.Visible]）——间距已经由 interval 保证，不会被裁成半截。
+ */
 @Composable
-private fun DayLabels(daily: List<DailyTotal>) {
+private fun DayLabels(days: List<Int>, interval: Int) {
+    val labeled = remember(days, interval) { labeledDays(days, interval) }
     Row(modifier = Modifier.fillMaxWidth()) {
-        daily.forEachIndexed { index, total ->
-            val day = total.date.dayOfMonth
-            val label = if (index == 0 || index == daily.lastIndex || day % 5 == 0) "${day}日" else ""
+        days.forEach { day ->
             Text(
-                text = label,
+                text = if (day in labeled) "${day}日" else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Visible,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -337,21 +613,27 @@ private fun LegendDot(label: String, color: Color) {
 
 /** 折线本体：3 条横向网格线 + 支出/收入两条折线，每个月份一个点 */
 @Composable
-private fun TrendCanvas(points: List<MonthlyTotal>, maxCents: Long, span: TrendSpan) {
+private fun TrendCanvas(
+    points: List<MonthlyTotal>,
+    maxCents: Long,
+    span: TrendSpan,
+    modifier: Modifier = Modifier,
+) {
     val expenseColor = MaterialTheme.colorScheme.error
     val incomeColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val top = niceCeiling(maxCents)
 
     Canvas(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(CHART_HEIGHT)
             .testTag(TREND_CHART_TEST_TAG)
             .semantics { contentDescription = trendDescription(points, span) },
     ) {
-        // 上下各留一点：折线画在最上/最下时描边不会被裁掉
-        val inset = 4f
+        // 留白与纵轴刻度、柱状图共用同一个值：折线画在最上/最下时描边不会被裁掉，
+        // 网格线也正好压在刻度文字的中线上
+        val inset = PLOT_INSET.toPx()
         val usable = size.height - inset * 2
         for (i in 0..2) {
             val y = inset + usable * i / 2f
@@ -387,8 +669,8 @@ private fun DrawScope.drawPolyline(color: Color, points: List<Offset>, strokePx:
 
 /** 横轴月份：每个格子一样宽，12 个格子放不下时隔一个显示一个（位置仍按格子对齐） */
 @Composable
-private fun MonthLabels(points: List<MonthlyTotal>, span: TrendSpan) {
-    Row(modifier = Modifier.fillMaxWidth()) {
+private fun MonthLabels(points: List<MonthlyTotal>, span: TrendSpan, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth()) {
         points.forEachIndexed { index, p ->
             val label = if (span == TrendSpan.FULL_YEAR && index % 2 == 1) "" else "${p.month.monthValue}月"
             Text(

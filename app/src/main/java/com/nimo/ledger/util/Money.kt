@@ -98,6 +98,31 @@ object Money {
         return sign + "¥" + groupThousands(a / 100) + "." + (a % 100).toString().padStart(2, '0')
     }
 
+    /** 「万」档起点：¥10,000 = 1,000,000 分 */
+    private const val WAN_CENTS: Long = 1_000_000L
+
+    /**
+     * 分 → 图表纵轴刻度文本：紧凑、不带拖尾零，量级一眼可读（统计页 y 轴优化）。
+     *
+     * 规则：不足 1 万元走"整数元 + 千分位"（0 -> "¥0"、60000 -> "¥600"、100000 -> "¥1,000"）；
+     * 不是整元时保留两位小数（1234 -> "¥12.34"），避免刻度"看着像整数其实不是"；
+     * 1 万元及以上压成"万"、最多一位小数，且**向上取**——刻度宁可略高于实际值也不能低报
+     * （1_000_000 -> "¥1万"、1_010_000 -> "¥1.1万"、4_000_000 -> "¥4万"、100_000_000 -> "¥100万"）。
+     * 只给图表刻度用；给人看的金额一律 [formatCurrency]（带两位小数）。
+     */
+    fun formatAxisLabel(cents: Long): String {
+        val a = abs(cents)
+        val sign = if (cents < 0) "-" else ""
+        if (a >= WAN_CENTS) {
+            val tenth = (a + 99_999L) / 100_000L   // 万 × 10，向上取整
+            val wan = tenth / 10
+            val fraction = tenth % 10
+            return sign + "¥" + groupThousands(wan) + (if (fraction != 0L) ".$fraction" else "") + "万"
+        }
+        if (a % 100L == 0L) return sign + "¥" + groupThousands(a / 100L)
+        return sign + "¥" + groupThousands(a / 100L) + "." + (a % 100L).toString().padStart(2, '0')
+    }
+
     /** 整数部分每三位插一个逗号：1234567 -> "1,234,567"（<=3 位原样返回） */
     private fun groupThousands(value: Long): String {
         val digits = value.toString()

@@ -31,6 +31,29 @@ class TrendScaleTest {
         }
     }
 
+    /** 月底 31 天格子只有 10 来 dp：标签必须稀疏，不能再挤成一团 */
+    @Test
+    fun labelInterval_keepsNeighbouringLabelsApart() {
+        assertEquals(1, dayLabelInterval(44f))
+        assertEquals(1, dayLabelInterval(60f))
+        assertEquals(2, dayLabelInterval(22f))
+        assertEquals(5, dayLabelInterval(10.5f))
+        // 宽度拿不到（测量前/异常值）时退化成每天都标，不能除 0
+        assertEquals(1, dayLabelInterval(0f))
+        assertEquals(1, dayLabelInterval(-1f))
+    }
+
+    @Test
+    fun labeledDays_keepsTheFirstDay_andDropsTheCrowdedLastDay() {
+        val labeled = labeledDays((1..31).toList(), dayLabelInterval(10.5f))
+        assertEquals(setOf(1, 5, 10, 15, 20, 25, 30), labeled)
+        // 31 日离 30 日只差一天：只标 30
+        assertTrue(31 !in labeled)
+        // 只有几天时每天都标（标签放得下）
+        assertEquals(setOf(1, 2, 3), labeledDays(listOf(1, 2, 3), 1))
+        assertEquals(emptySet<Int>(), labeledDays(emptyList(), 5))
+    }
+
     /** 真实数据：本月支出最高 ¥34,432.36 = 3,443,236 分 → 上界 ¥40,000.00 */
     @Test
     fun realMonthlyMaximum_scalesToAFriendlyTop() {

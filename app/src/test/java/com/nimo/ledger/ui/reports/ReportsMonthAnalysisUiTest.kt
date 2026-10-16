@@ -126,7 +126,7 @@ class ReportsMonthAnalysisUiTest {
         )
 
     @Test
-    fun tappingADayBar_opensThatDaysTransactions() {
+    fun tappingADayBar_showsTheAmountTooltip_thenOpensThatDaysTransactions() {
         val accountId = seedAccount()
         val otherId = runBlocking { repository.createAccount("招行卡", AccountType.DEBIT, 0L).getOrThrow() }
         val entertainmentId = seedCategory("娱乐", "🎮", CategoryKind.EXPENSE)
@@ -139,6 +139,17 @@ class ReportsMonthAnalysisUiTest {
         awaitText("最高 ¥600.00")
         dayNode(firstDay, expenseCents = 60_000L).performScrollTo().performClick()
 
+        // 第一步：点柱子先弹金额气泡（R2 优化：不再直接跳走）
+        val firstDayTotal = DailyTotal(firstDay, incomeCents = 0L, expenseCents = 60_000L)
+        composeRule.awaitUntil {
+            composeRule.onAllNodes(hasTestTag(DAY_TOOLTIP_TEST_TAG)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNode(hasTestTag(DAY_TOOLTIP_TEST_TAG)).assertIsDisplayed()
+        composeRule.onNodeWithText(tooltipHead(firstDayTotal)).assertExists()
+        composeRule.onNodeWithText(tooltipSummary(firstDayTotal)).assertExists()
+
+        // 第二步：点气泡才进当日明细
+        composeRule.onNode(hasTestTag(DAY_TOOLTIP_TEST_TAG)).performClick()
         composeRule.awaitUntil {
             composeRule.onAllNodes(hasTestTag(DAY_DETAIL_DIALOG_TEST_TAG)).fetchSemanticsNodes().isNotEmpty()
         }
@@ -172,6 +183,14 @@ class ReportsMonthAnalysisUiTest {
         awaitText("最高 ¥600.00")
         dayNode(emptyDay, expenseCents = 0L).performScrollTo().performClick()
 
+        // 先出气泡（这天两个 0），再点气泡进明细
+        val emptyDayTotal = DailyTotal(emptyDay, incomeCents = 0L, expenseCents = 0L)
+        composeRule.awaitUntil {
+            composeRule.onAllNodes(hasTestTag(DAY_TOOLTIP_TEST_TAG)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(tooltipSummary(emptyDayTotal)).assertExists()
+
+        composeRule.onNode(hasTestTag(DAY_TOOLTIP_TEST_TAG)).performClick()
         composeRule.awaitUntil {
             composeRule.onAllNodes(hasTestTag(DAY_DETAIL_DIALOG_TEST_TAG)).fetchSemanticsNodes().isNotEmpty()
         }

@@ -24,6 +24,9 @@ import com.nimo.ledger.domain.model.AccountType
 import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.domain.model.TransactionInput
 import com.nimo.ledger.domain.model.TransactionType
+import com.nimo.ledger.domain.stats.DailyTotal
+import com.nimo.ledger.domain.stats.MonthlyTotal
+import java.time.LocalDate
 import java.time.YearMonth
 import kotlinx.coroutines.runBlocking
 import com.nimo.ledger.awaitUntil
@@ -205,5 +208,48 @@ class TrendChartUiTest {
         composeRule.onNodeWithText("本月还没有记录").assertIsDisplayed()
         composeRule.onAllNodes(hasContentDescription("收支趋势", substring = true)).assertCountEquals(0)
         composeRule.onAllNodes(hasTestTag(DAILY_CHART_TEST_TAG)).assertCountEquals(0)
+    }
+
+    /**
+     * 月底（31 天）的密度：格子比最小宽度还窄 → 横轴标签稀疏、图能左右滑、纵轴刻度仍在。
+     * 直接渲染 [TrendSection] 造 31 天数据（只有 31 天的月份才够挤），不走数据库。
+     */
+    @Test
+    fun aThirtyOneDayMonth_sparsensTheLabelsAndScrolls() {
+        val month = YearMonth.of(2026, 7)
+        val daily = (1..31).map { day ->
+            DailyTotal(
+                date = month.atDay(day),
+                incomeCents = 0L,
+                expenseCents = if (day == 1) 60_000L else 0L,
+            )
+        }
+        composeRule.setContent {
+            MaterialTheme {
+                TrendSection(
+                    span = TrendSpan.MONTH,
+                    month = month,
+                    points = listOf(MonthlyTotal(month, incomeCents = 0L, expenseCents = 60_000L)),
+                    daily = daily,
+                    isLoading = false,
+                    onSpanChange = {},
+                    onDayClick = {},
+                )
+            }
+        }
+
+        composeRule.onNode(hasTestTag(DAILY_CHART_TEST_TAG)).assertExists()
+        // 纵轴：上界 niceCeiling(¥600.00) = ¥1,000，中线 ¥500，底线 ¥0
+        composeRule.onNode(hasTestTag(CHART_Y_AXIS_TEST_TAG)).assertExists()
+        composeRule.onAllNodesWithText("¥1,000").assertCountEquals(1)
+        composeRule.onAllNodesWithText("¥500").assertCountEquals(1)
+        composeRule.onAllNodesWithText("¥0").assertCountEquals(1)
+
+        // 标签稀疏：1 号必标、相邻的 2 号不标；最后一天离上一个标签太近也不标
+        // （格子宽 18dp 时每 3 天一个标签，所以 3 号仍在；2 号在任何间隔下都不该出现）
+        composeRule.onAllNodesWithText("1日").assertCountEquals(1)
+        composeRule.onAllNodesWithText("2日").assertCountEquals(0)
+        composeRule.onAllNodesWithText("31日").assertCountEquals(0)
+        composeRule.onAllNodesWithText(DAY_LABEL_SCROLL_HINT).assertCountEquals(1)
     }
 }
