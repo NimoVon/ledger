@@ -2,6 +2,7 @@ package com.nimo.ledger.ui.reports
 
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
@@ -12,24 +13,31 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.nimo.ledger.data.local.AppDatabase
 import com.nimo.ledger.data.local.SchemaHardening
 import com.nimo.ledger.data.local.entity.CategoryEntity
 import com.nimo.ledger.data.repository.LedgerRepository
+import com.nimo.ledger.domain.filter.TransactionFilter
 import com.nimo.ledger.domain.model.AccountType
 import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.domain.model.TransactionInput
 import com.nimo.ledger.domain.model.TransactionType
 import java.time.YearMonth
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlinx.coroutines.runBlocking
 import com.nimo.ledger.awaitUntil
+import org.junit.Assert.assertEquals
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -43,7 +51,8 @@ import org.robolectric.annotation.Config
  *
  * 画布上没有可读文字，用无障碍描述认它（与趋势折线同一套做法）；
  * 环心是"支出合计 + 金额"合一的节点，占比的明细由下面的「支出排行」承担——
- * 所以这里断言三件事：环画出来了、环心等于两个分类之和、排行把占比写在行里。
+ * 所以这里断言：环画出来了、环心等于两个分类之和、排行把占比写在行里；
+ * 以及点选交互——点一块先出占比气泡（先看数），点气泡才带「该分类 + 当月」下钻（R3 优化）。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w411dp-h891dp-xxhdpi")
@@ -70,10 +79,10 @@ class CategoryDonutUiTest {
         db.close()
     }
 
-    /** 本月两笔支出：娱乐 ¥600（75%）、餐饮 ¥200（25%） */
-    private fun seedTwoExpenses() {
+    /** 本月两笔支出：娱乐 ¥600（75%）、餐饮 ¥200（25%）；返回（娱乐 id, 餐饮 id）供下钻条件比对 */
+    private fun seedTwoExpenses(): Pair<Long, Long> {
         val month = YearMonth.now()
-        runBlocking {
+        return runBlocking {
             val accountId = repository.createAccount("CMB", AccountType.CASH, 0L).getOrThrow()
             val entertainmentId = db.categoryDao().upsert(
                 CategoryEntity(name = "娱乐", kind = CategoryKind.EXPENSE, icon = "🎮", sortOrder = 0),
@@ -99,6 +108,7 @@ class CategoryDonutUiTest {
                     occurredOn = month.atDay(2).toString(),
                 ),
             ).getOrThrow()
+            entertainmentId to diningId
         }
     }
 
@@ -122,9 +132,9 @@ class CategoryDonutUiTest {
         }
     }
 
-    private fun showReports() {
+    private fun showReports(onDrillDown: (TransactionFilter) -> Unit = {}) {
         composeRule.setContent {
-            MaterialTheme { ReportsScreen(repository = repository) }
+            MaterialTheme { ReportsScreen(repository = repository, onDrillDown = onDrillDown) }
         }
     }
 
@@ -170,5 +180,64 @@ class CategoryDonutUiTest {
         composeRule.onNodeWithText(hint).assertIsDisplayed()
         composeRule.onAllNodesWithText("分类占比").assertCountEquals(0)
         composeRule.onAllNodes(hasContentDescription(DONUT_DESCRIPTION, substring = true)).assertCountEquals(0)
+    }
+
+    /**
+     * 在环形图上点一个方向：0° = 3 点方向（金额第一名那一块），225° = 10 点半方向（第二名那一块）。
+     * 半径取环路中线（180dp 画布、26dp 环宽），坐标按测试密度换算成 px。
+     */
+    private fun tapDonut(directionDegrees: Double) {
+        val density = composeRule.density.density
+        val canvasPx = 180f * density
+        val strokePx = 26f * density
+        val radius = (canvasPx - strokePx) / 2f * 0.95f
+        val radians = Math.toRadians(directionDegrees)
+        val x = canvasPx / 2f + (radius * cos(radians)).toFloat()
+        val y = canvasPx / 2f + (radius * sin(radians)).toFloat()
+        // 用 down/up 而不是 click()：ui-test 1.12.1 的 TouchInjectionScope 没有 click 成员
+        composeRule.onNodeWithTag(DONUT_TEST_TAG).performTouchInput {
+            down(Offset(x, y))
+            up()
+        }
+    }
+
+    /** 点一块 → 出气泡（不跳走）；点气泡 → 带着「该分类 + 当月」下钻 */
+    @Test
+    fun tappingASlice_showsTheShare_thenOpensThatCategorysTransactions() {
+        val (entertainmentId, _) = seedTwoExpenses()
+        var drilled: TransactionFilter? = null
+        showReports(onDrillDown = { drilled = it })
+        awaitText("日均支出")
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(DONUT_TEST_TAG))
+
+        tapDonut(0.0)
+        composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).assertIsDisplayed()
+        composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).assertTextContains("娱乐")
+        composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).assertTextContains("¥600.00", substring = true)
+        composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).assertTextContains("75.0%", substring = true)
+
+        composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).performClick()
+        composeRule.runOnIdle {
+            assertEquals(ReportDrillDown.byCategory(YearMonth.now(), entertainmentId), drilled)
+        }
+    }
+
+    /** 换一块气泡跟着换；再点同一块收起 */
+    @Test
+    fun tappingAnotherSlice_switchesTheShare_andTappingItAgainHidesIt() {
+        seedTwoExpenses()
+        showReports()
+        awaitText("日均支出")
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(DONUT_TEST_TAG))
+
+        tapDonut(0.0)
+        composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).assertTextContains("娱乐")
+
+        tapDonut(225.0)
+        composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).assertTextContains("餐饮")
+        composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).assertTextContains("25.0%", substring = true)
+
+        tapDonut(225.0)
+        composeRule.onAllNodesWithTag(DONUT_TOOLTIP_TEST_TAG).assertCountEquals(0)
     }
 }

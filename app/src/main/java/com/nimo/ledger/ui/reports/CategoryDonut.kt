@@ -1,21 +1,32 @@
 package com.nimo.ledger.ui.reports
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -25,6 +36,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.stats.CategoryBreakdownRow
 import com.nimo.ledger.util.Money
+import kotlin.math.atan2
+import kotlin.math.hypot
 
 /** 环形图的外径：中间留 [DONUT_HOLE] 放合计，图上不放文字，名字看下面的「支出排行」 */
 private val DONUT_SIZE = 180.dp
@@ -43,8 +56,17 @@ internal const val DONUT_TEST_TAG = "report-category-donut"
 /** 环心（合计）也是一个可断言的节点：它是"支出合计 + 金额"两行合成的一句话 */
 internal const val DONUT_CENTER_TEST_TAG = "report-donut-center"
 
+/** 点中一块分类后弹出的占比气泡（R3 优化）：先看数，再点它才下钻——与柱状图同一套交互语言 */
+internal const val DONUT_TOOLTIP_TEST_TAG = "report-donut-tooltip"
+
 /** 无障碍描述的头一句（画布上没有可读文字）：读屏听到的是带数字的整句，测试用前缀匹配 */
 internal const val DONUT_DESCRIPTION = "本月支出分类占比"
+
+/** 没被选中的扇形压暗到这个透明度：选中那块一眼能认出来，也不至于脏 */
+private const val DONUT_DIM_ALPHA = 0.35f
+
+/** 选中扇形的描边加粗量：颜色之外再加一层形状反馈 */
+private val DONUT_SELECTED_STROKE_BONUS = 6.dp
 
 /**
  * 无障碍描述：环形图 + 环心合计读出来，再补金额最大的前三个分类（名字、金额、占比）——
@@ -80,6 +102,45 @@ private val DONUT_COLORS = listOf(
 internal fun donutColorAt(index: Int): Color = DONUT_COLORS[index % DONUT_COLORS.size]
 
 /**
+ * 点按落在环的哪一块：返回 [rows] 的下标；点在环心的洞里或环外返回 null（视作"取消选中"）。
+ *
+ * 环从 12 点方向顺时针画（[DONUT_START_ANGLE]），所以先把 atan2 的角度 +90° 再取模，
+ * 折算成"从 12 点起顺时针转过多少度"，然后按各分类的角度宽度累加找落点。
+ * 半径上留 [strokePx] / 3 的容错：手指点偏一点也算命中，但点在洞里不算——环心是"支出合计"。
+ * 纯函数（不碰 Compose），命中判定单独测：画布上能不能点、点得准不准，不该只靠看截图。
+ */
+internal fun donutSliceAt(
+    rows: List<CategoryBreakdownRow>,
+    totalCents: Long,
+    tapX: Float,
+    tapY: Float,
+    canvasWidthPx: Float,
+    canvasHeightPx: Float,
+    strokePx: Float,
+): Int? {
+    if (rows.isEmpty() || totalCents <= 0L) return null
+    val centerX = canvasWidthPx / 2f
+    val centerY = canvasHeightPx / 2f
+    val dx = tapX - centerX
+    val dy = tapY - centerY
+    val radius = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+    val pathRadius = (minOf(canvasWidthPx, canvasHeightPx) - strokePx) / 2f
+    val slack = strokePx / 3f
+    val inner = (pathRadius - strokePx / 2f - slack).coerceAtLeast(0f)
+    val outer = pathRadius + strokePx / 2f + slack
+    if (radius < inner || radius > outer) return null
+    val degrees = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble()))
+    val clockwise = ((degrees + 90.0) % 360.0 + 360.0) % 360.0
+    var swept = 0.0
+    rows.forEachIndexed { index, row ->
+        swept += row.amountCents.toDouble() / totalCents * 360.0
+        if (clockwise < swept) return index
+    }
+    // 浮点误差：贴着最后一个扇区末端的一点点，归最后一块，不当作"点了空白"
+    return rows.lastIndex
+}
+
+/**
  * 分类占比环形图（F10）：本月支出按一级分类的占比。
  *
  * 图表用 Compose Canvas 自绘（计划 240 行：先自绘，暂不引图表库）。
@@ -88,12 +149,20 @@ internal fun donutColorAt(index: Int): Color = DONUT_COLORS[index % DONUT_COLORS
  * 口径本身仍来自 StatsCalculator.categoryBreakdown（铁律 3），这里只负责画。
  *
  * 名字与金额不重复列一遍：正下方的「支出排行」就是它的图例（占比条用了同一套颜色）。
+ * 点一块 → 选中并弹出占比气泡 → 点气泡才下钻（[onCategoryClick]）。与「点柱子先出气泡」
+ * 是同一套交互语言：图表上先给一眼能看见的数，再进明细。
  * [rows] 为空时整段不渲染，由调用方决定。
  */
 @Composable
-internal fun CategoryDonutSection(rows: List<CategoryBreakdownRow>, modifier: Modifier = Modifier) {
+internal fun CategoryDonutSection(
+    rows: List<CategoryBreakdownRow>,
+    modifier: Modifier = Modifier,
+    onCategoryClick: (CategoryBreakdownRow) -> Unit = {},
+) {
     if (rows.isEmpty()) return
     val totalCents = rows.sumOf { it.amountCents }
+    // 选中的那一块：再点一次同一块 = 收起；换月份（rows 变了）时自动清空
+    var selectedIndex by remember(rows) { mutableStateOf<Int?>(null) }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -101,19 +170,50 @@ internal fun CategoryDonutSection(rows: List<CategoryBreakdownRow>, modifier: Mo
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            CategoryDonutCanvas(rows = rows, totalCents = totalCents)
+            CategoryDonutCanvas(
+                rows = rows,
+                totalCents = totalCents,
+                selectedIndex = selectedIndex,
+                onSelect = { picked -> selectedIndex = if (picked == selectedIndex) null else picked },
+            )
             DonutCenter(totalCents = totalCents)
+        }
+        selectedIndex?.let { index ->
+            rows.getOrNull(index)?.let { row ->
+                DonutTooltip(row = row, onClick = { onCategoryClick(row) })
+            }
         }
     }
 }
 
 @Composable
-private fun CategoryDonutCanvas(rows: List<CategoryBreakdownRow>, totalCents: Long) {
+private fun CategoryDonutCanvas(
+    rows: List<CategoryBreakdownRow>,
+    totalCents: Long,
+    selectedIndex: Int?,
+    onSelect: (Int?) -> Unit,
+) {
     Canvas(
         modifier = Modifier
             .size(DONUT_SIZE)
             .testTag(DONUT_TEST_TAG)
-            .semantics { contentDescription = donutDescription(rows, totalCents) },
+            .semantics { contentDescription = donutDescription(rows, totalCents) }
+            // 命中判定在 donutSliceAt（纯函数、单独测）；点洞里或环外 = 取消选中
+            .pointerInput(rows, totalCents) {
+                detectTapGestures { offset ->
+                    onSelect(
+                        donutSliceAt(
+                            rows = rows,
+                            totalCents = totalCents,
+                            tapX = offset.x,
+                            tapY = offset.y,
+                            canvasWidthPx = size.width.toFloat(),
+                            canvasHeightPx = size.height.toFloat(),
+                            strokePx = DONUT_STROKE.toPx(),
+                        ),
+                    )
+                }
+            },
     ) {
         if (totalCents <= 0L) return@Canvas
         val strokePx = DONUT_STROKE.toPx()
@@ -123,16 +223,56 @@ private fun CategoryDonutCanvas(rows: List<CategoryBreakdownRow>, totalCents: Lo
         var startAngle = DONUT_START_ANGLE
         rows.forEachIndexed { index, row ->
             val sweep = row.amountCents.toDouble() / totalCents * 360.0
+            val selected = index == selectedIndex
             drawArc(
-                color = donutColorAt(index),
+                // 选中的一块保持原色，其余的压暗：颜色 + 描边粗细两层反馈，不只靠颜色
+                color = donutColorAt(index)
+                    .copy(alpha = if (selectedIndex == null || selected) 1f else DONUT_DIM_ALPHA),
                 startAngle = startAngle,
                 sweepAngle = sweep.toFloat(),
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcSize,
-                style = Stroke(width = strokePx),
+                style = Stroke(
+                    width = if (selected) strokePx + DONUT_SELECTED_STROKE_BONUS.toPx() else strokePx,
+                ),
             )
             startAngle += sweep.toFloat()
+        }
+    }
+}
+
+/**
+ * 点中一块分类后的占比气泡：分类名 + 金额 + 占比 + 「查看明细」。
+ * 整块可点，点它才把"该分类 + 当前月份"下钻到明细页（F07 的同一条链路，由宿主跳转）。
+ */
+@Composable
+private fun DonutTooltip(row: CategoryBreakdownRow, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .padding(top = 12.dp)
+            .fillMaxWidth()
+            .testTag(DONUT_TOOLTIP_TEST_TAG)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shadowElevation = 4.dp,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = row.name, style = MaterialTheme.typography.labelLarge)
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "查看明细",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = "${Money.formatCurrency(row.amountCents)} · ${ReportFormatting.percent(row.percent)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

@@ -129,9 +129,16 @@ fun ReportsScreen(
                 // 先给个总览：谁占了大头；具体数字看下面的排行（占比条用同一套颜色对号）
                 if (state.breakdown.isNotEmpty()) {
                     item(key = "donut-header") {
-                        SectionHeader("分类占比", hint = "占比 = 分类支出 ÷ 支出合计")
+                        SectionHeader("分类占比", hint = "点一块看明细")
                     }
-                    item(key = "donut") { CategoryDonutSection(rows = state.breakdown) }
+                    item(key = "donut") {
+                        CategoryDonutSection(
+                            rows = state.breakdown,
+                            onCategoryClick = { row ->
+                                onDrillDown(ReportDrillDown.byCategory(state.month, row.categoryId))
+                            },
+                        )
+                    }
                 }
                 item(key = "breakdown-header") { SectionHeader("支出排行", hint = "点一行看明细") }
                 if (state.breakdown.isEmpty()) {
