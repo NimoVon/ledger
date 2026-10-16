@@ -1,5 +1,6 @@
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.gradle.testing.jacoco.tasks.JacocoReport
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -9,9 +10,30 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// 发布签名材料：keystore/keystore.properties 与 .jks 都在 .gitignore 里，绝不提交。
+// 文件不存在时（别人 clone、CI）不注册 signingConfig，release 构建退化成未签名包，
+// debug 构建与全部单元测试不受影响。
+val releaseKeystorePropertiesFile = rootProject.file("keystore/keystore.properties")
+val releaseKeystoreProperties = Properties().apply {
+    if (releaseKeystorePropertiesFile.exists()) {
+        releaseKeystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     namespace = "com.nimo.bookkeeping"
     compileSdk = 37
+
+    signingConfigs {
+        if (releaseKeystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(releaseKeystoreProperties.getProperty("storeFile"))
+                storePassword = releaseKeystoreProperties.getProperty("storePassword")
+                keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
+                keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
 
     // Robolectric JVM 测试（计划 6.1：DAO/约束用真实 SQLite 语义测）
     // JDK 17+ 模块系统要求 add-opens，否则 FileDescriptor 反射失败
@@ -46,15 +68,19 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.nimo.bookkeeping"
+        // 应用身份（安装标识）。注意：它和源码命名空间 com.nimo.bookkeeping 是两回事，
+        // 后者只决定 R/BuildConfig 的包名与源码目录，改名等于全量重排源文件，此处不动。
+        applicationId = "com.nimo.ledger"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0"
     }
 
     buildTypes {
         release {
+            // 有 keystore/keystore.properties 就用发布密钥签名；没有就是未签名包（装不上）
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

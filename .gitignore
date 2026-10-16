@@ -1,4 +1,9 @@
 *.iml
+# 发布签名材料（keystore/ 里既有权钥库也有明文口令）——绝不提交
+keystore/
+*.jks
+*.keystore
+keystore.properties
 .gradle/
 .dsh-gradle-home/
 .kotlin/

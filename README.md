@@ -117,7 +117,10 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 | 导入 CSV | 设置 → 导入 CSV（增量合并） | 选中放着 4 个 CSV 的文件夹；**先预览「将写入多少行/跳过多少行」，确认后才写库**；同 id 覆盖、新 id 追加，本机独有数据不删；坏行跳过并报文件名与行号 |
 
 **换手机迁移**：旧机「导出 JSON 完整备份」→ 把文件拷到新机 → 新机「导入 JSON（覆盖替换）」。
-或直接拷 `ledger.db` 文件到新机应用私有目录（同包名、同 schema 版本）。
+或直接拷 `ledger.db` 文件到新机应用私有目录（同 applicationId、同 schema 版本）。
+
+> 安装标识是 `com.nimo.ledger`，源码命名空间仍是 `com.nimo.bookkeeping`（`R`/`BuildConfig` 的包名），
+> 两者是两回事；发布与签名细节见 [`docs/发布与签名.md`](docs/发布与签名.md)。
 
 **想先试用再录入**：[`docs/示例数据/`](docs/示例数据/README.md) 下有一份合成脱敏的完整示例（1 份 JSON + 4 份 CSV），用上面的导入流程即可装进来。
 
@@ -128,6 +131,7 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 | [`docs/测试报告.md`](docs/测试报告.md) | 门禁结果、562 例分布、JaCoCo 覆盖率、性能实测、打包体积、数据安全、未覆盖项 |
 | [`docs/F13-SQLCipher评估.md`](docs/F13-SQLCipher评估.md) | SQLCipher 兼容性/密钥恢复/迁移/体积评估与「不纳入」决策记录 |
 | [`docs/示例数据/README.md`](docs/示例数据/README.md) | 示例备份与 CSV 的格式约定、导入用法 |
+| [`docs/发布与签名.md`](docs/发布与签名.md) | 安装标识与版本规则、发布签名流程、密钥库备份与丢失后果 |
 
 ## 关键设计决策（改代码前必读）
 
@@ -153,11 +157,14 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 - [x] 阶段 3：月度报表与筛选搜索
 - [x] 阶段 4：预算、图表、深色模式、余额校准
 - [x] 阶段 5：性能实测、无障碍打磨、隐私权限审计、测试报告、示例数据
-- [ ] 待办：签名 release APK（需确认密钥库方案，尚未创建 keystore）
+- [x] 签名 release APK：`keystore/ledger-release.jks`（已 `.gitignore`）→ `assembleRelease` → `apksigner` 验签通过；流程见 [`docs/发布与签名.md`](docs/发布与签名.md)
+- [ ] 待办：签名包的真机安装验证（测试机 MIUI 未开「通过 USB 安装」，`adb install` 被 `INSTALL_FAILED_USER_RESTRICTED` 拦下；APK 已放到设备 `/sdcard/Download/ledger-1.0-release.apk` 供手动安装）
 
 ## 已知限制
 
-- 未产出签名 release APK；未启用 minify，release 混淆规则待补充
+- release 未启用 minify，混淆规则待补充（当前靠 debug/release 同源构建，无额外收缩）
+- `applicationId` 与源码 `namespace` 不一致（`com.nimo.ledger` / `com.nimo.bookkeeping`）：用 `adb shell am start -n <applicationId>/<namespace>.MainActivity` 启动时类名必须写全，简写 `com.nimo.ledger/.MainActivity` 会报 `Error type 3`
+- 签名密钥库与口令只在本机，无异地备份；丢失后已安装的包无法覆盖升级
 - 无自定义应用图标（用系统默认）
 - 数据库仍为 v1，暂无 Migration 对象（v1→v2 迁移验证待有 v2 后进行）
 - 真机 1 万笔性能与 Android 8.0（API 26）真机兼容性尚未实测；覆盖率无门禁阈值
