@@ -42,6 +42,7 @@ import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.ledger.ui.DrillDownRequests
 import com.nimo.ledger.ui.components.MonthSummaryBar
 import com.nimo.ledger.ui.components.MonthSwitcher
+import com.nimo.ledger.ui.components.YearMonthPickerDialog
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -74,6 +75,8 @@ fun TransactionsScreen(
         viewModel(factory = TransactionsViewModel.factory(repository, pendingDeletionIds, drillDown))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showFilterDialog by remember { mutableStateOf(false) }
+    // R1 日期直改：点月份标签打开年月选择器
+    var showMonthPicker by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (state.showsMonthSwitcher) {
@@ -81,6 +84,7 @@ fun TransactionsScreen(
                 label = state.monthLabel,
                 onPrevious = viewModel::showPreviousMonth,
                 onNext = viewModel::showNextMonth,
+                onLabelClick = { showMonthPicker = true },
             )
         }
         MonthSummaryBar(summary = state.summary, loading = state.isLoading)
@@ -138,6 +142,17 @@ fun TransactionsScreen(
                 }
             }
         }
+    }
+
+    if (showMonthPicker) {
+        YearMonthPickerDialog(
+            current = state.month,
+            onDismiss = { showMonthPicker = false },
+            onSelect = { picked ->
+                viewModel.setMonth(picked)
+                showMonthPicker = false
+            },
+        )
     }
 
     if (showFilterDialog) {

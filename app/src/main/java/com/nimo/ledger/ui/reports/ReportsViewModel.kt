@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -278,11 +277,19 @@ class ReportsViewModel(
         trendSpan.value = span
     }
 
-    private fun moveMonth(delta: Long) {
-        // 上个月的读取错误不该带进新月份
+    /**
+     * R1 日期直改：直接跳到指定年月（年月选择器两步选出来的结果）。
+     *
+     * 与上下月只差"跳多远"：同一个 [month] 流、同一套 [Dates.monthBounds] 区间查询，
+     * 本月合计、上月环比、趋势窗口因此都跟着这个值一起走，不需要为直选另写一份。
+     */
+    fun setMonth(month: YearMonth) {
+        // 上一个月份的读取错误不该带进新月份
         loadError.value = null
-        month.update { it.plusMonths(delta) }
+        this.month.value = month
     }
+
+    private fun moveMonth(delta: Long) = setMonth(month.value.plusMonths(delta))
 
     companion object {
         fun factory(

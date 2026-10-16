@@ -24,6 +24,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,6 +40,7 @@ import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.ledger.ui.components.MonthSummaryBar
 import com.nimo.ledger.ui.components.MonthSwitcher
+import com.nimo.ledger.ui.components.YearMonthPickerDialog
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -65,12 +69,15 @@ fun ReportsScreen(
     val viewModel: ReportsViewModel =
         viewModel(factory = ReportsViewModel.factory(repository, pendingDeletionIds))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // R1 日期直改：点月份标签打开年月选择器，选中的年月与明细页同一套口径
+    var showMonthPicker by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         MonthSwitcher(
             label = state.monthLabel,
             onPrevious = viewModel::showPreviousMonth,
             onNext = viewModel::showNextMonth,
+            onLabelClick = { showMonthPicker = true },
         )
         MonthSummaryBar(summary = state.summary, loading = state.isLoading)
         HorizontalDivider()
@@ -181,6 +188,17 @@ fun ReportsScreen(
                 }
             }
         }
+    }
+
+    if (showMonthPicker) {
+        YearMonthPickerDialog(
+            current = state.month,
+            onDismiss = { showMonthPicker = false },
+            onSelect = { picked ->
+                viewModel.setMonth(picked)
+                showMonthPicker = false
+            },
+        )
     }
 }
 

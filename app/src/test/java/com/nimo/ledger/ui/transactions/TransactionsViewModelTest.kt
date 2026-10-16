@@ -505,4 +505,90 @@ class TransactionsViewModelTest {
         assertTrue(cleared.filterChips.isEmpty())
         assertTrue(cleared.showsMonthSwitcher)
     }
+
+    // ---- R1 日期直改：月份标签 → 年月选择器，直接 set 到指定年月 ----
+
+    @Test
+    fun setMonth_jumpsAcrossTheYearBoundary_withoutWalkingThroughTheMonthsInBetween() = runTest {
+        seed()
+        addExpense(300L, "2025-12-31")
+        addExpense(700L, "2026-10-12")
+        addExpense(1_100L, "2027-01-01")
+
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        // 跨年往回：2026-10 → 2025-12（一步，不经过 2026-09/08/…）
+        vm.setMonth(YearMonth.of(2025, 12))
+        val december = vm.awaitMonth(YearMonth.of(2025, 12))
+        assertEquals("2025年12月", december.monthLabel)
+        assertEquals(listOf("2025-12-31"), december.groups.map { it.date })
+        assertEquals(300L, december.summary.expenseCents)
+
+        // 跨年往前：→ 2027-01
+        vm.setMonth(YearMonth.of(2027, 1))
+        val january = vm.awaitMonth(YearMonth.of(2027, 1))
+        assertEquals("2027年1月", january.monthLabel)
+        assertEquals(listOf("2027-01-01"), january.groups.map { it.date })
+        assertEquals(1_100L, january.summary.expenseCents)
+    }
+
+    @Test
+    fun setMonth_toJanuary_coversTheFirstThroughTheLastDayOfThatMonth() = runTest {
+        seed()
+        addExpense(100L, "2025-12-31") // 上一年最后一天：在区间左端之外
+        addExpense(200L, "2026-01-01") // 左端（含）
+        addExpense(400L, "2026-01-31") // 右端前一刻（含）
+        addExpense(800L, "2026-02-01") // 右端（不含）
+
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        vm.setMonth(YearMonth.of(2026, 1))
+        val january = vm.awaitMonth(YearMonth.of(2026, 1))
+
+        assertEquals("2026年1月", january.monthLabel)
+        assertEquals(listOf("2026-01-31", "2026-01-01"), january.groups.map { it.date })
+        assertEquals(600L, january.summary.expenseCents)
+    }
+
+    @Test
+    fun setMonth_toDecember_coversThroughTheLastDayAndStopsAtNextYearJanuaryFirst() = runTest {
+        seed()
+        addExpense(100L, "2026-11-30")
+        addExpense(200L, "2026-12-01")
+        addExpense(400L, "2026-12-31")
+        addExpense(800L, "2027-01-01")
+
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        vm.setMonth(YearMonth.of(2026, 12))
+        val december = vm.awaitMonth(YearMonth.of(2026, 12))
+        assertEquals("2026年12月", december.monthLabel)
+        assertEquals(listOf("2026-12-31", "2026-12-01"), december.groups.map { it.date })
+        assertEquals(600L, december.summary.expenseCents)
+
+        // 直选与箭头落在同一处：12 月的下一个月就是次年 1 月
+        vm.showNextMonth()
+        val january = vm.awaitMonth(YearMonth.of(2027, 1))
+        assertEquals(listOf("2027-01-01"), january.groups.map { it.date })
+        assertEquals(800L, january.summary.expenseCents)
+    }
+
+    @Test
+    fun setMonth_toTheSameMonth_keepsEverythingAsIs() = runTest {
+        seed()
+        addExpense(700L, "2026-10-12")
+
+        val vm = newViewModel()
+        val before = vm.awaitLoaded()
+
+        vm.setMonth(before.month)
+        val after = vm.awaitMonth(YearMonth.of(2026, 10))
+
+        // 选了同一个年月：列表与合计都不动（也没必要把它当"切月"再读一遍）
+        assertEquals(before.groups.map { it.date }, after.groups.map { it.date })
+        assertEquals(700L, after.summary.expenseCents)
+    }
 }

@@ -382,4 +382,60 @@ class ReportsViewModelTest {
         // 已结束的月份按整月天数（30 天）：30_000 / 30 = 1_000
         assertEquals(1_000L, september.dailyAverageExpenseCents)
     }
+
+    // ---- R1 日期直改：统计页直接 set 到指定年月（合计、环比一起换） ----
+
+    @Test
+    fun setMonth_bringsThatMonthsSummaryAndItsPreviousMonthAcrossTheYearBoundary() = runTest {
+        seed()
+        addExpense(300L, "2025-12-31")
+        addExpense(900L, "2026-01-05")
+
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        // 跨年往回：2026-10 → 2026-01，环比的上个月要跟着跨到 2025-12
+        vm.setMonth(YearMonth.of(2026, 1))
+        val january = vm.awaitMonth(YearMonth.of(2026, 1))
+        assertEquals("2026年1月", january.monthLabel)
+        assertEquals(900L, january.summary.expenseCents)
+        assertEquals(300L, january.previousSummary.expenseCents)
+        assertEquals("较上月 ↑200.0%", ReportFormatting.change(january.expenseChangeRatio))
+
+        // 再往回一年的 12 月：上月没有记录 → 环比无意义
+        vm.setMonth(YearMonth.of(2025, 12))
+        val december = vm.awaitMonth(YearMonth.of(2025, 12))
+        assertEquals("2025年12月", december.monthLabel)
+        assertEquals(300L, december.summary.expenseCents)
+        assertEquals(0L, december.previousSummary.expenseCents)
+        assertNull(december.expenseChangeRatio)
+    }
+
+    @Test
+    fun setMonth_toDecember_stopsBeforeNextYearJanuarySecond() = runTest {
+        seed()
+        addExpense(100L, "2026-11-30")
+        addExpense(700L, "2026-12-31")
+        addExpense(500L, "2027-01-02")
+
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        vm.setMonth(YearMonth.of(2026, 12))
+        val december = vm.awaitMonth(YearMonth.of(2026, 12))
+        assertEquals("2026年12月", december.monthLabel)
+        // 12 月区间右端是 2027-01-01（不含）：2027-01-02 不算进 12 月
+        assertEquals(700L, december.summary.expenseCents)
+        assertEquals(100L, december.previousSummary.expenseCents)
+
+        vm.setMonth(YearMonth.of(2027, 1))
+        val january = vm.awaitMonth(YearMonth.of(2027, 1))
+        assertEquals(500L, january.summary.expenseCents)
+        assertEquals(700L, january.previousSummary.expenseCents)
+        assertEquals("较上月 ↓28.6%", ReportFormatting.change(january.expenseChangeRatio))
+
+        // 直选与箭头等价：从 2027-01 退一个月，回到同一个 2026-12
+        vm.showPreviousMonth()
+        assertEquals(700L, vm.awaitMonth(YearMonth.of(2026, 12)).summary.expenseCents)
+    }
 }
