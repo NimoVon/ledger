@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 背景：纯色米白（取自前景位图边缘均色 #F3EDDF，遮罩过渡自然） -->
+<!-- 背景：纯色浅蓝（取自前景位图背景方块均色 #79C9FC，遮罩过渡自然） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -7,6 +7,6 @@
     android:viewportHeight="108">
 
     <path
-        android:fillColor="#F3EDDF"
+        android:fillColor="#79C9FC"
         android:pathData="M0,0 H108 V108 H0 Z"/>
 </vector>

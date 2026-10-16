@@ -21,7 +21,7 @@ val releaseKeystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.nimo.bookkeeping"
+    namespace = "com.nimo.ledger"
     compileSdk = 37
 
     signingConfigs {
@@ -68,7 +68,7 @@ android {
     }
 
     defaultConfig {
-        // 应用身份（安装标识）。注意：它和源码命名空间 com.nimo.bookkeeping 是两回事，
+        // 应用身份（安装标识）。注意：它和源码命名空间 com.nimo.ledger 是两回事，
         // 后者只决定 R/BuildConfig 的包名与源码目录，改名等于全量重排源文件，此处不动。
         applicationId = "com.nimo.ledger"
         minSdk = 26

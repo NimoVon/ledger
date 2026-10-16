@@ -48,7 +48,7 @@
 
 ## 3. 编译与打包 spike（临时改动，已还原）
 
-临时改动 3 个文件（`gradle/libs.versions.toml`、`app/build.gradle.kts`、`app/src/main/java/com/nimo/bookkeeping/data/local/AppDatabase.kt`，diff 存 `C:/Users/nimo/AppData/Local/Temp/ledger-verify/sqlcipher/f13_spike.patch`），测完已 `git checkout --` 全部还原，工作树干净（HEAD `15c6859`）。
+临时改动 3 个文件（`gradle/libs.versions.toml`、`app/build.gradle.kts`、`app/src/main/java/com/nimo/ledger/data/local/AppDatabase.kt`，diff 存 `C:/Users/nimo/AppData/Local/Temp/ledger-verify/sqlcipher/f13_spike.patch`），测完已 `git checkout --` 全部还原，工作树干净（HEAD `15c6859`）。
 
 - 编译：`assembleDebug` **BUILD SUCCESSFUL in 46s**；依赖解析把 `androidx.sqlite:sqlite 2.6.2` 顶到 `2.7.0`，无冲突。
 - 体积：
@@ -66,16 +66,16 @@
 
 失败只有两种消息：
 
-- 251 例 `java.lang.NoClassDefFoundError: Could not initialize class com.nimo.bookkeeping.AppContainer`
+- 251 例 `java.lang.NoClassDefFoundError: Could not initialize class com.nimo.ledger.AppContainer`
 - 20 例 `java.lang.UnsatisfiedLinkError: no sqlcipher in java.library.path: ...`
 
-根因：`System.loadLibrary("sqlcipher")` 在类初始化时就执行，而 Robolectric 测试经 `app/src/main/java/com/nimo/bookkeeping/LedgerApplication.kt:33` 的 `class AppContainer` 走到 `AppDatabase.build(context)`（`LedgerApplication.kt:35`），JVM 上没有原生库 → 整条链路崩。
+根因：`System.loadLibrary("sqlcipher")` 在类初始化时就执行，而 Robolectric 测试经 `app/src/main/java/com/nimo/ledger/LedgerApplication.kt:33` 的 `class AppContainer` 走到 `AppDatabase.build(context)`（`LedgerApplication.kt:35`），JVM 上没有原生库 → 整条链路崩。
 
 **结论：纳入 SQLCipher 前必须先给生产库构建加接缝**（例如 `build(context, factory: SupportSQLiteOpenHelper.Factory?)` 参数化，测试传内存工厂；或把加密工厂收进可替换的 provider），否则整套单测不可用。
 
 ## 5. 迁移与 SchemaHardening
 
-- 现有库：`app/src/main/java/com/nimo/bookkeeping/data/local/AppDatabase.kt:42` 常量 `NAME = "ledger.db"`，:44-47 唯一打开点，无 `addMigrations`、无 `fallbackToDestructiveMigration`，`@Database(version = 1, exportSchema = true)`。
+- 现有库：`app/src/main/java/com/nimo/ledger/data/local/AppDatabase.kt:42` 常量 `NAME = "ledger.db"`，:44-47 唯一打开点，无 `addMigrations`、无 `fallbackToDestructiveMigration`，`@Database(version = 1, exportSchema = true)`。
 - 加密是**存储层**替换，表结构与 schema 版本不变 → Room 的 identity hash（`room_master_table`）随库一起被加密，对新老代码都是透明的；`SchemaHardening.apply(db)`（触发器、幂等语句）在 `HardeningCallback.onCreate` 里照常执行，不冲突。
 - **真正的迁移风险**：已有用户的 `ledger.db` 是明文。首启加密版本必须：读取明文库 → 建加密库 → 全量搬运 → 校验行数/余额 → 原子替换（保留 `.bak` 直到校验通过）→ 失败回滚。计划第 247 行明确要求这一步单独验证，且禁止破坏性迁移。
 - 另需确认：`PRAGMA temp_store` / `SQLITE_TEMP_STORE` 强制内存（否则临时文件明文落盘，安全性自相矛盾）。
@@ -141,7 +141,7 @@ SQLCipher 的密钥必须来自某处，而每一条来源都有丢失场景：
 | 检查 | 命令 / 位置 | 结果 |
 | --- | --- | --- |
 | 应用清单声明 | `app/src/main/AndroidManifest.xml:4` | 注释明写「无 INTERNET 权限：对『数据不上云』的物理保证（计划 4.5）」 |
-| 合并后清单 | `app/build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml` | 只有 `com.nimo.bookkeeping.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`，**无 INTERNET / ACCESS_NETWORK_STATE** |
+| 合并后清单 | `app/build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml` | 只有 `com.nimo.ledger.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`，**无 INTERNET / ACCESS_NETWORK_STATE** |
 | 系统备份 | 合并清单 `android:allowBackup="false"` | 禁止系统自动把数据库备份到云 |
 | 源码网络调用 | grep `java.net|okhttp|retrofit|HttpURLConnection|Socket(|URL(` over `app/src/main/java` | **0 命中** |
 | 依赖里的网络库 | grep `okhttp|retrofit|ktor|volley|network` over `gradle/libs.versions.toml` | **0 命中** |

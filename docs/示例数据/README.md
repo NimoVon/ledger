@@ -24,4 +24,4 @@
 ## 这份数据怎么来的
 
 用应用**自己的导出代码**（`BackupRepository.exportJson()` / `exportCsvFiles()`）生成，不是手抄的，所以格式与应用实际导出完全一致。
-`app/src/test/java/com/nimo/bookkeeping/docs/SampleDataFilesTest.kt` 会在单元测试里校验这几个文件：JSON 能被 `BackupCodec` 解码且行数正确、CSV 是 BOM+CRLF+元、四个文件解析零问题、对空库预览写入 44 行、JSON 能真的恢复且往返一致。文件被改坏或格式漂移，测试会直接失败。
+`app/src/test/java/com/nimo/ledger/docs/SampleDataFilesTest.kt` 会在单元测试里校验这几个文件：JSON 能被 `BackupCodec` 解码且行数正确、CSV 是 BOM+CRLF+元、四个文件解析零问题、对空库预览写入 44 行、JSON 能真的恢复且往返一致。文件被改坏或格式漂移，测试会直接失败。

@@ -1,0 +1,230 @@
+package com.nimo.ledger.ui.categories
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nimo.ledger.data.repository.LedgerRepository
+import com.nimo.ledger.domain.model.MoveDirection
+import com.nimo.ledger.ui.LedgerIcons
+import com.nimo.ledger.ui.components.EmptyState
+import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import kotlinx.coroutines.launch
+
+/** 「新建分类」按钮的文字：按钮文字与读屏名共用（F15 补语义，悬浮按钮的文字在无障碍树上读不出来） */
+private const val NEW_CATEGORY_LABEL = "新建分类"
+
+/**
+ * 分类管理（F02）：支出 / 收入两套独立分类树，一级 / 二级单层父子，上下移排序，停用不删除。
+ *
+ * 排版和账户管理页一致（列表 + 右下角新建按钮 + 点行开对话框），
+ * 但多一个区别：排序不塞进对话框，而是行内每级各一对"上移 / 下移"按钮——
+ * 排序是高频微调，每次开对话框太笨重。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CategoriesScreen(
+    repository: LedgerRepository,
+    onBack: () -> Unit,
+) {
+    val viewModel: CategoriesViewModel = viewModel(
+        factory = CategoriesViewModel.factory(repository),
+    )
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+
+    var dialogTarget by remember { mutableStateOf<CategoryDialogTarget?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var dialogError by remember { mutableStateOf<String?>(null) }
+
+    fun openDialog(target: CategoryDialogTarget) {
+        dialogTarget = target
+        dialogError = null
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("分类管理") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = LedgerIcons.Back, contentDescription = "返回")
+                    }
+                },
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { openDialog(CategoryDialogTarget.Create) },
+                modifier = Modifier.semantics { contentDescription = NEW_CATEGORY_LABEL },
+                icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
+                text = { Text(NEW_CATEGORY_LABEL) },
+            )
+        },
+    ) { innerPadding ->
+        val contentModifier = Modifier
+            .fillMaxSize()
+            .padding(innerPadding)
+        when {
+            state.isLoading -> Box(contentModifier, Alignment.Center) { CircularProgressIndicator() }
+
+            state.errorMessage != null -> EmptyState(
+                title = "加载失败",
+                message = state.errorMessage.orEmpty(),
+                modifier = contentModifier,
+            )
+
+            state.isEmpty -> EmptyState(
+                title = "还没有分类",
+                message = "预置分类应该在首次启动时写入。\n如果这里是空的，请回到设置页跑一次数据库自检。",
+                modifier = contentModifier,
+            )
+
+            else -> LazyColumn(
+                modifier = contentModifier,
+                contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
+            ) {
+                state.sections.forEach { section ->
+                    item(key = "header-" + section.kind.name) {
+                        Text(
+                            text = section.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                        HorizontalDivider()
+                    }
+                    items(section.rows, key = { it.id }) { row ->
+                        CategoryRowItem(
+                            row = row,
+                            onClick = { openDialog(CategoryDialogTarget.Edit(row)) },
+                            onMove = { direction ->
+                                scope.launch { viewModel.moveCategory(row.id, direction) }
+                            },
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    val target = dialogTarget
+    if (target != null) {
+        val editing = (target as? CategoryDialogTarget.Edit)?.row
+        // 上级候选：一级且未停用的分类（含另一棵树的，对话框里再按 kind 收窄——切 kind 时列表要能立刻跟上）
+        val topLevelOptions = state.sections.flatMap { it.rows }.filter { it.depth == 0 && !it.isArchived }
+        CategoryEditDialog(
+            editing = editing,
+            topLevelOptions = topLevelOptions,
+            saving = saving,
+            errorMessage = dialogError,
+            onDismiss = { if (!saving) dialogTarget = null },
+            onSave = { name, kind, parentId ->
+                scope.launch {
+                    saving = true
+                    val result = if (editing == null) {
+                        viewModel.createCategory(name, kind, parentId).map { }
+                    } else {
+                        viewModel.renameCategory(editing.id, name)
+                    }
+                    saving = false
+                    result
+                        .onSuccess { dialogTarget = null; dialogError = null }
+                        .onFailure { dialogError = it.toCategoryMessage() }
+                }
+            },
+            onToggleArchived = editing?.let { row ->
+                {
+                    scope.launch {
+                        saving = true
+                        val result = viewModel.setArchived(row, !row.isArchived)
+                        saving = false
+                        result
+                            .onSuccess { dialogTarget = null }
+                            .onFailure { dialogError = it.toCategoryMessage() }
+                    }
+                }
+            },
+        )
+    }
+}
+
+/** 对话框的两种用途：新建，或编辑某一行 */
+private sealed interface CategoryDialogTarget {
+    data object Create : CategoryDialogTarget
+    data class Edit(val row: CategoryRow) : CategoryDialogTarget
+}
+
+/**
+ * 一行分类：二级分类缩进一级。右侧一对上下移按钮，已经是组内第一个 / 最后一个时对应按钮置灰。
+ */
+@Composable
+private fun CategoryRowItem(
+    row: CategoryRow,
+    onClick: () -> Unit,
+    onMove: (MoveDirection) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(
+                start = 16.dp + (if (row.depth == 0) 0.dp else 24.dp),
+                end = 4.dp,
+                top = 4.dp,
+                bottom = 4.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (!row.icon.isNullOrBlank()) {
+            Text(text = row.icon, style = MaterialTheme.typography.bodyLarge)
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = row.name, style = MaterialTheme.typography.bodyLarge)
+            if (row.isArchived) {
+                Text(
+                    text = "已停用",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+        IconButton(onClick = { onMove(MoveDirection.UP) }, enabled = row.canMoveUp) {
+            Icon(imageVector = LedgerIcons.ArrowUp, contentDescription = "上移 " + row.name)
+        }
+        IconButton(onClick = { onMove(MoveDirection.DOWN) }, enabled = row.canMoveDown) {
+            Icon(imageVector = LedgerIcons.ArrowDown, contentDescription = "下移 " + row.name)
+        }
+    }
+}
