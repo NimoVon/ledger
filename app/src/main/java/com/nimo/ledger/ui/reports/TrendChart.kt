@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.stats.DailyTotal
 import com.nimo.ledger.domain.stats.MonthlyTotal
+import com.nimo.ledger.ui.theme.TooltipShape
 import com.nimo.ledger.util.Money
 import java.time.LocalDate
 import java.time.YearMonth
@@ -521,7 +522,7 @@ private fun DayTooltip(total: DailyTotal, onClick: () -> Unit, modifier: Modifie
             .width(DAY_TOOLTIP_WIDTH)
             .testTag(DAY_TOOLTIP_TEST_TAG)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
+        shape = TooltipShape,
         color = MaterialTheme.colorScheme.surfaceVariant,
         shadowElevation = 4.dp,
     ) {

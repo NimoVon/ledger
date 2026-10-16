@@ -1,41 +1,21 @@
 package com.nimo.ledger.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
-private val LightColors = lightColorScheme(
-    primary = LightPrimary,
-    onPrimary = LightOnPrimary,
-    primaryContainer = LightPrimaryContainer,
-    onPrimaryContainer = LightOnPrimaryContainer,
-    secondary = LightSecondary,
-    surface = LightSurface,
-    background = LightBackground,
-)
-
-private val DarkColors = darkColorScheme(
-    primary = DarkPrimary,
-    onPrimary = DarkOnPrimary,
-    primaryContainer = DarkPrimaryContainer,
-    onPrimaryContainer = DarkOnPrimaryContainer,
-    secondary = DarkSecondary,
-    surface = DarkSurface,
-    background = DarkBackground,
-)
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 /**
- * 应用根主题（F12）。
+ * 应用根主题（F12 外观偏好 + R4-L1 品牌色）。
  *
- * @param preference 外观偏好：SYSTEM 跟随系统深色开关（默认，与 F12 之前的行为一致），
- *   LIGHT / DARK 手动覆盖。由 [ThemePreference.isDark] 归一成「这次到底要不要深色」，
- *   避免「偏好」与「实际深浅」两个概念在各处各判一次。
+ * 品牌色是**静态**的：浅色 [LightColors] / 深色 [DarkColors] 两套写死在 Color.kt。
+ * R4-L1 按计划移除了 Android 12+ 的壁纸动态取色分支 —— 取色会把图标里那抹淡蓝、
+ * 以及「支出红 / 收入蓝」的语义色一并改写成壁纸的颜色，品牌就不叫品牌了。
+ * 守门测试见 LedgerThemeSourceTest（源码级）与 LedgerPaletteTest（对比度级）。
+ *
+ * @param preference 外观偏好：SYSTEM 跟随系统深色开关（默认），LIGHT / DARK 手动覆盖。
+ *   由 [ThemePreference.isDark] 归一成「这次到底要不要深色」。
  * @param darkTheme 系统当前的深色开关（[isSystemInDarkTheme]）；手动覆盖时它只是输入，不作准。
  */
 @Composable
@@ -45,13 +25,12 @@ fun LedgerTheme(
     content: @Composable () -> Unit,
 ) {
     val dark = preference.isDark(darkTheme)
-    val colorScheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        dark -> DarkColors
-        else -> LightColors
-    }
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    MaterialTheme(
+        colorScheme = if (dark) DarkColors else LightColors,
+        shapes = LedgerShapes,
+        content = content,
+    )
 }
+
+/** 气泡类浮层的圆角（趋势图 / 环形图共用）：走容器档，不各写一个魔数 */
+internal val TooltipShape = RoundedCornerShape(BRAND_SHAPE_CONTAINER_DP[0].dp)

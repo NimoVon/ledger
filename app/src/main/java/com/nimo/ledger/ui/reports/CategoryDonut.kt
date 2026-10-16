@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -35,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.stats.CategoryBreakdownRow
+import com.nimo.ledger.ui.theme.TooltipShape
 import com.nimo.ledger.util.Money
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -254,7 +254,7 @@ private fun DonutTooltip(row: CategoryBreakdownRow, onClick: () -> Unit) {
             .fillMaxWidth()
             .testTag(DONUT_TOOLTIP_TEST_TAG)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
+        shape = TooltipShape,
         color = MaterialTheme.colorScheme.surfaceVariant,
         shadowElevation = 4.dp,
     ) {
