@@ -1,4 +1,5 @@
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
 import java.util.Properties
 
@@ -140,7 +141,7 @@ dependencies {
     testImplementation(libs.androidx.room.testing)
 }
 
-// 覆盖率 spike：统计单元测试对 main 源码的行覆盖（临时接线，是否入库待定）
+// 覆盖率：统计单元测试对 main 源码的行覆盖（报告见 app/build/reports/jacoco/jacocoTestReport/）
 tasks.register<JacocoReport>("jacocoTestReport") {
     group = "verification"
     dependsOn("testDebugUnitTest")
@@ -157,4 +158,71 @@ tasks.register<JacocoReport>("jacocoTestReport") {
     )
     sourceDirectories.setFrom(files("src/main/java", "src/main/kotlin"))
     executionData.setFrom(layout.buildDirectory.file("jacoco/testDebugUnitTest.exec"))
+}
+
+// 覆盖率门禁（计划 8.1：核心逻辑覆盖率 80% 以上、domain/stats 100%）。
+// 阈值按实测值留余量，避开 ±4 行的运行抖动；低于阈值时构建失败并打印违规明细。
+tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
+    group = "verification"
+    description = "核心逻辑覆盖率门禁：低于阈值即构建失败"
+    dependsOn("testDebugUnitTest")
+    val appClasses = layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")
+    classDirectories.setFrom(
+        files(appClasses).asFileTree.matching {
+            exclude("**/R.class", "**/R$*.class", "**/BuildConfig.*", "**/*_Factory.*", "**/*_Impl.*")
+        }
+    )
+    sourceDirectories.setFrom(files("src/main/java", "src/main/kotlin"))
+    executionData.setFrom(layout.buildDirectory.file("jacoco/testDebugUnitTest.exec"))
+    violationRules {
+        // 金额/统计/筛选/校验：计划点名 100% 或 80% 以上，实测 100%，留 5 个点余量
+        rule {
+            element = "PACKAGE"
+            includes = listOf(
+                "com.nimo.ledger.domain.stats*",
+                "com.nimo.ledger.domain.validate*",
+                "com.nimo.ledger.domain.filter*",
+                "com.nimo.ledger.domain.model*",
+                "com.nimo.ledger.util*",
+            )
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.95".toBigDecimal()
+            }
+        }
+        // 备份/导入导出/仓库：实测 92.8% ~ 94.3%，下限 85%
+        rule {
+            element = "PACKAGE"
+            includes = listOf(
+                "com.nimo.ledger.domain.backup*",
+                "com.nimo.ledger.data.repository*",
+                "com.nimo.ledger.data.backup*",
+            )
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.85".toBigDecimal()
+            }
+        }
+        // DAO 与数据库约束：实测 89.8%，下限 85%
+        rule {
+            element = "PACKAGE"
+            includes = listOf("com.nimo.ledger.data.local.dao*")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.85".toBigDecimal()
+            }
+        }
+        // 总体下限：防止用低覆盖新代码稀释核心分层（实测 65.6%，下限 60%）
+        rule {
+            element = "BUNDLE"
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.60".toBigDecimal()
+            }
+        }
+    }
 }

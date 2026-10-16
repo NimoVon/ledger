@@ -60,10 +60,11 @@ cd /d/git/ledger
 ./gradlew.bat --console=plain jacocoTestReport       # 覆盖率报告（HTML/XML）
 ./gradlew.bat --console=plain lint                   # 静态检查
 # 一次跑全绿门禁：
-./gradlew.bat --console=plain testDebugUnitTest --rerun jacocoTestReport lint assembleDebug
+./gradlew.bat --console=plain testDebugUnitTest --rerun jacocoCoverageVerification lint assembleDebug
+# 覆盖率门禁：核心分层 LINE ≥ 85~95%、整体 ≥ 60%（阈值可拦人，见 docs/测试报告.md §3）
 ```
 
-最近一次门禁（2026-10-16，改名 + 换图标后的 `clean` 构建）：**62 套 562 例，0 失败 0 错误 0 跳过**；lint 6 项、0 error；
+最近一次门禁（2026-10-16，改名 + 换图标后的 `clean` 构建）：**63 套 563 例，0 失败 0 错误 0 跳过**；lint 6 项、0 error；
 `app/build/outputs/apk/debug/app-debug.apk` = 14,120,440 字节（13.5 MiB，计划上限 20MB）；
 签名 `app/build/outputs/apk/release/app-release.apk` = 10,004,821 字节（9.5 MiB），已装到测试机并实测冷启动 150 / 219 ms。
 详细数据见 [`docs/测试报告.md`](docs/测试报告.md)。
@@ -129,7 +130,7 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 
 | 文档 | 内容 |
 | --- | --- |
-| [`docs/测试报告.md`](docs/测试报告.md) | 门禁结果、562 例分布、JaCoCo 覆盖率、性能实测、打包体积、数据安全、未覆盖项 |
+| [`docs/测试报告.md`](docs/测试报告.md) | 门禁结果、563 例分布、真机 10,000 笔验收、JaCoCo 覆盖率、性能实测、打包体积、数据安全、未覆盖项 |
 | [`docs/F13-SQLCipher评估.md`](docs/F13-SQLCipher评估.md) | SQLCipher 兼容性/密钥恢复/迁移/体积评估与「不纳入」决策记录 |
 | [`docs/示例数据/README.md`](docs/示例数据/README.md) | 示例备份与 CSV 的格式约定、导入用法 |
 | [`docs/发布与签名.md`](docs/发布与签名.md) | 安装标识与版本规则、发布签名流程、密钥库备份与丢失后果 |
@@ -165,9 +166,9 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 
 - release 未启用 minify，混淆规则待补充（当前靠 debug/release 同源构建，无额外收缩）
 - 旧安装标识 `com.nimo.bookkeeping` 的包与本包（`com.nimo.ledger`）是两个应用，不能互相覆盖升级；旧包数据要迁移须先「导出 JSON」再在新包「导入 JSON（覆盖替换）」
-- 签名密钥库与口令只在本机，无异地备份；丢失后已安装的包无法覆盖升级
+- 签名密钥库与口令只在本机、不在版本库（`.gitignore`）；使用者已自行完成异地备份（2026-10-16 确认），仓库不保存备份
 - 测试机 MIUI 上 `adb install` 需要先开「开发者选项 → 通过 USB 安装」，否则报 `Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]`（屏幕无确认框）
 - 应用图标为自适应图标（浅蓝底 + 白狗）：前景 `drawable-nodpi/ic_launcher_foreground.png`、背景 `drawable/ic_launcher_background.xml`（`#79C9FC`）、单色层 `drawable-nodpi/ic_launcher_monochrome.png`；平面主图 [`docs/icon-512.png`](docs/icon-512.png)
 - 数据库仍为 v1，暂无 Migration 对象（v1→v2 迁移验证待有 v2 后进行）
-- 真机 1 万笔性能与 Android 8.0（API 26）真机兼容性尚未实测；覆盖率无门禁阈值
+- 真机 1 万笔性能已实测（2026-10-16：10,000 笔种子库冷启动 610 / 593 / 595 ms，页面汇总与库真值逐分一致；见 docs/测试报告.md §4.2）；Android 8.0（API 26）真机兼容性尚未实测
 - UI 屏幕层覆盖率偏低（SAF/系统对话框不可单测），详见 `docs/测试报告.md` §10
