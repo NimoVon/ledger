@@ -40,6 +40,13 @@ data class MonthlyTotal(
     val expenseCents: Long,
 )
 
+/** 逐日柱状图上的一个点（R2「本月」视图）：某一天的收支合计 */
+data class DailyTotal(
+    val date: LocalDate,
+    val incomeCents: Long,
+    val expenseCents: Long,
+)
+
 /**
  * 统计口径唯一实现（计划 3.4）。纯函数，不依赖 Android / Room / Context。
  * 任何页面显示的统计数字都必须来自这里，不允许另写一套首页算法。
@@ -178,6 +185,40 @@ object StatsCalculator {
                 month = ym,
                 incomeCents = income[ym] ?: 0L,
                 expenseCents = expense[ym] ?: 0L,
+            )
+        }
+    }
+
+    /**
+     * 逐日聚合（R2：统计页「本月」视图）。把 [records] 按天归档成 1..已过天数 的收支合计：
+     * 只输出已经过去的天（含今天），未来日期**不画也不补 0**——[elapsedDays] 为 0（未来月份）时返回空列表。
+     * 不属于 [month] 的记录、以及日期落在已过天数之后的记录（预设/脏数据）一律忽略。
+     * 只算 INCOME / EXPENSE：转账与余额调整永不进入（铁律 3），与 [summarize]/[monthlyTotals] 同一套白名单。
+     */
+    fun dailyTotals(
+        records: List<TransactionRecord>,
+        month: YearMonth,
+        today: LocalDate,
+    ): List<DailyTotal> {
+        val days = elapsedDays(month, today)
+        if (days <= 0) return emptyList()
+        val income = HashMap<Int, Long>()
+        val expense = HashMap<Int, Long>()
+        for (r in records) {
+            if (YearMonth.from(r.occurredOn) != month) continue
+            val day = r.occurredOn.dayOfMonth
+            if (day > days) continue
+            when (r.type) {
+                TransactionType.INCOME -> income[day] = (income[day] ?: 0L) + r.amountCents
+                TransactionType.EXPENSE -> expense[day] = (expense[day] ?: 0L) + r.amountCents
+                TransactionType.TRANSFER, TransactionType.BALANCE_ADJUST -> Unit
+            }
+        }
+        return (1..days).map { day ->
+            DailyTotal(
+                date = month.atDay(day),
+                incomeCents = income[day] ?: 0L,
+                expenseCents = expense[day] ?: 0L,
             )
         }
     }

@@ -64,8 +64,8 @@ cd /d/git/ledger
 # 覆盖率门禁：核心分层 LINE ≥ 85~95%、整体 ≥ 60%（阈值可拦人，见 docs/测试报告.md §3）
 ```
 
-最近一次门禁（2026-10-16，改名 + 换图标 + 批 A（R1 月份直选）后的 `clean` 构建）：**66 套 582 例，0 失败 0 错误 0 跳过**；lint 8 项、0 error；
-`app/build/outputs/apk/debug/app-debug.apk` = 14,136,824 字节（13.5 MiB，计划上限 20MB）；
+最近一次门禁（2026-10-16，改名 + 换图标 + 批 A（R1 月份直选 + R2 单月分析）后的 `clean` 构建）：**69 套 607 例，0 失败 0 错误 0 跳过**；lint 8 项、0 error；
+`app/build/outputs/apk/debug/app-debug.apk` = 14,169,592 字节（13.5 MiB，计划上限 20MB）；
 签名 `app/build/outputs/apk/release/app-release.apk` = 10,004,821 字节（9.5 MiB）；2026-10-16 已装到测试机，卸载后重装再验（14:18 `Success`），冷启动首次安装 150 / 219 ms、重装后 323 / 204 / 204 ms。
 详细数据见 [`docs/测试报告.md`](docs/测试报告.md)。
 
@@ -130,7 +130,7 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 
 | 文档 | 内容 |
 | --- | --- |
-| [`docs/测试报告.md`](docs/测试报告.md) | 门禁结果、582 例分布、真机 10,000 笔验收、JaCoCo 覆盖率、性能实测、打包体积、数据安全、未覆盖项 |
+| [`docs/测试报告.md`](docs/测试报告.md) | 门禁结果、607 例分布、真机 10,000 笔验收、JaCoCo 覆盖率、性能实测、打包体积、数据安全、未覆盖项 |
 | [`docs/F13-SQLCipher评估.md`](docs/F13-SQLCipher评估.md) | SQLCipher 兼容性/密钥恢复/迁移/体积评估与「不纳入」决策记录 |
 | [`docs/示例数据/README.md`](docs/示例数据/README.md) | 示例备份与 CSV 的格式约定、导入用法 |
 | [`docs/发布与签名.md`](docs/发布与签名.md) | 安装标识与版本规则、发布签名流程、密钥库备份与丢失后果 |

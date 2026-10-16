@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -35,7 +36,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * 趋势折线（F10）的界面行为：默认画近半年、点"全年"之后窗口真的变成 12 个月。
+ * 趋势区三段开关（附.1 R2）的界面行为：默认画"本月"的逐日柱、点"半年/全年"换成月度折线。
  * 画布本身用无障碍描述断言行数，避免依赖像素。
  */
 @RunWith(RobolectricTestRunner::class)
@@ -108,7 +109,7 @@ class TrendChartUiTest {
 
     /**
      * 折线图的描述现在带真实数字（F15）：按头一句 [trendHead] 做前缀匹配——
-     * 金额随数据变，测试不写死一串钱；窗口月数（6 / 12）仍是断言的重点。
+     * 金额随数据变，测试不写死一串钱；窗口月数（1 / 6 / 12）仍是断言的重点。
      */
     private fun trendNode(span: TrendSpan): SemanticsNodeInteraction =
         composeRule.onNode(hasContentDescription(trendHead(span), substring = true))
@@ -120,56 +121,81 @@ class TrendChartUiTest {
         }
     }
 
+    /** 逐日柱状图的根节点（本月视图） */
+    private fun dailyChart(): SemanticsNodeInteraction =
+        composeRule.onNode(hasTestTag(DAILY_CHART_TEST_TAG))
+
+    private fun awaitDailyChart() {
+        composeRule.awaitUntil {
+            composeRule.onAllNodes(hasTestTag(DAILY_CHART_TEST_TAG)).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun segment(span: TrendSpan): SemanticsNodeInteraction =
+        composeRule.onNode(hasClickAction() and hasText(span.label))
+
     @Test
-    fun chartStartsAtHalfAYear_andTheFullYearSwitchWidensIt() {
+    fun chartStartsAtTheCurrentMonth_thenTheSwitchesReshapeIt() {
         val month = seedInCurrentMonth()
         showReports()
 
+        // 默认"本月"：逐日柱状图，不是折线
+        awaitDailyChart()
+        dailyChart().performScrollTo().assertIsDisplayed()
+        segment(TrendSpan.MONTH).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("最高 ¥600.00").performScrollTo().assertIsDisplayed()
+        // 本月的横轴是"1日"这样的日子，而不是"10月"这样的月份
+        composeRule.onNodeWithText("1日").performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("${month.monthValue}月").assertCountEquals(0)
+
+        // 切"半年"：换成 6 个月的折线
+        segment(TrendSpan.HALF_YEAR).performScrollTo().performClick()
         awaitTrend(TrendSpan.HALF_YEAR)
         trendNode(TrendSpan.HALF_YEAR).performScrollTo().assertIsDisplayed()
-        // 图例 + 纵轴最高值（本月唯一一笔支出 ¥600.00）
-        composeRule.onNodeWithText("最高 ¥600.00").performScrollTo().assertIsDisplayed()
-        // 横轴最后一个月就是当前查看的月份
         composeRule.onNodeWithText("${month.monthValue}月").performScrollTo().assertIsDisplayed()
-        // 默认选中的是"半年"
-        composeRule.onNode(hasClickAction() and hasText(TrendSpan.HALF_YEAR.label)).performScrollTo().assertIsDisplayed()
 
-        composeRule.onNode(hasClickAction() and hasText(TrendSpan.FULL_YEAR.label)).performScrollTo().performClick()
-
+        // 切"全年"：12 个月
+        segment(TrendSpan.FULL_YEAR).performScrollTo().performClick()
         awaitTrend(TrendSpan.FULL_YEAR)
         trendNode(TrendSpan.FULL_YEAR).performScrollTo().assertIsDisplayed()
     }
 
     @Test
-    fun switchingBackToHalfAYear_shrinksTheWindowAgain() {
+    fun switchingBackToTheCurrentMonth_bringsTheDailyBarsBack() {
         seedInCurrentMonth()
         showReports()
 
-        awaitTrend(TrendSpan.HALF_YEAR)
-        composeRule.onNode(hasClickAction() and hasText(TrendSpan.FULL_YEAR.label)).performScrollTo().performClick()
+        awaitDailyChart()
+        segment(TrendSpan.FULL_YEAR).performScrollTo().performClick()
         awaitTrend(TrendSpan.FULL_YEAR)
 
-        composeRule.onNode(hasClickAction() and hasText(TrendSpan.HALF_YEAR.label)).performScrollTo().performClick()
-
+        segment(TrendSpan.HALF_YEAR).performScrollTo().performClick()
         awaitTrend(TrendSpan.HALF_YEAR)
         trendNode(TrendSpan.HALF_YEAR).performScrollTo().assertIsDisplayed()
+
+        segment(TrendSpan.MONTH).performScrollTo().performClick()
+        awaitDailyChart()
+        dailyChart().performScrollTo().assertIsDisplayed()
     }
 
-    /** 本月没记账、但窗口内有数据：趋势图不能被空状态挡掉（F10 的可达性） */
+    /** 本月没记账、但近 12 个月里有数据：趋势区仍然在，切一段就能看到（F10 的可达性） */
     @Test
-    fun anEmptyMonth_stillShowsTheTrend_whenTheWindowHasRecords() {
+    fun anEmptyMonth_stillLetsYouReachTheTrend_whenTheWindowHasRecords() {
         seedLastMonth()
         showReports()
 
         awaitText("本月还没有记录")
         composeRule.onNodeWithText("本月还没有记录").assertIsDisplayed()
+        // 默认"本月"没有已过天数的记录：不摆空图，但三段开关还在
+        composeRule.onNodeWithText("本月还没有收支记录。").performScrollTo().assertIsDisplayed()
+
+        segment(TrendSpan.HALF_YEAR).performScrollTo().performClick()
         awaitTrend(TrendSpan.HALF_YEAR)
-        trendNode(TrendSpan.HALF_YEAR)
-            .performScrollTo().assertIsDisplayed()
+        trendNode(TrendSpan.HALF_YEAR).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("最高 ¥600.00").performScrollTo().assertIsDisplayed()
     }
 
-    /** 整个窗口都没有记录：保持原来的纯空状态，不摆一张空图 */
+    /** 整个 12 个月窗口都没有记录：保持原来的纯空状态，不摆一张空图 */
     @Test
     fun anEmptyWindow_keepsThePlainEmptyState() {
         seedAccountOnly()
@@ -177,7 +203,7 @@ class TrendChartUiTest {
 
         awaitText("本月还没有记录")
         composeRule.onNodeWithText("本月还没有记录").assertIsDisplayed()
-        composeRule.onAllNodes(hasContentDescription(trendHead(TrendSpan.HALF_YEAR), substring = true))
-            .assertCountEquals(0)
+        composeRule.onAllNodes(hasContentDescription("收支趋势", substring = true)).assertCountEquals(0)
+        composeRule.onAllNodes(hasTestTag(DAILY_CHART_TEST_TAG)).assertCountEquals(0)
     }
 }

@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.domain.filter.TransactionFilter
+import com.nimo.ledger.domain.stats.BudgetStatus
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.ledger.ui.components.MonthSummaryBar
@@ -106,15 +107,8 @@ fun ReportsScreen(
                         modifier = Modifier.heightIn(min = 180.dp),
                     )
                 }
-                item(key = "trend-header") { SectionHeader("收支趋势", hint = "近半年 / 近全年") }
-                item(key = "trend") {
-                    TrendSection(
-                        span = state.trendSpan,
-                        points = state.trend,
-                        isLoading = state.isTrendLoading,
-                        onSpanChange = viewModel::setTrendSpan,
-                    )
-                }
+                item(key = "trend-header") { SectionHeader("收支趋势", hint = "本月 / 近半年 / 近全年") }
+                item(key = "trend") { TrendBlock(state = state, viewModel = viewModel) }
             }
 
             // 空状态按"本月"表述：切到没有记录的月份不该看起来像坏了
@@ -128,17 +122,10 @@ fun ReportsScreen(
                 modifier = contentModifier,
                 contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
             ) {
-                item(key = "daily") { DailyAverageRow(state.dailyAverageExpenseCents) }
-                item(key = "change") { ChangeSection(state) }
-                item(key = "trend-header") { SectionHeader("收支趋势", hint = "近半年 / 近全年") }
-                item(key = "trend") {
-                    TrendSection(
-                        span = state.trendSpan,
-                        points = state.trend,
-                        isLoading = state.isTrendLoading,
-                        onSpanChange = viewModel::setTrendSpan,
-                    )
-                }
+                item(key = "insight-header") { SectionHeader("本月洞察", hint = "日均 / 环比 / 预算") }
+                item(key = "insight") { InsightSection(state) }
+                item(key = "trend-header") { SectionHeader("收支趋势", hint = "本月 / 近半年 / 近全年") }
+                item(key = "trend") { TrendBlock(state = state, viewModel = viewModel) }
                 // 先给个总览：谁占了大头；具体数字看下面的排行（占比条用同一套颜色对号）
                 if (state.breakdown.isNotEmpty()) {
                     item(key = "donut-header") {
@@ -200,6 +187,40 @@ fun ReportsScreen(
             },
         )
     }
+
+    // R2：点了某一天的柱子 → 当日流水明细（行文/排序都来自 Repository 与 TransactionTimeline）
+    state.dayDetail?.let { detail ->
+        DayDetailDialog(state = detail, onDismiss = viewModel::clearSelectedDay)
+    }
+}
+
+/** 趋势区（F10 / R2）：三段开关 + 图；「本月」是逐日柱状，柱子可点开当天流水 */
+@Composable
+private fun TrendBlock(state: ReportsUiState, viewModel: ReportsViewModel) {
+    TrendSection(
+        span = state.trendSpan,
+        month = state.month,
+        points = state.trend,
+        daily = state.daily,
+        isLoading = state.isTrendLoading,
+        onSpanChange = viewModel::setTrendSpan,
+        onDayClick = viewModel::setSelectedDay,
+    )
+}
+
+/**
+ * 本月洞察（R2）：日均支出 + 支出/收入环比 + 预算达成率。
+ * 预算达成率只在设了总预算时出现——没设总预算时它没有分母，显示 0% 会误导。
+ */
+@Composable
+private fun InsightSection(state: ReportsUiState) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        DailyAverageRow(state.dailyAverageExpenseCents)
+        ChangeSection(state)
+        if (state.hasTotalBudget) {
+            BudgetRateRow(state)
+        }
+    }
 }
 
 /** 日均支出：一行。除法在 StatsCalculator，页面只负责显示 */
@@ -223,6 +244,48 @@ private fun DailyAverageRow(amountCents: Long) {
             fontWeight = FontWeight.Medium,
         )
     }
+}
+
+/**
+ * 预算达成率（计划附.1 R2）：本月支出 ÷ 总预算，比率由 BudgetCalculator 给出。
+ * 除了颜色还写了百分比数字，不只靠颜色区分"预警/超支"。
+ */
+@Composable
+private fun BudgetRateRow(state: ReportsUiState) {
+    val budget = state.totalBudgetCents ?: return
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "预算达成率",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = ReportFormatting.percent(state.budgetAchievementRatio),
+                style = MaterialTheme.typography.titleSmall,
+                color = budgetRateColor(state.budgetStatus),
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = "本月支出 ${Money.formatCurrency(state.summary.expenseCents)} / 总预算 ${Money.formatCurrency(budget)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun budgetRateColor(status: BudgetStatus): Color = when (status) {
+    BudgetStatus.OVER -> MaterialTheme.colorScheme.error
+    BudgetStatus.WARNING -> MaterialTheme.colorScheme.tertiary
+    BudgetStatus.OK, BudgetStatus.NONE -> MaterialTheme.colorScheme.onSurface
 }
 
 /** 环比：支出与收入各一格。上月为 0 时显示 "—"（计划 3.4） */

@@ -11,6 +11,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
+import java.io.IOException
 import java.time.LocalDate
 
 /**
@@ -92,11 +93,11 @@ class DeviceSeedGenerator {
         assertTrue("种子库未生成: " + source, source.exists())
         val outDir = File("build/device-seed").apply { mkdirs() }
         val target = File(outDir, "ledger10k.db")
-        source.copyTo(target, overwrite = true)
+        copyWithRetry(source, target)
         // WAL 若未在关闭时合并，一起复制，保证设备端拿到的是一致的一份库
         for (suffix in listOf("-wal", "-shm")) {
             val extra = File(source.path + suffix)
-            if (extra.exists()) extra.copyTo(File(target.path + suffix), overwrite = true)
+            if (extra.exists()) copyWithRetry(extra, File(target.path + suffix))
         }
 
         // 自检：复制出来的这份必须能被独立打开且行数正确（避免推上设备才发现是半截库）
@@ -109,5 +110,26 @@ class DeviceSeedGenerator {
         assertEquals(10_000L, rows)
         assertTrue("当月样本太少，压不出月报负载: " + inOctober, inOctober >= 900)
         println("DEVICE-SEED: file=" + target.absolutePath + " bytes=" + target.length() + " rows=" + rows + " octoberRows=" + inOctober)
+    }
+
+    /**
+     * 复制种子库产物。
+     *
+     * 带重试不是因为逻辑有问题：Windows 上刚写完的文件会被索引/杀软短暂持有，
+     * 2026-10-16 的门禁跑就因此抛出过一次 IOException（另一个程序已锁定文件的一部分），
+     * 把整条 testDebugUnitTest 打红；外部锁是瞬时的，隔 200ms 重试即可。
+     */
+    private fun copyWithRetry(source: File, target: File) {
+        var last: IOException? = null
+        repeat(5) { attempt ->
+            try {
+                source.copyTo(target, overwrite = true)
+                return
+            } catch (e: IOException) {
+                last = e
+                Thread.sleep(200L * (attempt + 1))
+            }
+        }
+        throw last ?: IOException("复制失败: " + source.path)
     }
 }

@@ -2,16 +2,22 @@ package com.nimo.ledger.ui.reports
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
@@ -31,15 +37,21 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nimo.ledger.domain.stats.DailyTotal
 import com.nimo.ledger.domain.stats.MonthlyTotal
 import com.nimo.ledger.util.Money
+import java.time.LocalDate
+import java.time.YearMonth
 
 /**
- * 趋势折线的跨度（F10）：半年 = 当前查看月份往前 5 个月，全年 = 往前 11 个月。
- * 窗口以统计页顶部选中的月份为终点，所以切月时折线跟着走。
+ * 趋势区的跨度（R2 三段：本月｜半年｜全年）。「本月」按天画柱状（只画已过天数），
+ * 半年 = 当前查看月份往前 5 个月，全年 = 往前 11 个月，按月份画折线。
+ * 窗口以统计页顶部选中的月份为终点，所以切月时图跟着走。
  */
 enum class TrendSpan(val months: Int, val label: String) {
+    MONTH(1, "本月"),
     HALF_YEAR(6, "半年"),
     FULL_YEAR(12, "全年"),
 }
@@ -49,8 +61,30 @@ private val CHART_HEIGHT = 160.dp
 
 internal const val TREND_CHART_TEST_TAG = "report-trend-chart"
 
-/** 折线图的头一句（切到全年之后必须变成 12 个月）：读屏听到的是带数字的整句，测试用前缀匹配 */
-internal fun trendHead(span: TrendSpan): String = "近${span.months}个月收支趋势"
+/** 逐日柱状图的 testTag（R2「本月」视图） */
+internal const val DAILY_CHART_TEST_TAG = "report-daily-chart"
+
+/** 图表的头一句（切到全年之后必须变成 12 个月）：读屏听到的是带数字的整句，测试用前缀匹配 */
+internal fun trendHead(span: TrendSpan): String =
+    if (span == TrendSpan.MONTH) "本月收支趋势" else "近${span.months}个月收支趋势"
+
+/**
+ * 逐日柱状图的无障碍描述（R2）：窗口天数（= 已过天数）与该窗口的收支合计。
+ * 数字全部来自 StatsCalculator.dailyTotals，页面一个数都不自己算。
+ */
+internal fun dailyDescription(daily: List<DailyTotal>, month: YearMonth): String {
+    val head = "${month.year}年${month.monthValue}月逐日收支"
+    if (daily.isEmpty()) return "$head：暂无数据"
+    val income = daily.sumOf { it.incomeCents }
+    val expense = daily.sumOf { it.expenseCents }
+    return "$head，共 ${daily.size} 天：收入 ${Money.formatCurrency(income)}，支出 ${Money.formatCurrency(expense)}"
+}
+
+/** 单根柱子（一天）的无障碍描述，同时也是它的点击目标说明 */
+internal fun dayDescription(total: DailyTotal): String {
+    val label = "${total.date.monthValue}月${total.date.dayOfMonth}日"
+    return "$label：支出 ${Money.formatCurrency(total.expenseCents)}，收入 ${Money.formatCurrency(total.incomeCents)}"
+}
 
 /**
  * 无障碍描述：只说"近半年收支趋势"读屏用户拿不到任何数据，所以把窗口里的钱读出来——
@@ -69,22 +103,28 @@ internal fun trendDescription(points: List<MonthlyTotal>, span: TrendSpan): Stri
 }
 
 /**
- * 收支趋势（F10）：近半年 / 近全年的按月收入、支出折线。
+ * 收支趋势（F10 / R2）：三段「本月｜半年｜全年」。本月按天画柱状（柱子可点开当日流水），
+ * 半年/全年按月份画折线。
  *
- * 图表用 Compose Canvas 自绘（计划 240 行：先自绘，暂不引图表库）：
- * 横轴是月份、纵轴是金额，两条折线——支出与收入。所有数字来自 StatsCalculator.monthlyTotals，
- * 页面一个数都不自己算（铁律 3）。
+ * 图表用 Compose 自绘（计划 240 行：先自绘，暂不引图表库）：横轴是日期/月份、纵轴是金额。
+ * 所有数字来自 StatsCalculator.dailyTotals / monthlyTotals，页面一个数都不自己算（铁律 3）。
  *
  * @param span 当前选中的跨度（点了就生效，即使数据还在读）
- * @param points 升序的按月合计；[isLoading] 为 true 时这里是空列表
+ * @param month 顶部选中的月份：「本月」视图的柱子属于它
+ * @param points 升序的按月合计（切到「本月」时只有当前月一个点）
+ * @param daily 升序的逐日合计，只含已过去的天（含今天），未来日期不在里面
  * @param isLoading 数据没到位：显示占位，绝不拿上一段的数字画这一段的图
+ * @param onDayClick 点了某一天的柱子：打开当天流水明细
  */
 @Composable
 internal fun TrendSection(
     span: TrendSpan,
+    month: YearMonth,
     points: List<MonthlyTotal>,
+    daily: List<DailyTotal>,
     isLoading: Boolean,
     onSpanChange: (TrendSpan) -> Unit,
+    onDayClick: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -106,30 +146,159 @@ internal fun TrendSection(
         }
         Spacer(modifier = Modifier.height(10.dp))
 
-        val maxCents = points.maxOfOrNull { maxOf(it.incomeCents, it.expenseCents) } ?: 0L
-        when {
-            isLoading -> Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(CHART_HEIGHT),
-                contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator(modifier = Modifier.size(24.dp)) }
+        if (span == TrendSpan.MONTH) {
+            DailySection(daily = daily, month = month, isLoading = isLoading, onDayClick = onDayClick)
+        } else {
+            MonthlySection(points = points, span = span, isLoading = isLoading)
+        }
+    }
+}
 
-            // 一段时间里一笔收支都没有：给一句话，而不是一条贴着 0 的直线
-            maxCents <= 0L -> Text(
-                text = "近${span.months}个月还没有收支记录。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
+/** 「本月」视图：逐日柱状，只画已过去的天数（未来日期不画） */
+@Composable
+private fun DailySection(
+    daily: List<DailyTotal>,
+    month: YearMonth,
+    isLoading: Boolean,
+    onDayClick: (LocalDate) -> Unit,
+) {
+    val maxCents = daily.maxOfOrNull { maxOf(it.incomeCents, it.expenseCents) } ?: 0L
+    when {
+        isLoading -> ChartPlaceholder()
+        maxCents <= 0L -> EmptyChartText("本月还没有收支记录。")
+        else -> {
+            TrendLegend(maxCents)
+            Spacer(modifier = Modifier.height(8.dp))
+            DailyBars(daily = daily, month = month, maxCents = maxCents, onDayClick = onDayClick)
+            Spacer(modifier = Modifier.height(6.dp))
+            DayLabels(daily = daily)
+        }
+    }
+}
 
-            else -> {
-                TrendLegend(maxCents)
-                Spacer(modifier = Modifier.height(8.dp))
-                TrendCanvas(points = points, maxCents = maxCents, span = span)
-                Spacer(modifier = Modifier.height(6.dp))
-                MonthLabels(points = points, span = span)
+/** 半年 / 全年视图：按月折线 */
+@Composable
+private fun MonthlySection(points: List<MonthlyTotal>, span: TrendSpan, isLoading: Boolean) {
+    val maxCents = points.maxOfOrNull { maxOf(it.incomeCents, it.expenseCents) } ?: 0L
+    when {
+        isLoading -> ChartPlaceholder()
+        // 一段时间里一笔收支都没有：给一句话，而不是一条贴着 0 的直线
+        maxCents <= 0L -> EmptyChartText("近${span.months}个月还没有收支记录。")
+        else -> {
+            TrendLegend(maxCents)
+            Spacer(modifier = Modifier.height(8.dp))
+            TrendCanvas(points = points, maxCents = maxCents, span = span)
+            Spacer(modifier = Modifier.height(6.dp))
+            MonthLabels(points = points, span = span)
+        }
+    }
+}
+
+/** 加载占位：与图表同高，避免数据到位时页面跳动 */
+@Composable
+private fun ChartPlaceholder() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(CHART_HEIGHT),
+        contentAlignment = Alignment.Center,
+    ) { CircularProgressIndicator(modifier = Modifier.size(24.dp)) }
+}
+
+@Composable
+private fun EmptyChartText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = 8.dp),
+    )
+}
+
+/**
+ * 逐日柱状图（R2）：一天两根柱子（支出在前、收入在后），高度按当天金额占纵轴上界的比例。
+ *
+ * 特意用可点击的 Box 而不是 Canvas 画：Canvas 里的每一根柱子对无障碍和测试都是不可区分的，
+ * 而「点某一天的柱子看当日流水」要求每一天都是独立的可点目标。金额全程 Long，
+ * 比例只在布局时用 Float。
+ */
+@Composable
+private fun DailyBars(
+    daily: List<DailyTotal>,
+    month: YearMonth,
+    maxCents: Long,
+    onDayClick: (LocalDate) -> Unit,
+) {
+    val expenseColor = MaterialTheme.colorScheme.error
+    val incomeColor = MaterialTheme.colorScheme.primary
+    val top = niceCeiling(maxCents)
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(CHART_HEIGHT)
+            .testTag(DAILY_CHART_TEST_TAG)
+            .semantics { contentDescription = dailyDescription(daily, month) },
+    ) {
+        val available = maxHeight
+        Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
+            daily.forEach { total ->
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onDayClick(total.date) }
+                        .semantics(mergeDescendants = true) { contentDescription = dayDescription(total) },
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
+                    DailyBar(
+                        cents = total.expenseCents,
+                        top = top,
+                        available = available,
+                        color = expenseColor,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DailyBar(
+                        cents = total.incomeCents,
+                        top = top,
+                        available = available,
+                        color = incomeColor,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
+        }
+    }
+}
+
+/** 一根柱子：高度 = 上界可用高度 × 金额比例；有金额但比例太小时至少留 2dp，否则等于没画 */
+@Composable
+private fun DailyBar(cents: Long, top: Long, available: Dp, color: Color, modifier: Modifier = Modifier) {
+    val fraction = if (top <= 0L) 0f else (cents.toDouble() / top).coerceIn(0.0, 1.0).toFloat()
+    val barHeight = if (cents <= 0L) 0.dp else (available * fraction).coerceAtLeast(2.dp)
+    Box(
+        modifier = modifier
+            .height(barHeight)
+            .background(color = color, shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp)),
+    )
+}
+
+/** 横轴日期：格子一样宽，放不下时只标 1 号、5 的倍数与最后一天 */
+@Composable
+private fun DayLabels(daily: List<DailyTotal>) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        daily.forEachIndexed { index, total ->
+            val day = total.date.dayOfMonth
+            val label = if (index == 0 || index == daily.lastIndex || day % 5 == 0) "${day}日" else ""
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }

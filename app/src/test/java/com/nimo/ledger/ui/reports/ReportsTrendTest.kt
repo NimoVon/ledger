@@ -29,7 +29,10 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * 趋势折线（F10）的取数与窗口：默认半年、切全年、切月跟着走，以及"绝不拿上一段的数据画这一段的图"。
+ * 趋势区三段开关（附.1 R2）：默认"本月"、切半年/全年只是换画法，折线窗口始终跟着"正在看的月份"走。
+ *
+ * R2 起趋势查询固定取近 12 个月，跨度只做视图切片——所以每一帧里
+ * "选中的跨度"和"折线点数"必须对得上（下面最后那个逐帧不变量测试盯着这件事）。
  * 走真实 Repository + in-memory Room，验证端到端行为。
  */
 @RunWith(RobolectricTestRunner::class)
@@ -110,26 +113,25 @@ class ReportsTrendTest {
 
     private fun newViewModel() = ReportsViewModel(repository, today = { today })
 
-    private suspend fun ReportsViewModel.awaitTrend(span: TrendSpan = TrendSpan.HALF_YEAR): ReportsUiState =
+    private suspend fun ReportsViewModel.awaitTrend(span: TrendSpan = TrendSpan.MONTH): ReportsUiState =
         uiState.first { !it.isLoading && !it.isTrendLoading && it.trendSpan == span }
 
     @Test
-    fun defaultSpan_isHalfAYearEndingAtTheViewedMonth() = runTest {
+    fun defaultSpan_isTheViewedMonth_andTheTrendIsJustThatMonth() = runTest {
         seed()
         addExpense(1_000L, "2026-10-05")
         addIncome(50_000L, "2026-10-10")
         addExpense(2_000L, "2026-09-05")
-        addExpense(9_999L, "2026-04-30") // 半年窗口之外：2026-05 ~ 2026-10 里看不到它
+        addExpense(9_999L, "2026-04-30")
 
         val state = newViewModel().awaitTrend()
 
-        assertEquals(TrendSpan.HALF_YEAR, state.trendSpan)
-        assertEquals(
-            listOf(YearMonth.of(2026, 5), YearMonth.of(2026, 6), YearMonth.of(2026, 7), YearMonth.of(2026, 8), YearMonth.of(2026, 9), YearMonth.of(2026, 10)),
-            state.trend.map { it.month },
-        )
-        assertEquals(listOf(0L, 0L, 0L, 0L, 2_000L, 1_000L), state.trend.map { it.expenseCents })
-        assertEquals(listOf(0L, 0L, 0L, 0L, 0L, 50_000L), state.trend.map { it.incomeCents })
+        // 默认"本月"（附.1 R2）
+        assertEquals(TrendSpan.MONTH, state.trendSpan)
+        assertEquals(1, state.trend.size)
+        assertEquals(YearMonth.of(2026, 10), state.trend.single().month)
+        assertEquals(1_000L, state.trend.single().expenseCents)
+        assertEquals(50_000L, state.trend.single().incomeCents)
         // 折线的最后一个月必须和标题上的月份一致，且合计与月报摘要同口径
         assertEquals(state.month, state.trend.last().month)
         assertEquals(state.summary.expenseCents, state.trend.last().expenseCents)
@@ -137,15 +139,24 @@ class ReportsTrendTest {
     }
 
     @Test
-    fun switchingToFullYear_bringsOlderMonthsIn() = runTest {
+    fun switchingToHalfAYearAndFullYear_bringsOlderMonthsIn() = runTest {
         seed()
         addExpense(7_000L, "2025-11-20") // 只在全年窗口里
+        addExpense(2_000L, "2026-09-05") // 只在半年/全年窗口里
         addExpense(1_000L, "2026-10-05")
 
         val viewModel = newViewModel()
-        val half = viewModel.awaitTrend()
-        assertEquals(6, half.trend.size)
-        assertTrue(half.trend.none { it.month == YearMonth.of(2025, 11) })
+        val month = viewModel.awaitTrend()
+        assertEquals(1, month.trend.size)
+        assertEquals(YearMonth.of(2026, 10), month.trend.single().month)
+
+        viewModel.setTrendSpan(TrendSpan.HALF_YEAR)
+        val half = viewModel.awaitTrend(TrendSpan.HALF_YEAR)
+        assertEquals(
+            listOf(YearMonth.of(2026, 5), YearMonth.of(2026, 6), YearMonth.of(2026, 7), YearMonth.of(2026, 8), YearMonth.of(2026, 9), YearMonth.of(2026, 10)),
+            half.trend.map { it.month },
+        )
+        assertEquals(listOf(0L, 0L, 0L, 0L, 2_000L, 1_000L), half.trend.map { it.expenseCents })
 
         viewModel.setTrendSpan(TrendSpan.FULL_YEAR)
         val full = viewModel.awaitTrend(TrendSpan.FULL_YEAR)
@@ -158,7 +169,7 @@ class ReportsTrendTest {
     }
 
     @Test
-    fun switchingBack_returnsToSixMonths() = runTest {
+    fun switchingBack_returnsToTheViewedMonth() = runTest {
         seed()
         addExpense(1_000L, "2026-10-05")
 
@@ -168,10 +179,14 @@ class ReportsTrendTest {
         viewModel.awaitTrend(TrendSpan.FULL_YEAR)
 
         viewModel.setTrendSpan(TrendSpan.HALF_YEAR)
-        val back = viewModel.awaitTrend()
+        val half = viewModel.awaitTrend(TrendSpan.HALF_YEAR)
+        assertEquals(6, half.trend.size)
+        assertEquals(YearMonth.of(2026, 5), half.trend.first().month)
 
-        assertEquals(6, back.trend.size)
-        assertEquals(YearMonth.of(2026, 5), back.trend.first().month)
+        viewModel.setTrendSpan(TrendSpan.MONTH)
+        val back = viewModel.awaitTrend()
+        assertEquals(1, back.trend.size)
+        assertEquals(YearMonth.of(2026, 10), back.trend.single().month)
     }
 
     @Test
@@ -182,13 +197,21 @@ class ReportsTrendTest {
         val viewModel = newViewModel()
         viewModel.awaitTrend()
         viewModel.showPreviousMonth()
-        val september = viewModel.uiState.first { it.month == YearMonth.of(2026, 9) && !it.isTrendLoading }
+        val september = viewModel.awaitTrend()
 
+        assertEquals(YearMonth.of(2026, 9), september.month)
+        assertEquals(1, september.trend.size)
+        assertEquals(YearMonth.of(2026, 9), september.trend.single().month)
+        assertEquals(1_000L, september.trend.single().expenseCents)
+
+        // 切到半年：窗口整体左移，仍然以"正在看的月份"收尾
+        viewModel.setTrendSpan(TrendSpan.HALF_YEAR)
+        val half = viewModel.awaitTrend(TrendSpan.HALF_YEAR)
         assertEquals(
             listOf(YearMonth.of(2026, 4), YearMonth.of(2026, 5), YearMonth.of(2026, 6), YearMonth.of(2026, 7), YearMonth.of(2026, 8), YearMonth.of(2026, 9)),
-            september.trend.map { it.month },
+            half.trend.map { it.month },
         )
-        assertEquals(1_000L, september.trend.last().expenseCents)
+        assertEquals(1_000L, half.trend.last().expenseCents)
     }
 
     @Test
@@ -197,15 +220,25 @@ class ReportsTrendTest {
         addExpense(1_000L, "2026-10-05")
         addTransfer(500_000L, "2026-09-09")
 
-        val state = newViewModel().awaitTrend()
+        val viewModel = newViewModel()
+        val month = viewModel.awaitTrend()
 
-        assertEquals(listOf(0L, 0L, 0L, 0L, 0L, 1_000L), state.trend.map { it.expenseCents })
-        assertTrue(state.trend.all { it.incomeCents == 0L })
+        assertEquals(1_000L, month.trend.single().expenseCents)
+        assertTrue(month.trend.single().incomeCents == 0L)
+
+        viewModel.setTrendSpan(TrendSpan.FULL_YEAR)
+        val full = viewModel.awaitTrend(TrendSpan.FULL_YEAR)
+
+        // 整段窗口里的支出只有那 ¥10.00，转账一分都没进来
+        assertEquals(1_000L, full.trend.sumOf { it.expenseCents })
+        assertTrue(full.trend.all { it.incomeCents == 0L })
     }
 
     /**
      * 蓝军自检的那个坑：开关切到全年时，如果先更新开关、后拿到数据，
      * 中途会出现"标着全年、画的是半年"的状态。逐帧检查不变量。
+     *
+     * R2 起趋势查询固定 12 个月、跨度只切片，所以这条不变量应当从第一帧就成立。
      */
     @Test
     fun everyEmittedState_keepsTrendSpanAndTrendLengthConsistent() = runTest {
@@ -219,6 +252,8 @@ class ReportsTrendTest {
             viewModel.awaitTrend()
             viewModel.setTrendSpan(TrendSpan.FULL_YEAR)
             viewModel.awaitTrend(TrendSpan.FULL_YEAR)
+            viewModel.setTrendSpan(TrendSpan.MONTH)
+            viewModel.awaitTrend()
         } finally {
             job.cancelAndJoin()
         }
@@ -232,6 +267,10 @@ class ReportsTrendTest {
                     state.trend.size,
                 )
                 assertEquals(state.month, state.trend.last().month)
+                // 本月视图的柱子根数必须等于"已经过去的天数"，未来日期不补 0
+                if (state.trendSpan == TrendSpan.MONTH) {
+                    assertEquals(state.elapsedDays, state.daily.size)
+                }
             }
         }
     }
