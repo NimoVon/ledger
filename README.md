@@ -66,7 +66,7 @@ cd /d/git/ledger
 
 最近一次门禁（2026-10-16，改名 + 换图标后的 `clean` 构建）：**63 套 563 例，0 失败 0 错误 0 跳过**；lint 6 项、0 error；
 `app/build/outputs/apk/debug/app-debug.apk` = 14,120,440 字节（13.5 MiB，计划上限 20MB）；
-签名 `app/build/outputs/apk/release/app-release.apk` = 10,004,821 字节（9.5 MiB），已装到测试机并实测冷启动 150 / 219 ms。
+签名 `app/build/outputs/apk/release/app-release.apk` = 10,004,821 字节（9.5 MiB）；2026-10-16 已装到测试机，卸载后重装再验（14:18 `Success`），冷启动首次安装 150 / 219 ms、重装后 323 / 204 / 204 ms。
 详细数据见 [`docs/测试报告.md`](docs/测试报告.md)。
 
 首次执行 `gradlew.bat` 会下载一次 Gradle 发行包（约 140MB）。
@@ -160,14 +160,14 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 - [x] 阶段 4：预算、图表、深色模式、余额校准
 - [x] 阶段 5：性能实测、无障碍打磨、隐私权限审计、测试报告、示例数据
 - [x] 签名 release APK：`keystore/ledger-release.jks`（已 `.gitignore`）→ `assembleRelease` → `apksigner` 验签通过；流程见 [`docs/发布与签名.md`](docs/发布与签名.md)
-- [x] 签名包真机验证（2026-10-16）：装到测试机（`firstInstallTime 2026-10-16 10:20:18`、`versionName 1.0`、签名 v2），冷启动 219 / 150 ms，「应用信息」页显示新图标，启动日志无 `FATAL EXCEPTION`
+- [x] 签名包真机验证（2026-10-16）：装到测试机（`firstInstallTime 2026-10-16 10:20:18`、`versionName 1.0`、签名 v2），冷启动 219 / 150 ms，「应用信息」页显示新图标，启动日志无 `FATAL EXCEPTION`；14:18 卸载后重装 `Success`、冷启动 323 / 204 / 204 ms、首启播种默认分类可见
 
 ## 已知限制
 
 - release 未启用 minify，混淆规则待补充（当前靠 debug/release 同源构建，无额外收缩）
 - 旧安装标识 `com.nimo.bookkeeping` 的包与本包（`com.nimo.ledger`）是两个应用，不能互相覆盖升级；旧包数据要迁移须先「导出 JSON」再在新包「导入 JSON（覆盖替换）」
 - 签名密钥库与口令只在本机、不在版本库（`.gitignore`）；使用者已自行完成异地备份（2026-10-16 确认），仓库不保存备份
-- 测试机 MIUI 上 `adb install` 需要先开「开发者选项 → 通过 USB 安装」，否则报 `Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]`（屏幕无确认框）
+- 测试机 MIUI 上 `adb install` 需要先开「开发者选项 → 通过 USB 安装」，否则报 `Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]`（屏幕无确认框）；2026-10-16 14:18 开启该开关后重装 `Success`，验证通过
 - 应用图标为自适应图标（浅蓝底 + 白狗）：前景 `drawable-nodpi/ic_launcher_foreground.png`、背景 `drawable/ic_launcher_background.xml`（`#79C9FC`）、单色层 `drawable-nodpi/ic_launcher_monochrome.png`；平面主图 [`docs/icon-512.png`](docs/icon-512.png)
 - 数据库仍为 v1，暂无 Migration 对象（v1→v2 迁移验证待有 v2 后进行）
 - 真机 1 万笔性能已实测（2026-10-16：10,000 笔种子库冷启动 610 / 593 / 595 ms，页面汇总与库真值逐分一致；见 docs/测试报告.md §4.2）；Android 8.0（API 26）真机兼容性尚未实测
