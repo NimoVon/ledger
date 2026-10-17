@@ -524,7 +524,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 └─ 二级页（自绘 TopAppBar + 返回）：
    ├─ 设置 → 账户管理 accounts / 分类管理 categories / 预算管理 budgets
    ├─ 明细行 → record?txId= 或 transfer?txId=（编辑既有流水）
-   └─ 统计下钻 → transactions + TransactionFilter（DRILL_DOWN）
+   └─ 统计下钻 → transactions/drill（压在统计页之上的一层，系统返回回统计页；筛选条件经 DrillDownRequests 单次脉冲传入）
 ```
 
 **结论：IA 结构是对的，不需要重排。** 三个 Tab 覆盖「看 / 分析 / 配」，FAB 覆盖「记」，二级页覆盖「管」——与开发计划 F01–F15 一一对应，且「冷启动到保存一笔 ≤ 3 次点击 + 一次金额输入」已由 FAB → record → 保存满足。
@@ -540,8 +540,20 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 ### 7.3 IA 层面的 3 个建议（都不是新增页面）
 
 1. **账户页/分类页的 FAB 与宿主 FAB 撞名（P0）**：宿主 LedgerApp 的 FAB 是「记一笔」，AccountsScreen 与 CategoriesScreen 各自的 ExtendedFAB 是「新建账户 / 新建分类」。语义不同却同款视觉，且 docs/测试报告.md §8 已记录「朗读与对话框标题同串、无法分离」。方案见 A-1 / C-1 / AA-1。
-2. **统计页下钻返回要保留滚动位置（P1）**：点环形图 → 明细 → 返回，统计页应停在原位置而非回到顶部。需要把 rememberLazyListState 挂到 ViewModel 或改用 rememberSaveable。**现状未验证**，需先确认再改。
+2. ~~**统计页下钻返回要保留滚动位置（P1）**~~：点环形图/排行行 → 明细 → 返回，统计页应停在原位置而非回到顶部。**2026-10-17 已实现并真机验证**：下钻改为压在统计页之上的 `transactions/drill` 目的地（不再 `popUpTo`），返回时统计页的 `LazyListState` 由 Compose 保留，真机走查从「支出排行」位置进入、返回后仍停在排行榜而不是回到顶部（见 `docs/测试报告.md` §19.4 第 2 项）。
 3. **设置页三行内联入口 → 子页卡片（P1）**：账户管理/分类管理/预算管理现在是一行文字加箭头字符。改成 LedgerListItem（chevron = true），右侧补一行副标题（账户数 / 分类数 / 本月是否已设总预算），让用户进子页前就看见状态。**是否需要计数取决于 repository 有无现成 count 查询，标待确认，不默认实施。**
+
+### 7.4 转场（2026-10-17 已实装，`ui/LedgerNavMotion.kt`）
+
+| 场景 | 动效 | 参数 |
+| --- | --- | --- |
+| 底栏 Tab 之间（明细 ↔ 统计 ↔ 设置） | `FADE` | 进入 220 ms / 退出 180 ms |
+| 层级进入（Tab / 设置页 → 二级页，含统计下钻） | `SLIDE_HORIZONTAL`（从右进） | 位移 1/4 屏 |
+| 层级返回（二级页 → 上一级） | `SLIDE_HORIZONTAL`（反向） | 位移 1/4 屏 |
+| 表单打开（任何页 → 记一笔 / 转账） | `SLIDE_VERTICAL`（自下而上） | 位移 1/3 屏 |
+| 表单返回（含从下钻页打开编辑页再返回） | `SLIDE_VERTICAL`（下落） | 位移 1/3 屏 |
+
+判据只有一处：`navMotionOf(initialRoute, targetRoute, isPop)`——pop 时先看 `initialRoute` 是否是表单（是就 `SLIDE_VERTICAL`，不因为下层是二级页而改成横向），其余按 `PageKind { TAB, DETAIL, FORM }` 决定。缓动统一 `FastOutSlowInEasing`，**不要**在调用点另写 `tween` 时长。已知缺口：未接 Android 14 预测式返回、未读系统「减少动画」（AA-7 / 批 F 的 F-4），无拖拽返回手势。
 
 ---
 
@@ -832,7 +844,7 @@ cd /d/git/ledger
 | F-1 | 补 13 个 LedgerIcons（§5.1），替换「›」与「↑↓」字符 | 图标在 24dp / 20dp / 16dp 三档清晰（截图） |
 | F-2 | fontScale ≥1.5 三处竖排（G-6） | `qualifiers = "w411dp-h891dp-xxhdpi"` + fontScale 1.5 / 2.0 截图 |
 | F-3 | 分类预设 emoji 网格（C-6） | 对话框 UI 测试 |
-| F-4 | 「减少动画」偏好（AA-7） | 手动验证 |
+| F-4 | 「减少动画」偏好（AA-7） | 手动验证；§7.4 的转场目前未读这个偏好（见 `docs/测试报告.md` §19.6） |
 
 ### 批 P3：待拍板项（不默认做）
 
@@ -889,6 +901,6 @@ cd /d/git/ledger
 
 **UI 设计师**：DSH UI 设计师 Agent
 **设计系统日期**：2026-10-16
-**实施状态**：§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E / 批 F 待排期
+**实施状态（2026-10-17）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E / 批 F 待排期
 **QA 流程**：批 D/E/F 每批结束跑 testDebugUnitTest --rerun + lint + assembleDebug，并为新组件补截图断言
 
