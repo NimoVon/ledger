@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.nimo.ledger.data.local.LastUsedCategory
+import com.nimo.ledger.data.local.LastUsedCategoryStore
 import com.nimo.ledger.data.local.entity.AccountEntity
 import com.nimo.ledger.data.local.entity.CategoryEntity
 import com.nimo.ledger.data.local.entity.TransactionEntity
@@ -16,6 +18,7 @@ import com.nimo.ledger.domain.validate.TxValidationError
 import com.nimo.ledger.domain.validate.TxValidationException
 import com.nimo.ledger.ui.categories.toCategoryMessage
 import com.nimo.ledger.util.Money
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -83,6 +86,11 @@ data class RecordUiState(
     val categoryCreateErrorMessage: String? = null,
     /** 刚建好并已自动选中的分类 id（非空 = 页面关掉新建对话框） */
     val createdCategoryId: Long? = null,
+    /**
+     * 预选了「上次用过的分类」时的一句话说明（「2 天前用过「餐饮」」），用户改选别项就消失。
+     * 没有历史、或那个分类已停用，这里是 null——宁可不提示，也不提示一个存不进去的分类。
+     */
+    val lastUsedCategoryHint: String? = null,
 ) {
     /**
      * 一个可用账户都没有：引导用户先去建账户，而不是给一张空白表单。
@@ -149,6 +157,15 @@ private data class EditingOriginals(
     val category: CategoryEntity? = null,
 )
 
+/** 攒在一起的小状态：删除请求 + 「沿用上次分类」的预选结果（combine 最多 5 个参数，不能各占一个） */
+private data class ExtraState(
+    val deleteRequested: TransactionEntity? = null,
+    val autoSelected: AutoSelectedCategory? = null,
+)
+
+/** 预选结果：categoryId 用来判断「用户是不是还选着它」，hint 是那句「N 天前用过」 */
+private data class AutoSelectedCategory(val categoryId: Long, val hint: String)
+
 /**
  * 记一笔 / 改一笔（F03，仅支出/收入）。
  *
@@ -160,6 +177,11 @@ private data class EditingOriginals(
 class RecordViewModel(
     private val repository: LedgerRepository,
     private val editingId: Long? = null,
+    /**
+     * 上次用过的分类（附.1 R4-P3，用户批准的产品决定）。
+     * null = 不预选：单测默认走这条路，编辑模式也不需要——那一笔的分类来自它自己。
+     */
+    private val lastUsedCategoryStore: LastUsedCategoryStore? = null,
 ) : ViewModel() {
 
     private val form = MutableStateFlow(RecordForm())
@@ -181,6 +203,12 @@ class RecordViewModel(
 
     /** 删除入口的一次性信号 */
     private val deleteRequest = MutableStateFlow<TransactionEntity?>(null)
+
+    /** 上次用过的分类：读到后先存着，等当前方向的分类列表到位再决定要不要预选 */
+    private val pendingLastUsed = MutableStateFlow<LastUsedCategory?>(null)
+
+    /** 预选成功的分类 + 提示文案：提示只在用户还选着这一项时显示 */
+    private val autoSelected = MutableStateFlow<AutoSelectedCategory?>(null)
 
     init {
         viewModelScope.launch {
@@ -226,6 +254,30 @@ class RecordViewModel(
                         .collect { categories.value = it }
                 }
         }
+        viewModelScope.launch {
+            // 编辑模式不预选：表单内容来自那一笔，别拿"上次用过"去覆盖历史
+            if (editingId != null) return@launch
+            val store = lastUsedCategoryStore ?: return@launch
+            pendingLastUsed.value = runCatching { store.load() }.getOrNull() ?: return@launch
+        }
+        viewModelScope.launch {
+            // 分类列表到位后预选一次：那个分类已停用/删除就什么都不做，也别留半句提示
+            combine(categories, form) { list, currentForm -> list to currentForm }
+                .collect { (categoryList, currentForm) ->
+                    val pending = pendingLastUsed.value ?: return@collect
+                    if (categoryList == null || currentForm.categoryId != null) return@collect
+                    pendingLastUsed.value = null
+                    val hit = categoryList.firstOrNull { it.id == pending.categoryId }
+                        ?: return@collect
+                    // 先记提示再改表单：两次改动会各推一次 state，
+                    // 反过来写的话"分类已选中但提示还空着"那一帧会被用户看见
+                    autoSelected.value = AutoSelectedCategory(
+                        categoryId = hit.id,
+                        hint = lastUsedHint(pending.usedOnEpochDay, hit.name),
+                    )
+                    updateForm { it.copy(categoryId = hit.id) }
+                }
+        }
     }
 
     private val load: Flow<LoadState> = combine(
@@ -244,13 +296,17 @@ class RecordViewModel(
         )
     }
 
+    private val extra: Flow<ExtraState> = combine(deleteRequest, autoSelected) { delete, auto ->
+        ExtraState(deleteRequested = delete, autoSelected = auto)
+    }
+
     val uiState: StateFlow<RecordUiState> = combine(
         load,
         form,
         submit,
-        deleteRequest,
+        extra,
         editingOriginals,
-    ) { load, form, submit, deleteRequest, originals ->
+    ) { load, form, submit, extra, originals ->
         val accountList = load.accounts.orEmpty()
         val categoryList = load.categories.orEmpty()
         val isEditing = editingId != null
@@ -283,10 +339,13 @@ class RecordViewModel(
             isSaving = submit.isSaving,
             saveErrorMessage = submit.saveErrorMessage,
             savedTransactionId = submit.savedTransactionId,
-            deleteRequested = deleteRequest,
+            deleteRequested = extra.deleteRequested,
             isCreatingCategory = submit.isCreatingCategory,
             categoryCreateErrorMessage = submit.categoryCreateErrorMessage,
             createdCategoryId = submit.createdCategoryId,
+            lastUsedCategoryHint = extra.autoSelected
+                ?.takeIf { it.categoryId == form.categoryId }
+                ?.hint,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordUiState())
 
@@ -387,6 +446,18 @@ class RecordViewModel(
                             },
                         )
                     }
+                    // 记下"上次用过的分类"：下次进记一笔按方向预选。编辑不算——历史不该改偏好
+                    val usedCategoryId = toSubmit.categoryId
+                    if (editing == null && result.isSuccess && usedCategoryId != null) {
+                        runCatching {
+                            lastUsedCategoryStore?.save(
+                                LastUsedCategory(
+                                    categoryId = usedCategoryId,
+                                    usedOnEpochDay = LocalDate.now().toEpochDay(),
+                                ),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -450,8 +521,9 @@ class RecordViewModel(
         fun factory(
             repository: LedgerRepository,
             editingId: Long? = null,
+            lastUsedCategoryStore: LastUsedCategoryStore? = null,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { RecordViewModel(repository, editingId) }
+            initializer { RecordViewModel(repository, editingId, lastUsedCategoryStore) }
         }
     }
 }
@@ -470,6 +542,25 @@ internal fun TransactionEntity.toRecordForm(): RecordForm = RecordForm(
     occurredOn = occurredOn,
     note = note.orEmpty(),
 )
+
+/**
+ * 「2 天前用过「餐饮」」这类提示（用户批准的「沿用上次分类」，附.1 R4-P3）。
+ *
+ * 天数用 epoch day 相减，跨月跨年都算得对；[todayEpochDay] 可注入，单测不依赖真实日期。
+ */
+internal fun lastUsedHint(
+    usedOnEpochDay: Long,
+    name: String,
+    todayEpochDay: Long = LocalDate.now().toEpochDay(),
+): String {
+    val days = (todayEpochDay - usedOnEpochDay).coerceAtLeast(0L)
+    val whenText = when (days) {
+        0L -> "今天"
+        1L -> "昨天"
+        else -> "$days 天前"
+    }
+    return "${whenText}用过「$name」"
+}
 
 /** 记账页只会切到这两种分类体系；其余类型被 [RecordForm.toOutcome] 挡在提交之前。 */
 private fun TransactionType.toCategoryKind(): CategoryKind = when (this) {

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -84,6 +83,8 @@ fun ReportsScreen(
         HorizontalDivider()
 
         val contentModifier = Modifier.weight(1f)
+        // 分类色：与环形图同一套（CategoryPalette）——颜色跟分类 id 走，不跟排名走
+        val categorySlots = resolveCategorySlots(state.breakdown.map { it.categoryId })
         when {
             // 错误优先于加载：读取失败时两条流都会 emit，别把用户永远按在转圈上
             state.errorMessage != null -> EmptyState(
@@ -146,15 +147,15 @@ fun ReportsScreen(
                         HintRow("本月没有支出。转账与余额调整不算收支，所以不会出现在这里。")
                     }
                 } else {
-                    itemsIndexed(
+                    items(
                         items = state.breakdown,
-                        key = { _, row -> "cat-${row.categoryId}" },
-                    ) { index, row ->
+                        key = { row -> "cat-${row.categoryId}" },
+                    ) { row ->
                         BreakdownRow(
                             name = row.name,
                             amountCents = row.amountCents,
                             percent = row.percent,
-                            barColor = donutColorAt(index),
+                            barColor = CATEGORY_SLOT_COLORS[categorySlots.getValue(row.categoryId)],
                             onClick = {
                                 onDrillDown(ReportDrillDown.byCategory(state.month, row.categoryId))
                             },
@@ -388,7 +389,7 @@ private fun HintRow(text: String) {
  * 排行一行（分类排行与账户分布共用）：名字 + 占比 + 金额 + 占比条。
  * 整行可点：[onClick] 把"这一行 + 当前月份"下钻到明细页（F07）。
  *
- * @param barColor 占比条的颜色：分类排行用 [donutColorAt]（与环形图同色，看图能对上号），
+ * @param barColor 占比条的颜色：分类排行用 [CATEGORY_SLOT_COLORS]（与环形图同色，看图能对上号），
  *   账户分布沿用主题色
  */
 @Composable

@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -45,11 +44,14 @@ private val DONUT_SIZE = 180.dp
 /** 环的粗细：太细看不出比例，太粗显得笨重 */
 private val DONUT_STROKE = 26.dp
 
+/** 相邻扇区之间露出的底色缝：2dp（半径 77dp 时约 1.49°）。形状边界承载信息，不只靠颜色 */
+private val DONUT_SEAM = 2.dp
+
 /** 环中间的洞（= 外径 − 两侧环宽）：合计文字就摆在这个宽度里 */
 private val DONUT_HOLE = DONUT_SIZE - DONUT_STROKE * 2
 
 /** 从 12 点方向开始顺时针画 */
-private const val DONUT_START_ANGLE = -90f
+internal const val DONUT_START_ANGLE_DEG = -90f
 
 internal const val DONUT_TEST_TAG = "report-category-donut"
 
@@ -82,29 +84,46 @@ internal fun donutDescription(rows: List<CategoryBreakdownRow>, totalCents: Long
 }
 
 /**
- * 分类配色：暖色调，与 App 的主色系同族。
- * 分类多于配色数时按序循环——颜色只用来"对号"，具体数字一律看下面的排行。
+ * 一个扇形的起止角（度）：0 度在 12 点方向，顺时针为正。
+ * 单独抽出来是为了让"角度怎么算"能纯函数测，不用靠看截图数格子。
  */
-private val DONUT_COLORS = listOf(
-    Color(0xFFB4643C),
-    Color(0xFFD9924A),
-    Color(0xFFE0B457),
-    Color(0xFF8C9E5A),
-    Color(0xFF5F8A72),
-    Color(0xFF4F7C93),
-    Color(0xFF6B6FA8),
-    Color(0xFF9A6BA8),
-    Color(0xFFC0576E),
-    Color(0xFF8A8378),
-)
+internal data class DonutArc(val startAngleDeg: Float, val sweepAngleDeg: Float)
 
-/** 第 [index] 个分类（按金额降序）在环形图里用的颜色；下面的「支出排行」用同一套 */
-internal fun donutColorAt(index: Int): Color = DONUT_COLORS[index % DONUT_COLORS.size]
+/** [seamPx] 长的弧在半径 [radiusPx] 的圆上占多少度：色缝宽度换算成角度用 */
+internal fun seamAngleDeg(seamPx: Float, radiusPx: Float): Float =
+    if (radiusPx <= 0f) 0f else Math.toDegrees((seamPx / radiusPx).toDouble()).toFloat()
+
+/**
+ * 按金额占比算每个扇形的角度，并在相邻两块之间留出 [seamAngleDeg] 的缝。
+ *
+ * 缝是"吃掉"每块末尾的宽度、整块前移半个缝——所以 n 块加起来仍是满满的 360°，
+ * 不会因为留缝让环看起来少一截。只有一块时不留缝：单色环上凭空一道缺口像画坏了。
+ *
+ * @param seamAngleDeg 缝隙张角；调用方按"2dp 在真实半径上的弧长"算好传进来
+ */
+internal fun donutArcs(
+    rows: List<CategoryBreakdownRow>,
+    totalCents: Long,
+    seamAngleDeg: Float,
+): List<DonutArc> {
+    if (rows.isEmpty() || totalCents <= 0L) return emptyList()
+    val seam = if (rows.size <= 1) 0f else seamAngleDeg.coerceIn(0f, 90f)
+    var cursor = DONUT_START_ANGLE_DEG
+    return rows.map { row ->
+        val sweep = (row.amountCents.toDouble() / totalCents * 360.0).toFloat().coerceAtLeast(0f)
+        val arc = DonutArc(
+            startAngleDeg = cursor + seam / 2f,
+            sweepAngleDeg = (sweep - seam).coerceAtLeast(0f),
+        )
+        cursor += sweep
+        arc
+    }
+}
 
 /**
  * 点按落在环的哪一块：返回 [rows] 的下标；点在环心的洞里或环外返回 null（视作"取消选中"）。
  *
- * 环从 12 点方向顺时针画（[DONUT_START_ANGLE]），所以先把 atan2 的角度 +90° 再取模，
+ * 环从 12 点方向顺时针画（[DONUT_START_ANGLE_DEG]），所以先把 atan2 的角度 +90° 再取模，
  * 折算成"从 12 点起顺时针转过多少度"，然后按各分类的角度宽度累加找落点。
  * 半径上留 [strokePx] / 3 的容错：手指点偏一点也算命中，但点在洞里不算——环心是"支出合计"。
  * 纯函数（不碰 Compose），命中判定单独测：画布上能不能点、点得准不准，不该只靠看截图。
@@ -193,6 +212,8 @@ private fun CategoryDonutCanvas(
     selectedIndex: Int?,
     onSelect: (Int?) -> Unit,
 ) {
+    // 颜色跟分类 id 走（跨月不跳色）；同一张图里撞槽时按 id 升序避让，与「支出排行」算出来一致
+    val slots = resolveCategorySlots(rows.map { it.categoryId })
     Canvas(
         modifier = Modifier
             .size(DONUT_SIZE)
@@ -220,16 +241,19 @@ private fun CategoryDonutCanvas(
         val diameter = size.minDimension - strokePx
         val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
         val arcSize = Size(diameter, diameter)
-        var startAngle = DONUT_START_ANGLE
+        val arcs = donutArcs(
+            rows = rows,
+            totalCents = totalCents,
+            seamAngleDeg = seamAngleDeg(DONUT_SEAM.toPx(), diameter / 2f),
+        )
         rows.forEachIndexed { index, row ->
-            val sweep = row.amountCents.toDouble() / totalCents * 360.0
             val selected = index == selectedIndex
             drawArc(
                 // 选中的一块保持原色，其余的压暗：颜色 + 描边粗细两层反馈，不只靠颜色
-                color = donutColorAt(index)
+                color = CATEGORY_SLOT_COLORS[slots.getValue(row.categoryId)]
                     .copy(alpha = if (selectedIndex == null || selected) 1f else DONUT_DIM_ALPHA),
-                startAngle = startAngle,
-                sweepAngle = sweep.toFloat(),
+                startAngle = arcs[index].startAngleDeg,
+                sweepAngle = arcs[index].sweepAngleDeg,
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcSize,
@@ -237,7 +261,6 @@ private fun CategoryDonutCanvas(
                     width = if (selected) strokePx + DONUT_SELECTED_STROKE_BONUS.toPx() else strokePx,
                 ),
             )
-            startAngle += sweep.toFloat()
         }
     }
 }

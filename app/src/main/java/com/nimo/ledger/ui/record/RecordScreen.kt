@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,11 +43,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nimo.ledger.data.local.DataStoreLastUsedCategoryStore
 import com.nimo.ledger.data.local.entity.TransactionEntity
 import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.domain.model.TransactionType
@@ -57,6 +61,9 @@ import com.nimo.ledger.ui.transfer.TransferFormSection
 import com.nimo.ledger.ui.transfer.TransferUiState
 import com.nimo.ledger.ui.transfer.TransferViewModel
 import com.nimo.ledger.util.Dates
+
+/** 预选了「上次用过的分类」时那句提示的 tag：走查/UI 测试按它取文案，不靠截图认字 */
+internal const val LAST_USED_CATEGORY_HINT_TEST_TAG: String = "record-last-category-hint"
 
 /**
  * 记一笔 / 改一笔（F03 收支，F04 转账入口）。
@@ -83,8 +90,19 @@ fun RecordScreen(
     editingId: Long? = null,
     onDeleted: suspend (TransactionEntity) -> Unit = {},
 ) {
+    val context = LocalContext.current
+    // 上次用过的分类存在 DataStore 里（不动 Room schema）；按 Context 缓存，重组不重建
+    val lastUsedCategoryStore = remember(context) {
+        DataStoreLastUsedCategoryStore.from(context)
+    }
     val viewModel: RecordViewModel =
-        viewModel(factory = RecordViewModel.factory(repository, editingId))
+        viewModel(
+            factory = RecordViewModel.factory(
+                repository = repository,
+                editingId = editingId,
+                lastUsedCategoryStore = lastUsedCategoryStore,
+            ),
+        )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     var showDatePicker by remember { mutableStateOf(false) }
@@ -399,7 +417,7 @@ private fun RecordFormBody(
                 .focusRequester(amountFocus),
         )
 
-        FieldSection(title = "分类") {
+        FieldSection(title = "分类", hint = state.lastUsedCategoryHint) {
             if (state.categories.isEmpty()) {
                 Text(
                     text = "这个方向下还没有可用分类（停用的分类不会出现在这里）",
@@ -504,13 +522,32 @@ private fun RecordFormBody(
 }
 
 @Composable
-private fun FieldSection(title: String, content: @Composable () -> Unit) {
+private fun FieldSection(
+    title: String,
+    hint: String? = null,
+    content: @Composable () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Medium,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+            )
+            if (hint != null) {
+                // 预选「上次用过的分类」时说清为什么替你选好了、是哪天用过
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = hint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(LAST_USED_CATEGORY_HINT_TEST_TAG),
+                )
+            }
+        }
         content()
     }
 }
