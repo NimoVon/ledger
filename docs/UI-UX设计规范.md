@@ -555,6 +555,8 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 判据只有一处：`navMotionOf(initialRoute, targetRoute, isPop)`——pop 时先看 `initialRoute` 是否是表单（是就 `SLIDE_VERTICAL`，不因为下层是二级页而改成横向），其余按 `PageKind { TAB, DETAIL, FORM }` 决定。缓动统一 `FastOutSlowInEasing`，**不要**在调用点另写 `tween` 时长。已知缺口：未接 Android 14 预测式返回、未读系统「减少动画」（AA-7 / 批 F 的 F-4），无拖拽返回手势。
 
+**Tab 切换语义（2026-10-17 修，`NavHostController.switchTab`）**：①下钻页是压在统计页之上的**一次性**结果，切到任何 Tab 前先把它丢掉（不跟 Tab 状态一起存）；②目标若是起始 Tab「明细」，用 `popBackStack(起始页, inclusive = false, saveState = true)` 而不是 `navigate + restoreState`——后者会把压在起始页之上的那段（统计页）当成起始页自己的历史整段恢复回来，表现就是「在下钻页点统计没反应」「在统计页点明细没反应」。唯一入口 `ui/LedgerRoutes.kt` 的 `NavHostController.switchTab`，底栏不再内联导航参数；判据由 `ui/LedgerDrillDownNavigationTest` 的 10 例钉住，见 `docs/测试报告.md` §20。
+
 ---
 
 ## 8. 逐屏改进清单
