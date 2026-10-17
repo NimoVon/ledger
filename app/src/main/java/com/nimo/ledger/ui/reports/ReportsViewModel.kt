@@ -20,11 +20,12 @@ import com.nimo.ledger.domain.stats.CategoryBreakdownRow
 import com.nimo.ledger.domain.stats.DailyTotal
 import com.nimo.ledger.domain.stats.MonthlyTotal
 import com.nimo.ledger.domain.stats.PeriodSummary
+import com.nimo.ledger.domain.stats.ReportBucket
+import com.nimo.ledger.domain.stats.ReportRange
 import com.nimo.ledger.domain.stats.StatsCalculator
 import com.nimo.ledger.domain.stats.TransactionVisibility
 import com.nimo.ledger.ui.transactions.TransactionRow
 import com.nimo.ledger.ui.transactions.TransactionTimeline
-import com.nimo.ledger.util.Dates
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -42,61 +43,62 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * 月报状态（F07，计划 4.4：至少覆盖加载、内容、空状态和可理解的错误）。
+ * 统计报表状态（F07 + F10）。
+ *
+ * 与旧版的差别：时间口径从「一个月 + 趋势三段」变成**一个范围**（[ReportRange]：
+ * 某个月 / 近 N 个月 / 自然年 / 自定义起止日期）。整页的合计、分类占比、账户分布、排行、
+ * 趋势、日均全部按这一个范围聚合——不许出现"标题写着 10 月、趋势却画近 12 个月"的口径错位。
  *
  * 页面不写任何统计口径：收入/支出/结余来自 StatsCalculator.summarize，
- * 分类排行来自 StatsCalculator.categoryBreakdown，环比来自 StatsCalculator.monthOverMonth，
- * 趋势折线来自 StatsCalculator.monthlyTotals。
+ * 分类排行来自 categoryBreakdown，环比来自 monthOverMonth，
+ * 按天/按月聚合来自 dailyTotals / monthlyTotals。
  */
 data class ReportsUiState(
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
-    val month: YearMonth = YearMonth.now(),
-    /** 本月收支合计 */
+    /** 整页的时间范围（唯一口径） */
+    val range: ReportRange = ReportRange.Month(YearMonth.now()),
+    /** 区间内收支合计 */
     val summary: PeriodSummary = PeriodSummary(incomeCents = 0, expenseCents = 0),
-    /** 上月收支合计：只用于算环比，不直接展示 */
+    /** 上一个等长区间的收支合计：只用于算环比，不直接展示 */
     val previousSummary: PeriodSummary = PeriodSummary(incomeCents = 0, expenseCents = 0),
-    /** 本月支出分类排行（一级分类粒度，子分类金额已并入父分类） */
+    /** 区间内支出分类排行（一级分类粒度，子分类金额已并入父分类） */
     val breakdown: List<CategoryBreakdownRow> = emptyList(),
-    /** 本月支出账户分布 */
+    /** 区间内支出账户分布 */
     val accountBreakdown: List<AccountBreakdownRow> = emptyList(),
-    /** 本月日均支出（分母 = 已过去的天数，见 StatsCalculator.elapsedDays） */
+    /** 区间日均支出（分母 = 已过去的天数，见 StatsCalculator.elapsedDays） */
     val dailyAverageExpenseCents: Long = 0L,
-    /** 趋势区（R2 三段：本月｜半年｜全年）的跨度：用户点的那一段，点了立刻反映在开关上 */
-    val trendSpan: TrendSpan = TrendSpan.MONTH,
-    /** 趋势折线的按月合计（升序，最后一个是 [month]）；还没读到数据时为空 */
+    /** 按月画法的横轴合计（升序、无记录的月份补 0）；按天画法时只有区间覆盖的那几个月 */
     val trend: List<MonthlyTotal> = emptyList(),
-    /** 趋势数据还没到位（切月/切跨度瞬间）：界面给加载态，绝不拿上一段的数据画图 */
+    /** 趋势数据还没到位（切范围瞬间）：界面给加载态，绝不拿上一段的数据画图 */
     val isTrendLoading: Boolean = true,
     /**
-     * 本月是否有任何流水（含转账/余额调整）。
-     * 决定"空月"还是"有记录但本月没花钱"——后者不该显示整页空态。
+     * 区间内是否有任何流水（含转账/余额调整）。
+     * 决定"空区间"还是"有记录但这段没花钱"——后者不该显示整页空态。
      */
     val hasRecords: Boolean = false,
-    /** R2「本月」视图的逐日合计：只含已过去的天（含今天），未来日期不在里面 */
+    /** 按天画法的逐日合计：只含已过去的天（含今天），未来日期不在里面 */
     val daily: List<DailyTotal> = emptyList(),
-    /** 本月已经过去的天数（= [daily] 的天数；未来的月份为 0） */
+    /** 区间里已经过去的天数（= [daily] 的天数；未来区间为 0） */
     val elapsedDays: Int = 0,
-    /** 本月总预算（分）；没设总预算时为 null，界面据此决定是否显示「预算达成率」 */
+    /** 区间的总预算（分）；只有"单月"范围才有，其余范围/没设时为 null */
     val totalBudgetCents: Long? = null,
-    /** 预算达成率 = 本月支出 ÷ 总预算；没设总预算时为 null（界面不显示这一格） */
+    /** 预算达成率 = 区间支出 ÷ 总预算；只有单月范围且有总预算时才非 null */
     val budgetAchievementRatio: Double? = null,
     /** 总预算的状态（计划 3.4：80% 预警 / 超支） */
     val budgetStatus: BudgetStatus = BudgetStatus.NONE,
     /** 点开的当日流水明细；null = 弹层关闭 */
     val dayDetail: DayDetailUiState? = null,
     /**
-     * 趋势窗口（近 12 个月）里有没有任何收入/支出——与当前跨度无关。
-     *
-     * 不能用 [trend] 判断：它是当前跨度的切片，「本月」跨度下只有本月一个点，
-     * 空月份的切片恒为 0，趋势区就会整块不显示——正是 F10 要避免的（切到没记账的
-     * 月份，刚做好的趋势折线"不见了"）。
+     * 区间里有没有任何收入/支出（不含转账/余额调整）。
+     * 按月画法的空区间不该画一条贴着 0 的直线，而该给一句话。
      */
     val trendHasData: Boolean = false,
 ) {
-    val monthLabel: String get() = TransactionTimeline.monthLabel(month)
+    /** 顶部范围控件上的文字 */
+    val rangeLabel: String get() = range.label
 
-    /** 支出环比：(本月 − 上月) ÷ 上月；上月为 0 时为 null，界面显示 "—"（计划 3.4） */
+    /** 支出环比：(本段 − 上一段) ÷ 上一段；上一段为 0 时为 null，界面显示 "—"（计划 3.4） */
     val expenseChangeRatio: Double?
         get() = StatsCalculator.monthOverMonth(summary.expenseCents, previousSummary.expenseCents)
 
@@ -108,6 +110,31 @@ data class ReportsUiState(
 
     /** 设了总预算才显示「预算达成率」（计划附.1 R2）：没设就是"没这个概念"，不是 0% */
     val hasTotalBudget: Boolean get() = totalBudgetCents != null
+
+    /** 空态标题：单月说「本月」，其它范围说「这段区间」 */
+    val emptyTitle: String get() = if (range.isSingleMonth) "本月还没有记录" else "这段区间还没有记录"
+
+    /** 空态说明 */
+    val emptyMessage: String
+        get() = if (range.isSingleMonth) {
+            "记一笔之后，这里会给出收入、支出、结余与环比。"
+        } else {
+            "换个范围看看，或者先记一笔。"
+        }
+
+    /** 洞察区标题：日均/环比在任意范围都成立，预算达成率只在单月范围出现 */
+    val insightTitle: String get() = if (range.isSingleMonth) "本月洞察" else "区间洞察"
+
+    /** 支出排行/账户分布的空行文案 */
+    val noExpenseHint: String
+        get() = if (range.isSingleMonth) {
+            "本月没有支出。转账与余额调整不算收支，所以不会出现在这里。"
+        } else {
+            "这段区间没有支出。转账与余额调整不算收支，所以不会出现在这里。"
+        }
+
+    val noAccountExpenseHint: String
+        get() = if (range.isSingleMonth) "本月没有支出，所以没有账户分布。" else "这段区间没有支出，所以没有账户分布。"
 }
 
 /**
@@ -133,12 +160,11 @@ data class DayDetailUiState(
 }
 
 /**
- * 月报（F07 + F10 趋势折线）。
+ * 统计报表（F07 月报 + F10 趋势图 + 本轮增补：自然年 / 自选区间）。
  *
  * UI 不直接访问 DAO，读取全部经 LedgerRepository（计划 4.3）；
- * 月度查询走 Dates.monthBounds 得到的 [from, to) 区间（禁止 substr 截取）。
- * 上个月也一起读：环比需要它的合计，但只读不算，口径仍归 StatsCalculator。
- * 趋势窗口是 [month−(跨度−1), month]，同样按月边界取区间，归档交给 StatsCalculator.monthlyTotals。
+ * 区间一律用 [ReportRange] 给出的半开区间 `[from, to)`（禁止 substr 截取）。
+ * 上一个等长区间也一起读：环比需要它的合计，但只读不算，口径仍归 StatsCalculator。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReportsViewModel(
@@ -146,34 +172,29 @@ class ReportsViewModel(
     private val today: () -> LocalDate = { LocalDate.now() },
     /**
      * 撤销窗口内那几笔（延迟物理删除，计划 9.2）的 id：数据库里它们还在，
-     * 但月报必须当它们不存在，否则统计页会显示一个用户已经删掉的数字。
+     * 但报表必须当它们不存在，否则统计页会显示一个用户已经删掉的数字。
      * 过滤统一走 TransactionVisibility，与明细页/账户页同一口径。
      */
     private val pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
 ) : ViewModel() {
 
-    /** 当前查看的月份：切换只改这个值，查询区间与标签都由它派生 */
-    private val month = MutableStateFlow(YearMonth.from(today()))
-
-    /** 趋势区的跨度（R2 三段：本月 / 半年 / 全年），默认「本月」 */
-    private val trendSpan = MutableStateFlow(TrendSpan.MONTH)
+    /** 当前查看的范围：切换只改这个值，查询区间与标签都由它派生 */
+    private val range = MutableStateFlow<ReportRange>(ReportRange.Month(YearMonth.from(today())))
 
     /**
-     * 绑定「月份」的数据快照：同一份快照里的行必须属于同一个月。
-     * [trend] 覆盖 [firstTrendMonth] 到 [month] 的整段（近 12 个月，含 [current]）：
-     * 三种跨度共用它，切跨度只是换画法（本月=按天，半年/全年=按月切片），不需要重查。
+     * 绑定「范围」的数据快照：同一份快照里的行必须属于同一个范围。
+     * 预算只对单月范围有意义（月预算按月设），其余范围不读。
      */
-    private data class MonthSnapshot(
-        val month: YearMonth,
+    private data class RangeSnapshot(
+        val range: ReportRange,
         val current: List<TransactionEntity>,
         val previous: List<TransactionEntity>,
-        val trend: List<TransactionEntity>,
-        /** 当月预算：总预算 + 各分类预算（预算达成率用） */
+        /** 只有单月范围才有的当月预算：总预算 + 各分类预算（预算达成率用） */
         val budgets: List<BudgetEntity>,
     )
 
-    /** null = 当前请求还没加载完成（用于区分"加载中"与"本月确实没有记录"） */
-    private val snapshot = MutableStateFlow<MonthSnapshot?>(null)
+    /** null = 当前请求还没加载完成（用于区分"加载中"与"这段确实没有记录"） */
+    private val snapshot = MutableStateFlow<RangeSnapshot?>(null)
 
     /** 报表要用的"参考数据"：分类（含已停用）与账户名（含已归档）。两样都到齐才出数 */
     private data class References(
@@ -186,9 +207,9 @@ class ReportsViewModel(
     private val references = MutableStateFlow<References?>(null)
     private val loadError = MutableStateFlow<String?>(null)
 
-    /** 数据态的打包：请求态（月/跨度）与它分开组合，这样开关不必等查询回来才动 */
+    /** 数据态的打包：请求态（范围）与它分开组合，这样范围控件不必等查询回来才动 */
     private data class LoadedData(
-        val snapshot: MonthSnapshot?,
+        val snapshot: RangeSnapshot?,
         val references: References?,
         val loadError: String?,
         val pendingDeletionIds: Set<Long>,
@@ -196,29 +217,34 @@ class ReportsViewModel(
 
     init {
         viewModelScope.launch {
-            // 只按月份重查：趋势一次性取"近 12 个月"，切跨度只是在这段数据上换一种画法
-            // （本月=按天，半年/全年=按月切片），因此不存在"开关已切到全年、线还是半年"的错位。
-            month.flatMapLatest { ym ->
-                val (from, to) = Dates.monthBounds(ym)
-                val (prevFrom, prevTo) = Dates.monthBounds(ym.minusMonths(1))
-                val (trendFrom, _) = Dates.monthBounds(firstTrendMonth(ym, TrendSpan.FULL_YEAR))
+            // 只按范围重查：整页所有数字都来自这一次区间查询，不存在"标题一个范围、图里另一个范围"
+            range.flatMapLatest { requested ->
+                val previousRange = requested.previous()
+                val budgetsFlow: Flow<List<BudgetEntity>> =
+                    if (requested.isSingleMonth) {
+                        // 预算只读当月：它读失败只丢预算这一份，不该把整页拖成错误态
+                        repository.observeBudgets(YearMonth.from(requested.from).toString()).catch {
+                            loadError.value = "读取预算失败，请稍后重试"
+                            emit(emptyList())
+                        }
+                    } else {
+                        flowOf(emptyList())
+                    }
                 combine(
-                    repository.observeTransactions(from, to),
-                    repository.observeTransactions(prevFrom, prevTo),
-                    repository.observeTransactions(trendFrom, to),
-                    // 预算只读当月：它读失败只丢预算这一份，不该把整页拖成错误态
-                    repository.observeBudgets(ym.toString()).catch {
-                        loadError.value = "读取预算失败，请稍后重试"
-                        emit(emptyList())
-                    },
-                ) { current, previous, trend, budgets ->
-                    MonthSnapshot(ym, current, previous, trend, budgets)
+                    repository.observeTransactions(requested.from.toString(), requested.to.toString()),
+                    repository.observeTransactions(
+                        previousRange.from.toString(),
+                        previousRange.to.toString(),
+                    ),
+                    budgetsFlow,
+                ) { current, previous, budgets ->
+                    RangeSnapshot(requested, current, previous, budgets)
                 }
                     // 读取失败也要 emit 一次：否则这一页永远停在加载态（流水页踩过同一个坑）。
-                    // catch 放在内层，失败之后月份切换照旧能用。
+                    // catch 放在内层，失败之后范围切换照旧能用。
                     .catch {
                         loadError.value = "读取流水失败，请稍后重试"
-                        emit(MonthSnapshot(ym, emptyList(), emptyList(), emptyList(), emptyList()))
+                        emit(RangeSnapshot(requested, emptyList(), emptyList(), emptyList()))
                     }
             }.collect { snapshot.value = it }
         }
@@ -292,30 +318,28 @@ class ReportsViewModel(
             }
 
     val uiState: StateFlow<ReportsUiState> = combine(
-        combine(month, trendSpan) { ym, span -> ym to span },
+        range,
         combine(snapshot, references, loadError, pendingDeletionIds) { snapshot, references, loadError, pendingDeletionIds ->
             LoadedData(snapshot, references, loadError, pendingDeletionIds)
         },
         dayDetail,
-    ) { (requestedMonth, requestedSpan), data, detail ->
-        buildState(requestedMonth, requestedSpan, data, detail)
+    ) { requestedRange, data, detail ->
+        buildState(requestedRange, data, detail)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReportsUiState())
 
     private fun buildState(
-        month: YearMonth,
-        span: TrendSpan,
+        requestedRange: ReportRange,
         data: LoadedData,
         dayDetail: DayDetailUiState?,
     ): ReportsUiState {
-        // 快照必须属于当前请求：切月瞬间不能把上一个月的数据挂在标题下
-        val current = data.snapshot?.takeIf { it.month == month }
+        // 快照必须属于当前请求：切范围瞬间不能把上一段的数据挂在标题下
+        val current = data.snapshot?.takeIf { it.range == requestedRange }
         if (current == null || data.references == null) {
             return ReportsUiState(
                 isLoading = true,
                 isTrendLoading = true,
                 errorMessage = data.loadError,
-                month = month,
-                trendSpan = span,
+                range = requestedRange,
                 dayDetail = dayDetail,
             )
         }
@@ -326,27 +350,36 @@ class ReportsViewModel(
         // 把 stateIn 拖死，也不能计入任何合计。区间已由 observeTransactions 限定，这里不再重复判断。
         val records = TransactionTimeline.toRecords(visibleCurrent)
         val summary = StatsCalculator.summarize(records)
-        // 趋势数据覆盖近 12 个月：先按整段算一次，三种跨度都是它的切片（「本月」只有当前月一个点）
-        // 「有没有数据」也按整段判断：否则空月份的「本月」切片恒为 0，趋势区整块不显示
-        val trendFull = StatsCalculator.monthlyTotals(
-            records = TransactionTimeline.toRecords(
-                TransactionVisibility.visible(current.trend, data.pendingDeletionIds),
-            ),
-            months = trendMonths(month, TrendSpan.FULL_YEAR),
-        )
+        val today = today()
+        val trend = StatsCalculator.monthlyTotals(records = records, months = requestedRange.months)
+        val daily = if (requestedRange.bucket == ReportBucket.DAY) {
+            StatsCalculator.dailyTotals(
+                records = records,
+                from = requestedRange.from,
+                to = requestedRange.to,
+                today = today,
+            )
+        } else {
+            emptyList()
+        }
+        val elapsed = StatsCalculator.elapsedDays(requestedRange.from, requestedRange.to, today)
         val categories = data.references.categories.mapValues { it.value.toInfo() }
-        // 预算达成率的口径复用 BudgetCalculator（唯一实现），总预算没设时 totalBudgetCents 为 null
-        val budget = BudgetCalculator.summarize(
-            records = records,
-            categories = categories,
-            budgets = current.budgets.map { BudgetInput(it.id, it.categoryId, it.amount) },
-        )
-        val elapsed = StatsCalculator.elapsedDays(month, today())
+        // 预算达成率的口径复用 BudgetCalculator（唯一实现），总预算没设时 totalBudgetCents 为 null。
+        // 非单月范围不读预算：月预算按月设，拿它去除一个跨月区间没有可比性。
+        val budget = if (requestedRange.isSingleMonth) {
+            BudgetCalculator.summarize(
+                records = records,
+                categories = categories,
+                budgets = current.budgets.map { BudgetInput(it.id, it.categoryId, it.amount) },
+            )
+        } else {
+            null
+        }
         return ReportsUiState(
             isLoading = false,
             isTrendLoading = false,
             errorMessage = data.loadError,
-            month = month,
+            range = requestedRange,
             summary = summary,
             previousSummary = StatsCalculator.summarize(TransactionTimeline.toRecords(visiblePrevious)),
             breakdown = StatsCalculator.categoryBreakdown(
@@ -359,58 +392,46 @@ class ReportsViewModel(
                 expenseCents = summary.expenseCents,
                 days = elapsed,
             ),
-            trendSpan = span,
-            // 切片口径与 trendMonths(month, span) 等价：整段的后 span.months 个月
-            trend = trendFull.takeLast(span.months),
-            trendHasData = trendFull.any { it.incomeCents > 0L || it.expenseCents > 0L },
+            trend = trend,
+            trendHasData = trend.any { it.incomeCents > 0L || it.expenseCents > 0L } ||
+                daily.any { it.incomeCents > 0L || it.expenseCents > 0L },
             hasRecords = visibleCurrent.isNotEmpty(),
-            daily = StatsCalculator.dailyTotals(records = records, month = month, today = today()),
+            daily = daily,
             elapsedDays = elapsed,
-            totalBudgetCents = budget.totalBudgetCents,
-            budgetAchievementRatio = budget.totalBudgetCents?.let {
+            totalBudgetCents = budget?.totalBudgetCents,
+            budgetAchievementRatio = budget?.totalBudgetCents?.let {
                 BudgetCalculator.percent(budget.totalSpentCents, it)
             },
-            budgetStatus = budget.totalStatus,
+            budgetStatus = budget?.totalStatus ?: BudgetStatus.NONE,
             dayDetail = dayDetail,
         )
     }
 
-    /** 趋势窗口的第一个月：半年 = 往前 5 个月，全年 = 往前 11 个月 */
-    private fun firstTrendMonth(month: YearMonth, span: TrendSpan): YearMonth =
-        month.minusMonths((span.months - 1).toLong())
+    /** 上一个范围（按范围自己的一格挪） */
+    fun showPreviousRange() = setRange(range.value.previous())
 
-    /** 折线的横轴月份：升序，最后一个是当前查看的月份 */
-    private fun trendMonths(month: YearMonth, span: TrendSpan): List<YearMonth> =
-        (span.months - 1 downTo 0).map { month.minusMonths(it.toLong()) }
-
-    fun showPreviousMonth() = moveMonth(-1)
-
-    fun showNextMonth() = moveMonth(1)
+    /** 下一个范围 */
+    fun showNextRange() = setRange(range.value.shift(1))
 
     /**
-     * 切换趋势跨度（本月 / 半年 / 全年）。三段共用同一份「近 12 个月」数据，
-     * 切换只是换一种画法：立刻生效，不需要重查，也不会出现画错区间的中间态。
-     */
-    fun setTrendSpan(span: TrendSpan) {
-        if (trendSpan.value == span) return
-        // 上一次的读取错误不该带进新的跨度
-        loadError.value = null
-        trendSpan.value = span
-    }
-
-    /**
-     * R1 日期直改：直接跳到指定年月（年月选择器两步选出来的结果）。
+     * 换范围：范围控件点选、快捷项、自定义区间、直接跳到某个月都走这里。
      *
-     * 与上下月只差"跳多远"：同一个 [month] 流、同一套 [Dates.monthBounds] 区间查询，
-     * 本月合计、上月环比、趋势窗口因此都跟着这个值一起走，不需要为直选另写一份。
+     * 只改这一个值：查询区间、上一个等长区间、横轴月份、空态文案全部由它派生，
+     * 不需要为每种范围另写一份（旧版为「趋势三段」另存一份数据，才有了口径漂移的机会）。
      */
-    fun setMonth(month: YearMonth) {
-        // 上一个月份的读取错误不该带进新月份
+    fun setRange(newRange: ReportRange) {
+        if (range.value == newRange) return
+        // 上一个范围的读取错误不该带进新范围
         loadError.value = null
-        this.month.value = month
+        range.value = newRange
     }
 
-    private fun moveMonth(delta: Long) = setMonth(month.value.plusMonths(delta))
+    /**
+     * R1 日期直改的延续：直接跳到指定年月（范围弹层里的「指定月份」）。
+     *
+     * 与左右箭头只差"跳多远"：同一个 [range] 流、同一套半开区间查询。
+     */
+    fun setMonth(month: YearMonth) = setRange(ReportRange.Month(month))
 
     /**
      * R2：点趋势区某一天的柱子 —— 打开当日流水明细弹层。

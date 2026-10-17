@@ -27,6 +27,8 @@ import com.nimo.ledger.ui.LedgerIcons
  * 左右箭头原样保留——上下月仍是最常用的动作，不该被藏进弹窗里。
  *
  * @param onLabelClick 点月份标签的回调；null = 这一页还没接入年月直选（预算页），标签只显示不可点
+ * @param previousLabel 左箭头的无障碍描述：统计页的范围是按"段"走的，念「上个月」会误导
+ * @param nextLabel 右箭头的无障碍描述
  */
 @Composable
 fun MonthSwitcher(
@@ -34,6 +36,8 @@ fun MonthSwitcher(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onLabelClick: (() -> Unit)? = null,
+    previousLabel: String = "上个月",
+    nextLabel: String = "下个月",
 ) {
     Row(
         modifier = Modifier
@@ -42,7 +46,7 @@ fun MonthSwitcher(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onPrevious) {
-            Icon(imageVector = LedgerIcons.ChevronLeft, contentDescription = "上个月")
+            Icon(imageVector = LedgerIcons.ChevronLeft, contentDescription = previousLabel)
         }
         Box(
             modifier = Modifier
@@ -65,7 +69,7 @@ fun MonthSwitcher(
             )
         }
         IconButton(onClick = onNext) {
-            Icon(imageVector = LedgerIcons.ChevronRight, contentDescription = "下个月")
+            Icon(imageVector = LedgerIcons.ChevronRight, contentDescription = nextLabel)
         }
     }
 }

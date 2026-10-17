@@ -14,6 +14,7 @@ import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.domain.model.TransactionInput
 import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.domain.stats.PeriodSummary
+import com.nimo.ledger.domain.stats.ReportRange
 import com.nimo.ledger.domain.stats.StatsCalculator
 import java.time.LocalDate
 import java.time.YearMonth
@@ -137,8 +138,8 @@ class ReportsViewModelTest {
     private suspend fun ReportsViewModel.awaitLoaded(): ReportsUiState =
         uiState.first { !it.isLoading }
 
-    private suspend fun ReportsViewModel.awaitMonth(month: YearMonth): ReportsUiState =
-        uiState.first { it.month == month && !it.isLoading }
+    private suspend fun ReportsViewModel.awaitRange(range: ReportRange): ReportsUiState =
+        uiState.first { it.range == range && !it.isLoading }
 
     // ---- 合计与分类排行 ----
 
@@ -153,8 +154,8 @@ class ReportsViewModelTest {
 
         val state = newViewModel().awaitLoaded()
 
-        assertEquals(YearMonth.of(2026, 10), state.month)
-        assertEquals("2026年10月", state.monthLabel)
+        assertEquals(ReportRange.Month(YearMonth.of(2026, 10)), state.range)
+        assertEquals("2026年10月", state.rangeLabel)
         assertNull(state.errorMessage)
         assertFalse(state.isEmpty)
         assertEquals(17_000L, state.summary.expenseCents)
@@ -247,20 +248,20 @@ class ReportsViewModelTest {
 
         val vm = newViewModel()
         val october = vm.awaitLoaded()
-        assertEquals("2026年10月", october.monthLabel)
+        assertEquals("2026年10月", october.rangeLabel)
         assertEquals(1_100L, october.summary.expenseCents)
         assertEquals(700L, october.previousSummary.expenseCents)
         assertEquals("较上月 ↑57.1%", ReportFormatting.change(october.expenseChangeRatio))
 
-        vm.showPreviousMonth()
-        val september = vm.awaitMonth(YearMonth.of(2026, 9))
-        assertEquals("2026年9月", september.monthLabel)
+        vm.showPreviousRange()
+        val september = vm.awaitRange(ReportRange.Month(YearMonth.of(2026, 9)))
+        assertEquals("2026年9月", september.rangeLabel)
         assertEquals(700L, september.summary.expenseCents)
         assertEquals(300L, september.previousSummary.expenseCents)
         assertEquals("较上月 ↑133.3%", ReportFormatting.change(september.expenseChangeRatio))
 
-        vm.showNextMonth()
-        val back = vm.awaitMonth(YearMonth.of(2026, 10))
+        vm.showNextRange()
+        val back = vm.awaitRange(ReportRange.Month(YearMonth.of(2026, 10)))
         assertEquals(1_100L, back.summary.expenseCents)
     }
 
@@ -377,8 +378,8 @@ class ReportsViewModelTest {
         // 今天 = 2026-10-12 → 当月分母是 12，不是 31
         assertEquals(2_583L, vm.awaitLoaded().dailyAverageExpenseCents)
 
-        vm.showPreviousMonth()
-        val september = vm.awaitMonth(YearMonth.of(2026, 9))
+        vm.showPreviousRange()
+        val september = vm.awaitRange(ReportRange.Month(YearMonth.of(2026, 9)))
         // 已结束的月份按整月天数（30 天）：30_000 / 30 = 1_000
         assertEquals(1_000L, september.dailyAverageExpenseCents)
     }
@@ -396,16 +397,16 @@ class ReportsViewModelTest {
 
         // 跨年往回：2026-10 → 2026-01，环比的上个月要跟着跨到 2025-12
         vm.setMonth(YearMonth.of(2026, 1))
-        val january = vm.awaitMonth(YearMonth.of(2026, 1))
-        assertEquals("2026年1月", january.monthLabel)
+        val january = vm.awaitRange(ReportRange.Month(YearMonth.of(2026, 1)))
+        assertEquals("2026年1月", january.rangeLabel)
         assertEquals(900L, january.summary.expenseCents)
         assertEquals(300L, january.previousSummary.expenseCents)
         assertEquals("较上月 ↑200.0%", ReportFormatting.change(january.expenseChangeRatio))
 
         // 再往回一年的 12 月：上月没有记录 → 环比无意义
         vm.setMonth(YearMonth.of(2025, 12))
-        val december = vm.awaitMonth(YearMonth.of(2025, 12))
-        assertEquals("2025年12月", december.monthLabel)
+        val december = vm.awaitRange(ReportRange.Month(YearMonth.of(2025, 12)))
+        assertEquals("2025年12月", december.rangeLabel)
         assertEquals(300L, december.summary.expenseCents)
         assertEquals(0L, december.previousSummary.expenseCents)
         assertNull(december.expenseChangeRatio)
@@ -422,20 +423,20 @@ class ReportsViewModelTest {
         vm.awaitLoaded()
 
         vm.setMonth(YearMonth.of(2026, 12))
-        val december = vm.awaitMonth(YearMonth.of(2026, 12))
-        assertEquals("2026年12月", december.monthLabel)
+        val december = vm.awaitRange(ReportRange.Month(YearMonth.of(2026, 12)))
+        assertEquals("2026年12月", december.rangeLabel)
         // 12 月区间右端是 2027-01-01（不含）：2027-01-02 不算进 12 月
         assertEquals(700L, december.summary.expenseCents)
         assertEquals(100L, december.previousSummary.expenseCents)
 
         vm.setMonth(YearMonth.of(2027, 1))
-        val january = vm.awaitMonth(YearMonth.of(2027, 1))
+        val january = vm.awaitRange(ReportRange.Month(YearMonth.of(2027, 1)))
         assertEquals(500L, january.summary.expenseCents)
         assertEquals(700L, january.previousSummary.expenseCents)
         assertEquals("较上月 ↓28.6%", ReportFormatting.change(january.expenseChangeRatio))
 
         // 直选与箭头等价：从 2027-01 退一个月，回到同一个 2026-12
-        vm.showPreviousMonth()
-        assertEquals(700L, vm.awaitMonth(YearMonth.of(2026, 12)).summary.expenseCents)
+        vm.showPreviousRange()
+        assertEquals(700L, vm.awaitRange(ReportRange.Month(YearMonth.of(2026, 12))).summary.expenseCents)
     }
 }

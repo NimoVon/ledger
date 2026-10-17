@@ -26,6 +26,7 @@ import com.nimo.ledger.domain.model.TransactionInput
 import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.domain.stats.DailyTotal
 import com.nimo.ledger.domain.stats.MonthlyTotal
+import com.nimo.ledger.domain.stats.ReportRange
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlinx.coroutines.runBlocking
@@ -39,8 +40,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * 趋势区三段开关（附.1 R2）的界面行为：默认画"本月"的逐日柱、点"半年/全年"换成月度折线。
- * 画布本身用无障碍描述断言行数，避免依赖像素。
+ * 统计范围在界面上的行为：默认画"本月"的逐日柱，点范围标签 → 弹层里选「近6个月/今年」换成月度折线，
+ * 再选回「本月」又回到柱子。画布本身用无障碍描述断言行数，避免依赖像素。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w411dp-h891dp-xxhdpi")
@@ -91,7 +92,7 @@ class TrendChartUiTest {
 
     private fun seedLastMonth(): YearMonth = seedExpense(YearMonth.now().minusMonths(1))
 
-    /** 只建账户不记账：让报表读完 references，停在"整个窗口都没有记录"的状态 */
+    /** 只建账户不记账：让报表读完 references，停在"整个范围都没有记录"的状态 */
     private fun seedAccountOnly() {
         runBlocking {
             repository.createAccount("CMB", AccountType.CASH, 0L).getOrThrow()
@@ -110,21 +111,39 @@ class TrendChartUiTest {
         }
     }
 
+    /** 顶部范围标签（可点开范围弹层）的文案，与 ReportRange.Month.label 同源 */
+    private fun monthLabel(month: YearMonth): String = "${month.year}年${month.monthValue}月"
+
+    /** 点范围标签打开弹层：标签不复用旧的三段 chip，范围入口只有这一个 */
+    private fun openRangeDialog(currentLabel: String) {
+        // 标签在顶部固定栏（不在滚动容器里），不能 performScrollTo
+        composeRule.onNode(hasText(currentLabel) and hasClickAction()).performClick()
+        composeRule.onNode(hasTestTag(RANGE_DIALOG_TEST_TAG)).assertExists()
+    }
+
+    /** 点弹层里的快捷项（tag = reports-range-quick-<key>） */
+    private fun pickQuick(tag: String) {
+        composeRule.onNode(hasTestTag(RANGE_QUICK_PREFIX + tag)).performClick()
+        composeRule.awaitUntil {
+            composeRule.onAllNodes(hasTestTag(RANGE_DIALOG_TEST_TAG)).fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     /**
-     * 折线图的描述现在带真实数字（F15）：按头一句 [trendHead] 做前缀匹配——
+     * 折线图的描述带真实数字（F15）：按头一句 [trendHead] 做前缀匹配——
      * 金额随数据变，测试不写死一串钱；窗口月数（1 / 6 / 12）仍是断言的重点。
      */
-    private fun trendNode(span: TrendSpan): SemanticsNodeInteraction =
-        composeRule.onNode(hasContentDescription(trendHead(span), substring = true))
+    private fun trendNode(range: ReportRange): SemanticsNodeInteraction =
+        composeRule.onNode(hasContentDescription(trendHead(range), substring = true))
 
-    private fun awaitTrend(span: TrendSpan) {
+    private fun awaitTrend(range: ReportRange) {
         composeRule.awaitUntil {
-            composeRule.onAllNodes(hasContentDescription(trendHead(span), substring = true))
+            composeRule.onAllNodes(hasContentDescription(trendHead(range), substring = true))
                 .fetchSemanticsNodes().isNotEmpty()
         }
     }
 
-    /** 逐日柱状图的根节点（本月视图） */
+    /** 逐日柱状图的根节点（按天画法的范围） */
     private fun dailyChart(): SemanticsNodeInteraction =
         composeRule.onNode(hasTestTag(DAILY_CHART_TEST_TAG))
 
@@ -134,33 +153,35 @@ class TrendChartUiTest {
         }
     }
 
-    private fun segment(span: TrendSpan): SemanticsNodeInteraction =
-        composeRule.onNode(hasClickAction() and hasText(span.label))
+    private fun thisMonth(): YearMonth = YearMonth.now()
 
     @Test
-    fun chartStartsAtTheCurrentMonth_thenTheSwitchesReshapeIt() {
+    fun chartStartsAtTheCurrentMonth_thenTheRangeChangesReshapeIt() {
         val month = seedInCurrentMonth()
         showReports()
 
         // 默认"本月"：逐日柱状图，不是折线
         awaitDailyChart()
         dailyChart().performScrollTo().assertIsDisplayed()
-        segment(TrendSpan.MONTH).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("最高 ¥600.00").performScrollTo().assertIsDisplayed()
         // 本月的横轴是"1日"这样的日子，而不是"10月"这样的月份
         composeRule.onNodeWithText("1日").performScrollTo().assertIsDisplayed()
         composeRule.onAllNodesWithText("${month.monthValue}月").assertCountEquals(0)
 
-        // 切"半年"：换成 6 个月的折线
-        segment(TrendSpan.HALF_YEAR).performScrollTo().performClick()
-        awaitTrend(TrendSpan.HALF_YEAR)
-        trendNode(TrendSpan.HALF_YEAR).performScrollTo().assertIsDisplayed()
+        // 切"近6个月"：换成 6 个月的折线
+        val six = ReportRange.lastMonths(month, 6)
+        openRangeDialog(monthLabel(month))
+        pickQuick("last6")
+        awaitTrend(six)
+        trendNode(six).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("${month.monthValue}月").performScrollTo().assertIsDisplayed()
 
-        // 切"全年"：12 个月
-        segment(TrendSpan.FULL_YEAR).performScrollTo().performClick()
-        awaitTrend(TrendSpan.FULL_YEAR)
-        trendNode(TrendSpan.FULL_YEAR).performScrollTo().assertIsDisplayed()
+        // 切"今年"：自然年 12 个月，折线头也换成"今年"
+        val year = ReportRange.year(month.year)
+        openRangeDialog(six.label)
+        pickQuick("year-${month.year}")
+        awaitTrend(year)
+        trendNode(year).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -169,38 +190,46 @@ class TrendChartUiTest {
         showReports()
 
         awaitDailyChart()
-        segment(TrendSpan.FULL_YEAR).performScrollTo().performClick()
-        awaitTrend(TrendSpan.FULL_YEAR)
+        val year = ReportRange.year(thisMonth().year)
+        openRangeDialog(monthLabel(thisMonth()))
+        pickQuick("year-${thisMonth().year}")
+        awaitTrend(year)
 
-        segment(TrendSpan.HALF_YEAR).performScrollTo().performClick()
-        awaitTrend(TrendSpan.HALF_YEAR)
-        trendNode(TrendSpan.HALF_YEAR).performScrollTo().assertIsDisplayed()
+        val six = ReportRange.lastMonths(thisMonth(), 6)
+        openRangeDialog(year.label)
+        pickQuick("last6")
+        awaitTrend(six)
+        trendNode(six).performScrollTo().assertIsDisplayed()
 
-        segment(TrendSpan.MONTH).performScrollTo().performClick()
+        openRangeDialog(six.label)
+        pickQuick("month")
         awaitDailyChart()
         dailyChart().performScrollTo().assertIsDisplayed()
     }
 
-    /** 本月没记账、但近 12 个月里有数据：趋势区仍然在，切一段就能看到（F10 的可达性） */
+    /** 本月没记账、但近 6 个月里有数据：趋势区仍然可达，选一段就能看到（F10 的可达性） */
     @Test
-    fun anEmptyMonth_stillLetsYouReachTheTrend_whenTheWindowHasRecords() {
+    fun anEmptyMonth_stillLetsYouReachTheTrend_whenTheRangeHasRecords() {
         seedLastMonth()
         showReports()
 
         awaitText("本月还没有记录")
         composeRule.onNodeWithText("本月还没有记录").assertIsDisplayed()
-        // 默认"本月"没有已过天数的记录：不摆空图，但三段开关还在
-        composeRule.onNodeWithText("本月还没有收支记录。").performScrollTo().assertIsDisplayed()
+        // 默认"本月"一段流水都没有：整页空态，不摆空图（趋势区此时不渲染），但顶部范围入口还在
+        composeRule.onNodeWithText("记一笔之后，这里会给出收入、支出、结余与环比。").assertIsDisplayed()
+        composeRule.onAllNodes(hasTestTag(DAILY_CHART_TEST_TAG)).assertCountEquals(0)
 
-        segment(TrendSpan.HALF_YEAR).performScrollTo().performClick()
-        awaitTrend(TrendSpan.HALF_YEAR)
-        trendNode(TrendSpan.HALF_YEAR).performScrollTo().assertIsDisplayed()
+        val six = ReportRange.lastMonths(thisMonth(), 6)
+        openRangeDialog(monthLabel(thisMonth()))
+        pickQuick("last6")
+        awaitTrend(six)
+        trendNode(six).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("最高 ¥600.00").performScrollTo().assertIsDisplayed()
     }
 
-    /** 整个 12 个月窗口都没有记录：保持原来的纯空状态，不摆一张空图 */
+    /** 整个范围都没有记录：保持原来的纯空状态，不摆一张空图 */
     @Test
-    fun anEmptyWindow_keepsThePlainEmptyState() {
+    fun anEmptyRange_keepsThePlainEmptyState() {
         seedAccountOnly()
         showReports()
 
@@ -227,12 +256,10 @@ class TrendChartUiTest {
         composeRule.setContent {
             MaterialTheme {
                 TrendSection(
-                    span = TrendSpan.MONTH,
-                    month = month,
+                    range = ReportRange.Month(month),
                     points = listOf(MonthlyTotal(month, incomeCents = 0L, expenseCents = 60_000L)),
                     daily = daily,
                     isLoading = false,
-                    onSpanChange = {},
                     onDayClick = {},
                 )
             }
@@ -246,7 +273,6 @@ class TrendChartUiTest {
         composeRule.onAllNodesWithText("¥0").assertCountEquals(1)
 
         // 标签稀疏：1 号必标、相邻的 2 号不标；最后一天离上一个标签太近也不标
-        // （格子宽 18dp 时每 3 天一个标签，所以 3 号仍在；2 号在任何间隔下都不该出现）
         composeRule.onAllNodesWithText("1日").assertCountEquals(1)
         composeRule.onAllNodesWithText("2日").assertCountEquals(0)
         composeRule.onAllNodesWithText("31日").assertCountEquals(0)

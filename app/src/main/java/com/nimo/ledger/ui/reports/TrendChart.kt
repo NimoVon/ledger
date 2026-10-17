@@ -23,9 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,23 +52,19 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.stats.DailyTotal
 import com.nimo.ledger.domain.stats.MonthlyTotal
+import com.nimo.ledger.domain.stats.ReportBucket
+import com.nimo.ledger.domain.stats.ReportRange
 import com.nimo.ledger.ui.theme.TooltipShape
 import com.nimo.ledger.util.Money
 import java.time.LocalDate
-import java.time.YearMonth
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
-/**
- * 趋势区的跨度（R2 三段：本月｜半年｜全年）。「本月」按天画柱状（只画已过天数），
- * 半年 = 当前查看月份往前 5 个月，全年 = 往前 11 个月，按月份画折线。
- * 窗口以统计页顶部选中的月份为终点，所以切月时图跟着走。
+/*
+ * 画法不再由"三段开关"决定，而是由统计页的范围（ReportRange）派生：
+ * 单月与 ≤62 天的自选区间按天画柱（柱子可点开当日明细），
+ * 近 N 个月 / 自然年 / 更长的区间按月画折线。用户不再需要"先选月份再选跨度"两道口径。
  */
-enum class TrendSpan(val months: Int, val label: String) {
-    MONTH(1, "本月"),
-    HALF_YEAR(6, "半年"),
-    FULL_YEAR(12, "全年"),
-}
 
 /** 折线画布的高度：加载态用同一个高度占位，避免图出现时页面跳动 */
 private val CHART_HEIGHT = 160.dp
@@ -105,16 +98,15 @@ internal const val DAY_LABEL_MIN_SPACING_DP = 44f
 /** 金额气泡宽度 */
 private val DAY_TOOLTIP_WIDTH = 172.dp
 
-/** 图表的头一句（切到全年之后必须变成 12 个月）：读屏听到的是带数字的整句，测试用前缀匹配 */
-internal fun trendHead(span: TrendSpan): String =
-    if (span == TrendSpan.MONTH) "本月收支趋势" else "近${span.months}个月收支趋势"
+/** 图表的头一句：直接念当前范围，读屏听到的是带数字的整句，测试用前缀匹配 */
+internal fun trendHead(range: ReportRange): String = "${range.label}收支趋势"
 
 /**
  * 逐日柱状图的无障碍描述（R2）：窗口天数（= 已过天数）与该窗口的收支合计。
  * 数字全部来自 StatsCalculator.dailyTotals，页面一个数都不自己算。
  */
-internal fun dailyDescription(daily: List<DailyTotal>, month: YearMonth): String {
-    val head = "${month.year}年${month.monthValue}月逐日收支"
+internal fun dailyDescription(daily: List<DailyTotal>, rangeLabel: String): String {
+    val head = "${rangeLabel}逐日收支"
     if (daily.isEmpty()) return "$head：暂无数据"
     val income = daily.sumOf { it.incomeCents }
     val expense = daily.sumOf { it.expenseCents }
@@ -160,8 +152,8 @@ internal fun labeledDays(days: List<Int>, interval: Int): Set<Int> {
  * 无障碍描述：只说"近半年收支趋势"读屏用户拿不到任何数据，所以把窗口里的钱读出来——
  * 窗口合计与最近一个月（折线上最靠右那个点）。数字全部来自 StatsCalculator 的 [MonthlyTotal]。
  */
-internal fun trendDescription(points: List<MonthlyTotal>, span: TrendSpan): String {
-    val head = trendHead(span)
+internal fun trendDescription(points: List<MonthlyTotal>, range: ReportRange): String {
+    val head = trendHead(range)
     if (points.isEmpty()) return "$head：暂无数据"
     val income = points.sumOf { it.incomeCents }
     val expense = points.sumOf { it.expenseCents }
@@ -173,27 +165,24 @@ internal fun trendDescription(points: List<MonthlyTotal>, span: TrendSpan): Stri
 }
 
 /**
- * 收支趋势（F10 / R2）：三段「本月｜半年｜全年」。本月按天画柱状（柱子可点开当日流水），
- * 半年/全年按月份画折线。
+ * 收支趋势（F10）：画法由 [range] 的粒度决定——单月/短区间按天画柱（柱子可点开当日流水），
+ * 近 N 个月 / 自然年 / 长区间按月画折线。
  *
  * 图表用 Compose 自绘（计划 240 行：先自绘，暂不引图表库）：横轴是日期/月份、纵轴是金额。
  * 所有数字来自 StatsCalculator.dailyTotals / monthlyTotals，页面一个数都不自己算（铁律 3）。
  *
- * @param span 当前选中的跨度（点了就生效，即使数据还在读）
- * @param month 顶部选中的月份：「本月」视图的柱子属于它
- * @param points 升序的按月合计（切到「本月」时只有当前月一个点）
+ * @param range 整页当前的范围：横轴覆盖它、标题念它、空态文案也跟着它说
+ * @param points 升序的按月合计（按天画法时只有区间覆盖的那几个月）
  * @param daily 升序的逐日合计，只含已过去的天（含今天），未来日期不在里面
- * @param isLoading 数据没到位：显示占位，绝不拿上一段的数字画这一段的图
+ * @param isLoading 数据没到位：显示占位，绝不拿上一段范围的数字画这一段
  * @param onDayClick 点了某一天的柱子：打开当天流水明细
  */
 @Composable
 internal fun TrendSection(
-    span: TrendSpan,
-    month: YearMonth,
+    range: ReportRange,
     points: List<MonthlyTotal>,
     daily: List<DailyTotal>,
     isLoading: Boolean,
-    onSpanChange: (TrendSpan) -> Unit,
     onDayClick: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -202,24 +191,10 @@ internal fun TrendSection(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            TrendSpan.entries.forEachIndexed { index, item ->
-                SegmentedButton(
-                    selected = item == span,
-                    onClick = { onSpanChange(item) },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = index,
-                        count = TrendSpan.entries.size,
-                    ),
-                ) { Text(item.label) }
-            }
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-
-        if (span == TrendSpan.MONTH) {
-            DailySection(daily = daily, month = month, isLoading = isLoading, onDayClick = onDayClick)
+        if (range.bucket == ReportBucket.DAY) {
+            DailySection(daily = daily, range = range, isLoading = isLoading, onDayClick = onDayClick)
         } else {
-            MonthlySection(points = points, span = span, isLoading = isLoading)
+            MonthlySection(points = points, range = range, isLoading = isLoading)
         }
     }
 }
@@ -228,7 +203,7 @@ internal fun TrendSection(
 @Composable
 private fun DailySection(
     daily: List<DailyTotal>,
-    month: YearMonth,
+    range: ReportRange,
     isLoading: Boolean,
     onDayClick: (LocalDate) -> Unit,
 ) {
@@ -237,13 +212,13 @@ private fun DailySection(
     var selectedDay by remember(daily) { mutableStateOf<LocalDate?>(null) }
     when {
         isLoading -> ChartPlaceholder()
-        maxCents <= 0L -> EmptyChartText("本月还没有收支记录。")
+        maxCents <= 0L -> EmptyChartText("${range.label}还没有收支记录。")
         else -> {
             TrendLegend(maxCents)
             Spacer(modifier = Modifier.height(8.dp))
             DailyPlot(
                 daily = daily,
-                month = month,
+                rangeLabel = range.label,
                 top = niceCeiling(maxCents),
                 selectedDay = selectedDay,
                 onSelectDay = { day -> selectedDay = if (selectedDay == day) null else day },
@@ -253,14 +228,14 @@ private fun DailySection(
     }
 }
 
-/** 半年 / 全年视图：按月折线 */
+/** 近 N 个月 / 自然年 / 长区间：按月折线 */
 @Composable
-private fun MonthlySection(points: List<MonthlyTotal>, span: TrendSpan, isLoading: Boolean) {
+private fun MonthlySection(points: List<MonthlyTotal>, range: ReportRange, isLoading: Boolean) {
     val maxCents = points.maxOfOrNull { maxOf(it.incomeCents, it.expenseCents) } ?: 0L
     when {
         isLoading -> ChartPlaceholder()
         // 一段时间里一笔收支都没有：给一句话，而不是一条贴着 0 的直线
-        maxCents <= 0L -> EmptyChartText("近${span.months}个月还没有收支记录。")
+        maxCents <= 0L -> EmptyChartText("${range.label}还没有收支记录。")
         else -> {
             TrendLegend(maxCents)
             Spacer(modifier = Modifier.height(8.dp))
@@ -270,14 +245,14 @@ private fun MonthlySection(points: List<MonthlyTotal>, span: TrendSpan, isLoadin
                 TrendCanvas(
                     points = points,
                     maxCents = maxCents,
-                    span = span,
+                    range = range,
                     modifier = Modifier.weight(1f),
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
                 Spacer(modifier = Modifier.width(Y_AXIS_WIDTH))
-                MonthLabels(points = points, span = span, modifier = Modifier.weight(1f))
+                MonthLabels(points = points, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -317,7 +292,7 @@ private fun EmptyChartText(text: String) {
 @Composable
 private fun DailyBars(
     daily: List<DailyTotal>,
-    month: YearMonth,
+    rangeLabel: String,
     top: Long,
     selectedDay: LocalDate?,
     onSelectDay: (LocalDate) -> Unit,
@@ -332,7 +307,7 @@ private fun DailyBars(
         modifier = modifier
             .height(CHART_HEIGHT)
             .testTag(DAILY_CHART_TEST_TAG)
-            .semantics { contentDescription = dailyDescription(daily, month) },
+            .semantics { contentDescription = dailyDescription(daily, rangeLabel) },
     ) {
         // 与纵轴刻度、折线图同一套留白：0 分贴最下面那条网格线，上界贴最上面那条
         val available = (maxHeight - PLOT_INSET * 2).coerceAtLeast(0.dp)
@@ -438,7 +413,7 @@ private fun ChartYAxis(top: Long) {
 @Composable
 private fun DailyPlot(
     daily: List<DailyTotal>,
-    month: YearMonth,
+    rangeLabel: String,
     top: Long,
     selectedDay: LocalDate?,
     onSelectDay: (LocalDate) -> Unit,
@@ -468,7 +443,7 @@ private fun DailyPlot(
                         Column(modifier = Modifier.width(cellWidth * daily.size)) {
                             DailyBars(
                                 daily = daily,
-                                month = month,
+                                rangeLabel = rangeLabel,
                                 top = top,
                                 selectedDay = selectedDay,
                                 onSelectDay = onSelectDay,
@@ -617,7 +592,7 @@ private fun LegendDot(label: String, color: Color) {
 private fun TrendCanvas(
     points: List<MonthlyTotal>,
     maxCents: Long,
-    span: TrendSpan,
+    range: ReportRange,
     modifier: Modifier = Modifier,
 ) {
     val expenseColor = MaterialTheme.colorScheme.error
@@ -630,7 +605,7 @@ private fun TrendCanvas(
             .fillMaxWidth()
             .height(CHART_HEIGHT)
             .testTag(TREND_CHART_TEST_TAG)
-            .semantics { contentDescription = trendDescription(points, span) },
+            .semantics { contentDescription = trendDescription(points, range) },
     ) {
         // 留白与纵轴刻度、柱状图共用同一个值：折线画在最上/最下时描边不会被裁掉，
         // 网格线也正好压在刻度文字的中线上
@@ -670,10 +645,11 @@ private fun DrawScope.drawPolyline(color: Color, points: List<Offset>, strokePx:
 
 /** 横轴月份：每个格子一样宽，12 个格子放不下时隔一个显示一个（位置仍按格子对齐） */
 @Composable
-private fun MonthLabels(points: List<MonthlyTotal>, span: TrendSpan, modifier: Modifier = Modifier) {
+private fun MonthLabels(points: List<MonthlyTotal>, modifier: Modifier = Modifier) {
     Row(modifier = modifier.fillMaxWidth()) {
         points.forEachIndexed { index, p ->
-            val label = if (span == TrendSpan.FULL_YEAR && index % 2 == 1) "" else "${p.month.monthValue}月"
+            // 12 个月（自然年）放不下：单数位留空，位置仍按格子对齐
+            val label = if (points.size > 8 && index % 2 == 1) "" else "${p.month.monthValue}月"
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,

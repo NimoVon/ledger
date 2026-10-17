@@ -24,4 +24,19 @@ class ReportFormattingTest {
         assertEquals("较上月 ↑12.5%", ReportFormatting.change(0.125))
         assertEquals("较上月 ↓50.0%", ReportFormatting.change(-0.5))
     }
+
+    /**
+     * 「跟谁比」必须由范围决定：自然年比上一年、N 个月窗口比前 N 个月、自选区间比上一段。
+     * 单月不传就是原来的「较上月」——旧调用点一个都不用改。
+     */
+    @Test
+    fun change_namesTheComparedRange_insteadOfAlwaysSayingLastMonth() {
+        assertEquals("较上一年 ↑12.5%", ReportFormatting.change(0.125, "较上一年"))
+        assertEquals("较上一年 —", ReportFormatting.change(null, "较上一年"))
+        assertEquals("较上一年 持平", ReportFormatting.change(0.0, "较上一年"))
+        assertEquals("较前6个月 ↓50.0%", ReportFormatting.change(-0.5, "较前6个月"))
+        assertEquals("较上一段 ↑200.0%", ReportFormatting.change(2.0, "较上一段"))
+        // 默认参数仍走单月口径
+        assertEquals("较上月 ↑12.5%", ReportFormatting.change(0.125))
+    }
 }

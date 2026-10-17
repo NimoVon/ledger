@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -197,6 +198,42 @@ class ReportsMonthAnalysisUiTest {
         composeRule.onNodeWithText("这一天没有流水。").assertIsDisplayed()
     }
 
+    /**
+     * 换范围之后，「跟谁比」和读屏描述都得跟着换：自然年说的是"较上一年"，
+     * 环形图念的是"2026年支出分类占比"。写死「较上月」在自然年下就是错的口径（真机走查发现）。
+     */
+    @Test
+    fun switchingToACalendarYear_rewordsTheComparisonAndTheDonutDescription() {
+        val accountId = seedAccount()
+        val entertainmentId = seedCategory("娱乐", "🎮", CategoryKind.EXPENSE)
+        addExpense(accountId, entertainmentId, 60_000L, month.atDay(1))
+
+        showReports()
+        awaitText("支出环比")
+        // 支出、收入两格都写「较上月 —」
+        composeRule.onAllNodesWithText("较上月 —").assertCountEquals(2)
+
+        val year = month.year
+        composeRule.onNode(
+            hasText(month.year.toString() + "年" + month.monthValue + "月") and hasClickAction(),
+        ).performClick()
+        composeRule.awaitUntil {
+            composeRule.onAllNodes(
+                hasTestTag(RANGE_QUICK_PREFIX + "year-" + year),
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNode(hasTestTag(RANGE_QUICK_PREFIX + "year-" + year)).performClick()
+
+        awaitText("区间洞察")
+        composeRule.onNodeWithText(year.toString() + "年").assertExists()
+        composeRule.onAllNodesWithText("较上一年 —").assertCountEquals(2)
+        composeRule.onAllNodesWithText("较上月 —").assertCountEquals(0)
+        // 读屏那句头一句跟着范围走（占比 100% 的那一块）
+        composeRule.onNode(
+            hasContentDescription(year.toString() + "年支出分类占比", substring = true),
+        ).assertExists()
+    }
+
     @Test
     fun budgetRate_isHiddenUntilATotalBudgetExists() {
         val accountId = seedAccount()
@@ -234,11 +271,13 @@ class ReportsMonthAnalysisUiTest {
 
         awaitText("本月洞察")
         composeRule.onNodeWithText("本月洞察").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("日均 / 环比 / 预算").performScrollTo().assertIsDisplayed()
+        // 没设总预算时不提"预算"：提示行只列这块真给了的东西（预算达成率见下面的预算用例）
+        composeRule.onNodeWithText("日均 / 环比").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("日均支出").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("支出环比").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("收入环比").performScrollTo().assertIsDisplayed()
-        // 趋势区提示改成三段
-        composeRule.onNodeWithText("本月 / 近半年 / 近全年").performScrollTo().assertIsDisplayed()
+        // 趋势区不再自带"三段"提示：时间口径收归顶部的范围标签，趋势标题只说"收支趋势"
+        composeRule.onNodeWithText("收支趋势").performScrollTo().assertIsDisplayed()
+        composeRule.onNode(hasText("${month.year}年${month.monthValue}月") and hasClickAction()).assertExists()
     }
 }

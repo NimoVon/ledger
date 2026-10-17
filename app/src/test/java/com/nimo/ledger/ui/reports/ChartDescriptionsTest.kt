@@ -2,6 +2,7 @@ package com.nimo.ledger.ui.reports
 
 import com.nimo.ledger.domain.stats.CategoryBreakdownRow
 import com.nimo.ledger.domain.stats.MonthlyTotal
+import com.nimo.ledger.domain.stats.ReportRange
 import java.time.YearMonth
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -14,8 +15,8 @@ class ChartDescriptionsTest {
 
     @Test
     fun trendHead_countsTheWindowInMonths() {
-        assertEquals("近6个月收支趋势", trendHead(TrendSpan.HALF_YEAR))
-        assertEquals("近12个月收支趋势", trendHead(TrendSpan.FULL_YEAR))
+        assertEquals("近6个月收支趋势", trendHead(ReportRange.lastMonths(YearMonth.of(2026, 6), 6)))
+        assertEquals("近12个月收支趋势", trendHead(ReportRange.lastMonths(YearMonth.of(2026, 6), 12)))
     }
 
     @Test
@@ -27,13 +28,16 @@ class ChartDescriptionsTest {
         assertEquals(
             "近6个月收支趋势，共 2 个月：收入 ¥1,000.00，支出 ¥850.50；" +
                 "最近一个月 2026年6月：收入 ¥0.00，支出 ¥250.50",
-            trendDescription(points, TrendSpan.HALF_YEAR),
+            trendDescription(points, ReportRange.lastMonths(YearMonth.of(2026, 6), 6)),
         )
     }
 
     @Test
     fun trendDescription_withoutRecords_saysThereIsNoData() {
-        assertEquals("近12个月收支趋势：暂无数据", trendDescription(emptyList(), TrendSpan.FULL_YEAR))
+        assertEquals(
+            "近12个月收支趋势：暂无数据",
+            trendDescription(emptyList(), ReportRange.lastMonths(YearMonth.of(2026, 6), 12)),
+        )
     }
 
     @Test
@@ -61,6 +65,19 @@ class ChartDescriptionsTest {
                 "交通 ¥100.00（10.0%），其余 1 个分类",
             donutDescription(rows, 100_000L),
         )
+    }
+
+    /** 读屏那句「这是哪段范围的占比」要跟着范围标签走：自然年不能还念「本月」 */
+    @Test
+    fun donutDescription_namesTheCurrentRange_whenTheLabelIsNotAMonth() {
+        val rows = listOf(CategoryBreakdownRow(1L, "娱乐", 60_000L, 1.0))
+        assertEquals(
+            "2026年支出分类占比，合计 ¥600.00：娱乐 ¥600.00（100.0%）",
+            donutDescription(rows, 60_000L, "2026年"),
+        )
+        assertEquals("2026年支出分类占比", donutDescription(emptyList(), 0L, "2026年"))
+        // 默认仍是单月口径，旧调用零改动
+        assertEquals("本月支出分类占比", donutDescription(emptyList(), 0L))
     }
 
     @Test

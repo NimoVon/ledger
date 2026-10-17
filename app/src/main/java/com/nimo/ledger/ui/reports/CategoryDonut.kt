@@ -64,6 +64,9 @@ internal const val DONUT_TOOLTIP_TEST_TAG = "report-donut-tooltip"
 /** 无障碍描述的头一句（画布上没有可读文字）：读屏听到的是带数字的整句，测试用前缀匹配 */
 internal const val DONUT_DESCRIPTION = "本月支出分类占比"
 
+/** 描述头里的「这是哪段范围的占比」：统计页传当前范围标签，别处默认单月口径 */
+private const val DONUT_DEFAULT_LABEL = "本月"
+
 /** 没被选中的扇形压暗到这个透明度：选中那块一眼能认出来，也不至于脏 */
 private const val DONUT_DIM_ALPHA = 0.35f
 
@@ -74,13 +77,18 @@ private val DONUT_SELECTED_STROKE_BONUS = 6.dp
  * 无障碍描述：环形图 + 环心合计读出来，再补金额最大的前三个分类（名字、金额、占比）——
  * 与看「支出排行」拿到的信息一致。占比文案走 [ReportFormatting.percent]，不在这里另写一套。
  */
-internal fun donutDescription(rows: List<CategoryBreakdownRow>, totalCents: Long): String {
-    if (rows.isEmpty() || totalCents <= 0L) return DONUT_DESCRIPTION
+internal fun donutDescription(
+    rows: List<CategoryBreakdownRow>,
+    totalCents: Long,
+    label: String = DONUT_DEFAULT_LABEL,
+): String {
+    val head = label + "支出分类占比"
+    if (rows.isEmpty() || totalCents <= 0L) return head
     val top = rows.take(3).joinToString("，") {
         "${it.name} ${Money.formatCurrency(it.amountCents)}（${ReportFormatting.percent(it.percent)}）"
     }
     val rest = if (rows.size > 3) "，其余 ${rows.size - 3} 个分类" else ""
-    return "$DONUT_DESCRIPTION，合计 ${Money.formatCurrency(totalCents)}：$top$rest"
+    return "$head，合计 ${Money.formatCurrency(totalCents)}：$top$rest"
 }
 
 /**
@@ -177,6 +185,7 @@ internal fun CategoryDonutSection(
     rows: List<CategoryBreakdownRow>,
     modifier: Modifier = Modifier,
     onCategoryClick: (CategoryBreakdownRow) -> Unit = {},
+    label: String = DONUT_DEFAULT_LABEL,
 ) {
     if (rows.isEmpty()) return
     val totalCents = rows.sumOf { it.amountCents }
@@ -193,6 +202,7 @@ internal fun CategoryDonutSection(
                 rows = rows,
                 totalCents = totalCents,
                 selectedIndex = selectedIndex,
+                label = label,
                 onSelect = { picked -> selectedIndex = if (picked == selectedIndex) null else picked },
             )
             DonutCenter(totalCents = totalCents)
@@ -210,6 +220,7 @@ private fun CategoryDonutCanvas(
     rows: List<CategoryBreakdownRow>,
     totalCents: Long,
     selectedIndex: Int?,
+    label: String,
     onSelect: (Int?) -> Unit,
 ) {
     // 颜色跟分类 id 走（跨月不跳色）；同一张图里撞槽时按 id 升序避让，与「支出排行」算出来一致
@@ -218,7 +229,7 @@ private fun CategoryDonutCanvas(
         modifier = Modifier
             .size(DONUT_SIZE)
             .testTag(DONUT_TEST_TAG)
-            .semantics { contentDescription = donutDescription(rows, totalCents) }
+            .semantics { contentDescription = donutDescription(rows, totalCents, label) }
             // 命中判定在 donutSliceAt（纯函数、单独测）；点洞里或环外 = 取消选中
             .pointerInput(rows, totalCents) {
                 detectTapGestures { offset ->

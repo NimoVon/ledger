@@ -12,8 +12,8 @@ import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.domain.filter.TransactionFilter
 import com.nimo.ledger.domain.stats.BalanceCalculator
 import com.nimo.ledger.domain.stats.StatsCalculator
+import com.nimo.ledger.domain.stats.ReportRange
 import com.nimo.ledger.ui.reports.ReportDrillDown
-import com.nimo.ledger.ui.reports.TrendSpan
 import com.nimo.ledger.data.local.entity.BudgetEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -205,11 +205,11 @@ class TenThousandBenchmark {
         // F10 趋势折线：全年 12 个月的窗口查询 + 按月归档，链路与页面一致——
         // Dates.monthBounds 给 [首月1号, 次月1号) → DAO 范围查询 → StatsCalculator.monthlyTotals。
         val month = YearMonth.of(2026, 8)
-        val span = TrendSpan.FULL_YEAR
-        val firstTrendMonth = month.minusMonths((span.months - 1).toLong())
-        val (from, _) = com.nimo.ledger.util.Dates.monthBounds(firstTrendMonth)
-        val (_, to) = com.nimo.ledger.util.Dates.monthBounds(month)
-        val months = (span.months - 1 downTo 0).map { month.minusMonths(it.toLong()) }
+        // 12 个月滚动窗口：与页面同一条路径（ReportRange 给出半开区间 [from, to) 与月份列表）
+        val range = ReportRange.lastMonths(month, 12)
+        val from = range.from.toString()
+        val to = range.to.toString()
+        val months = range.months
 
         val t0 = System.currentTimeMillis()
         val rows = db.transactionDao().observeBetween(from, to).first()
@@ -220,7 +220,7 @@ class TenThousandBenchmark {
 
         assertEquals("2025-09-01", from)
         assertEquals("2026-09-01", to)
-        assertEquals(span.months, totals.size)
+        assertEquals(range.months.size, totals.size)
         assertEquals(month, totals.last().month)
         // 口径唯一：折线各月之和必须等于对同一段区间直接 summarize
         assertEquals(

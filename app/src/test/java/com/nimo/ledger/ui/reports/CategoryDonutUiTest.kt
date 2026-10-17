@@ -156,7 +156,8 @@ class CategoryDonutUiTest {
         composeRule.onNodeWithText("分类占比").assertIsDisplayed()
 
         list.performScrollToNode(hasTestTag(DONUT_TEST_TAG))
-        composeRule.onNode(hasContentDescription(DONUT_DESCRIPTION, substring = true)).assertIsDisplayed()
+        // 描述头跟着范围走：统计页传的是当前范围标签，这里用与范围无关的后半段做前缀匹配
+        composeRule.onNode(hasContentDescription("支出分类占比", substring = true)).assertIsDisplayed()
         // 环心 = 两个分类之和，和顶部「支出」是同一个数
         composeRule.onNodeWithTag(DONUT_CENTER_TEST_TAG).assertTextContains("支出合计")
         composeRule.onNodeWithTag(DONUT_CENTER_TEST_TAG).assertTextContains("¥800.00", substring = true)
@@ -179,7 +180,7 @@ class CategoryDonutUiTest {
         composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(hint))
         composeRule.onNodeWithText(hint).assertIsDisplayed()
         composeRule.onAllNodesWithText("分类占比").assertCountEquals(0)
-        composeRule.onAllNodes(hasContentDescription(DONUT_DESCRIPTION, substring = true)).assertCountEquals(0)
+        composeRule.onAllNodes(hasContentDescription("支出分类占比", substring = true)).assertCountEquals(0)
     }
 
     /**

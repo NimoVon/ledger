@@ -6,6 +6,7 @@ import com.nimo.ledger.domain.model.TransactionRecord
 import com.nimo.ledger.domain.model.TransactionType
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 
 /** 期间收支汇总。净结余 = 收入 - 支出，转账与余额调整永不进入（铁律 3：类型白名单） */
 data class PeriodSummary(
@@ -149,13 +150,17 @@ object StatsCalculator {
      * 日均支出的分母（已过去的天数）：查看当月时按"今天几号"，
      * 已结束的月份按整月天数，还没到的月份按 0。用整月天数当分母会把月中看到的日均压得偏低。
      */
-    fun elapsedDays(month: YearMonth, today: LocalDate): Int {
-        val current = YearMonth.from(today)
-        return when {
-            month == current -> today.dayOfMonth
-            month.isBefore(current) -> month.lengthOfMonth()
-            else -> 0
-        }
+    fun elapsedDays(month: YearMonth, today: LocalDate): Int =
+        elapsedDays(month.atDay(1), month.plusMonths(1).atDay(1), today)
+
+    /**
+     * 任意区间的已过去天数（统计页自选区间 / 自然年 / 近 N 个月共用一套口径）：
+     * 只数到"今天"为止，未来日期不算；区间还没开始（未来月份）时为 0。
+     */
+    fun elapsedDays(from: LocalDate, to: LocalDate, today: LocalDate): Int {
+        val end = minOf(to, today.plusDays(1))
+        if (!end.isAfter(from)) return 0
+        return ChronoUnit.DAYS.between(from, end).toInt()
     }
 
     /**
@@ -199,28 +204,44 @@ object StatsCalculator {
         records: List<TransactionRecord>,
         month: YearMonth,
         today: LocalDate,
+    ): List<DailyTotal> =
+        dailyTotals(records, month.atDay(1), month.plusMonths(1).atDay(1), today)
+
+    /**
+     * 任意区间的逐日聚合（统计页自选区间用）：横轴 = `[from, to)` 里已经过去的天（含今天）。
+     *
+     * 与 [dailyTotals] 的单月版本同一套白名单与"未来不画不补 0"的规矩，
+     * 只是把"某个月的第几天"换成真实日期——自选区间可能横跨两个月，按序号归档会撞车。
+     */
+    fun dailyTotals(
+        records: List<TransactionRecord>,
+        from: LocalDate,
+        to: LocalDate,
+        today: LocalDate,
     ): List<DailyTotal> {
-        val days = elapsedDays(month, today)
-        if (days <= 0) return emptyList()
-        val income = HashMap<Int, Long>()
-        val expense = HashMap<Int, Long>()
+        val end = minOf(to, today.plusDays(1))
+        if (!end.isAfter(from)) return emptyList()
+        val income = HashMap<LocalDate, Long>()
+        val expense = HashMap<LocalDate, Long>()
         for (r in records) {
-            if (YearMonth.from(r.occurredOn) != month) continue
-            val day = r.occurredOn.dayOfMonth
-            if (day > days) continue
+            val day = r.occurredOn
+            if (day < from || !day.isBefore(end)) continue
             when (r.type) {
                 TransactionType.INCOME -> income[day] = (income[day] ?: 0L) + r.amountCents
                 TransactionType.EXPENSE -> expense[day] = (expense[day] ?: 0L) + r.amountCents
                 TransactionType.TRANSFER, TransactionType.BALANCE_ADJUST -> Unit
             }
         }
-        return (1..days).map { day ->
-            DailyTotal(
-                date = month.atDay(day),
-                incomeCents = income[day] ?: 0L,
-                expenseCents = expense[day] ?: 0L,
-            )
-        }
+        return generateSequence(from) { it.plusDays(1) }
+            .takeWhile { it.isBefore(end) }
+            .map { day ->
+                DailyTotal(
+                    date = day,
+                    incomeCents = income[day] ?: 0L,
+                    expenseCents = expense[day] ?: 0L,
+                )
+            }
+            .toList()
     }
 
 }

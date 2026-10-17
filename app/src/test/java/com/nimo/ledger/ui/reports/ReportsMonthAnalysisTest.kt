@@ -13,6 +13,8 @@ import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.domain.model.TransactionInput
 import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.domain.stats.BudgetStatus
+import com.nimo.ledger.domain.stats.ReportBucket
+import com.nimo.ledger.domain.stats.ReportRange
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlinx.coroutines.flow.Flow
@@ -119,8 +121,8 @@ class ReportsMonthAnalysisTest {
 
     private suspend fun ReportsViewModel.awaitLoaded(): ReportsUiState = uiState.first { !it.isLoading }
 
-    private suspend fun ReportsViewModel.awaitSpan(span: TrendSpan): ReportsUiState =
-        uiState.first { !it.isLoading && !it.isTrendLoading && it.trendSpan == span }
+    private suspend fun ReportsViewModel.awaitRange(range: ReportRange): ReportsUiState =
+        uiState.first { !it.isLoading && !it.isTrendLoading && it.range == range }
 
     private suspend fun ReportsViewModel.awaitDayDetail(date: LocalDate): DayDetailUiState =
         uiState.first { it.dayDetail?.date == date && it.dayDetail?.isLoading == false }.dayDetail!!
@@ -152,7 +154,7 @@ class ReportsMonthAnalysisTest {
     }
 
     @Test
-    fun dailyBars_followTheViewedMonth_whenTheSegmentChanges() = runTest {
+    fun dailyBars_existOnlyForDayBuckets() = runTest {
         seed()
         addExpense(1_200L, "2026-10-01")
         addExpense(2_000L, "2026-09-05")
@@ -160,14 +162,27 @@ class ReportsMonthAnalysisTest {
         val viewModel = newViewModel()
         val month = viewModel.awaitLoaded()
         assertEquals(1, month.trend.size)
+        assertEquals(ReportBucket.DAY, month.range.bucket)
+        assertEquals(12, month.daily.size)
 
-        viewModel.setTrendSpan(TrendSpan.FULL_YEAR)
-        val full = viewModel.awaitSpan(TrendSpan.FULL_YEAR)
+        // 短区间同样按天：2026-10-01 ~ 2026-10-05 = 5 根柱子
+        val custom = ReportRange.custom(LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-05"))
+        viewModel.setRange(custom)
+        val five = viewModel.awaitRange(custom)
+        assertEquals(ReportBucket.DAY, five.range.bucket)
+        assertEquals(5, five.elapsedDays)
+        assertEquals(5, five.daily.size)
+        assertEquals(1_200L, five.daily.first().expenseCents)
+        assertEquals(1_200L, five.summary.expenseCents)
 
-        // 换的是画法，不是这个月的逐日数据
+        // 按月画法的范围不产出逐日柱：柱子属于"按天看账"，不是常驻数据
+        val year = ReportRange.year(2026)
+        viewModel.setRange(year)
+        val full = viewModel.awaitRange(year)
+        assertEquals(ReportBucket.MONTH, full.range.bucket)
         assertEquals(12, full.trend.size)
-        assertEquals(month.daily, full.daily)
-        assertEquals(month.elapsedDays, full.elapsedDays)
+        assertTrue(full.daily.isEmpty())
+        assertEquals(3_200L, full.summary.expenseCents)
     }
 
     @Test
@@ -178,8 +193,10 @@ class ReportsMonthAnalysisTest {
 
         val viewModel = newViewModel()
         viewModel.awaitLoaded()
-        viewModel.showPreviousMonth()
-        val september = viewModel.uiState.first { it.month == YearMonth.of(2026, 9) && !it.isLoading }
+        viewModel.showPreviousRange()
+        val september = viewModel.uiState.first {
+            it.range == ReportRange.Month(YearMonth.of(2026, 9)) && !it.isLoading
+        }
 
         // 9 月是过去的月份：整月 30 天都要画，不受"今天 12 号"限制
         assertEquals(30, september.elapsedDays)

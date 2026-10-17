@@ -18,14 +18,20 @@ object ReportFormatting {
         return formatTenths(Math.round(ratio * 1_000.0))
     }
 
-    /** 环比：0.125 → "较上月 ↑12.5%"；-0.5 → "较上月 ↓50.0%"；null（上月为 0）→ "较上月 —" */
-    fun change(ratio: Double?): String {
-        if (ratio == null) return "较上月 " + NO_DATA
+    /**
+     * 环比：0.125 → "较上月 ↑12.5%"；-0.5 → "较上月 ↓50.0%"；null（上一段为 0）→ "较上月 —"。
+     *
+     * @param comparedTo 「跟谁比」：单月是"较上月"，自然年是"较上一年"，N 个月窗口是"较前N个月"，
+     *   自定义区间是"较上一段"——由 [com.nimo.ledger.domain.stats.ReportRange.previousLabel] 给出。
+     *   默认值保持单月口径，测试与旧调用零改动。
+     */
+    fun change(ratio: Double?, comparedTo: String = "较上月"): String {
+        if (ratio == null) return comparedTo + " " + NO_DATA
         val tenths = Math.round(Math.abs(ratio) * 1_000.0)
         // 差不到 0.05% 就别拿出来吓人，显示"持平"
-        if (tenths == 0L) return "较上月 持平"
+        if (tenths == 0L) return comparedTo + " 持平"
         val arrow = if (ratio > 0) "↑" else "↓"
-        return "较上月 " + arrow + formatTenths(tenths)
+        return comparedTo + " " + arrow + formatTenths(tenths)
     }
 
     /** 千分之一单位 → "12.5%" */

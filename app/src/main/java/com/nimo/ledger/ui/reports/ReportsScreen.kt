@@ -40,7 +40,6 @@ import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.ledger.ui.components.MonthSummaryBar
 import com.nimo.ledger.ui.components.MonthSwitcher
-import com.nimo.ledger.ui.components.YearMonthPickerDialog
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -52,10 +51,11 @@ import kotlinx.coroutines.flow.flowOf
  * 钱花在哪（分类支出排行）。所有数字来自 [ReportsViewModel]，页面一个数都不自己算
  * （铁律 3：统计口径唯一实现在 StatsCalculator）。
  *
- * 顶部按月切换，月份边界与标签与明细页同一套（共用 [MonthSwitcher] / [MonthSummaryBar]）。
+ * 顶部是**统计范围**（月 / 近 N 个月 / 自然年 / 自选区间）：整页数字全部按它聚合，
+ * 切换用 [MonthSwitcher] 的同一套外观（标签可点开 [ReportRangeDialog]），箭头按范围单位走。
  *
- * 点排行或账户分布的一行可以下钻：跳回明细页、带上"这一行 + 当前这个月"的筛选条件，
- * 让用户自己核对该行背后的每一笔流水（计划 M3 验收：月报金额与流水逐笔对账一致）。
+ * 点排行或账户分布的一行可以下钻：跳回明细页、带上"这一行 + 当前这个范围"的筛选条件，
+ * 让用户自己核对该行背后的每一笔流水（计划 M3 验收：报表金额与流水逐笔对账一致）。
  *
  * @param pendingDeletionIds 正被暂存待删除的那几笔 id：倒计时内它们不进报表
  * @param onDrillDown 点某一行时要看的筛选条件，由 [ReportDrillDown] 翻译，宿主负责跳转
@@ -69,15 +69,17 @@ fun ReportsScreen(
     val viewModel: ReportsViewModel =
         viewModel(factory = ReportsViewModel.factory(repository, pendingDeletionIds))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    // R1 日期直改：点月份标签打开年月选择器，选中的年月与明细页同一套口径
-    var showMonthPicker by remember { mutableStateOf(false) }
+    // 点范围标签打开范围弹层：快捷项（本月/近 N 个月/今年/去年）、指定月份、自定义起止日期
+    var showRangeDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         MonthSwitcher(
-            label = state.monthLabel,
-            onPrevious = viewModel::showPreviousMonth,
-            onNext = viewModel::showNextMonth,
-            onLabelClick = { showMonthPicker = true },
+            label = state.rangeLabel,
+            onPrevious = viewModel::showPreviousRange,
+            onNext = viewModel::showNextRange,
+            onLabelClick = { showRangeDialog = true },
+            previousLabel = "上一段",
+            nextLabel = "下一段",
         )
         MonthSummaryBar(summary = state.summary, loading = state.isLoading)
         HorizontalDivider()
@@ -95,27 +97,27 @@ fun ReportsScreen(
 
             state.isLoading -> Box(contentModifier, Alignment.Center) { CircularProgressIndicator() }
 
-            // 本月没记账、但趋势窗口里有数据：空状态照旧，下面把趋势图也放出来。
-            // 不放的话，用户一切到空月份就看不到刚做好的趋势折线（F10）。
+            // 这段范围没记账、但趋势里还有数据：空状态照旧，下面把趋势图也放出来。
+            // 不放的话，用户一切到空范围就看不到刚做好的趋势折线（F10）。
             state.isEmpty && state.trendHasData -> LazyColumn(
                 modifier = contentModifier,
                 contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
             ) {
-                item(key = "empty-month") {
+                item(key = "empty-range") {
                     EmptyState(
-                        title = "本月还没有记录",
-                        message = "记一笔之后，这里会给出收入、支出、结余与环比。",
+                        title = state.emptyTitle,
+                        message = state.emptyMessage,
                         modifier = Modifier.heightIn(min = 180.dp),
                     )
                 }
-                item(key = "trend-header") { SectionHeader("收支趋势", hint = "本月 / 近半年 / 近全年") }
+                item(key = "trend-header") { SectionHeader("收支趋势") }
                 item(key = "trend") { TrendBlock(state = state, viewModel = viewModel) }
             }
 
-            // 空状态按"本月"表述：切到没有记录的月份不该看起来像坏了
+            // 空状态按范围表述：切到没有记录的范围不该看起来像坏了
             state.isEmpty -> EmptyState(
-                title = "本月还没有记录",
-                message = "记一笔之后，这里会给出收入、支出、结余与环比。",
+                title = state.emptyTitle,
+                message = state.emptyMessage,
                 modifier = contentModifier,
             )
 
@@ -123,9 +125,16 @@ fun ReportsScreen(
                 modifier = contentModifier,
                 contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
             ) {
-                item(key = "insight-header") { SectionHeader("本月洞察", hint = "日均 / 环比 / 预算") }
+                // 提示写清这块到底给了什么：预算达成率只在单月范围出现，写死了会让人找不存在的行
+                item(key = "insight-header") {
+                    val hint = buildString {
+                        append("日均 / 环比")
+                        if (state.hasTotalBudget) append(" / 预算")
+                    }
+                    SectionHeader(state.insightTitle, hint = hint)
+                }
                 item(key = "insight") { InsightSection(state) }
-                item(key = "trend-header") { SectionHeader("收支趋势", hint = "本月 / 近半年 / 近全年") }
+                item(key = "trend-header") { SectionHeader("收支趋势") }
                 item(key = "trend") { TrendBlock(state = state, viewModel = viewModel) }
                 // 先给个总览：谁占了大头；具体数字看下面的排行（占比条用同一套颜色对号）
                 if (state.breakdown.isNotEmpty()) {
@@ -135,8 +144,10 @@ fun ReportsScreen(
                     item(key = "donut") {
                         CategoryDonutSection(
                             rows = state.breakdown,
+                            // 读屏说的是「2026年10月支出分类占比」，跟着当前范围走，不再是写死的"本月"
+                            label = state.rangeLabel,
                             onCategoryClick = { row ->
-                                onDrillDown(ReportDrillDown.byCategory(state.month, row.categoryId))
+                                onDrillDown(ReportDrillDown.byCategory(state.range, row.categoryId))
                             },
                         )
                     }
@@ -144,7 +155,7 @@ fun ReportsScreen(
                 item(key = "breakdown-header") { SectionHeader("支出排行", hint = "点一行看明细") }
                 if (state.breakdown.isEmpty()) {
                     item(key = "breakdown-empty") {
-                        HintRow("本月没有支出。转账与余额调整不算收支，所以不会出现在这里。")
+                        HintRow(state.noExpenseHint)
                     }
                 } else {
                     items(
@@ -157,7 +168,7 @@ fun ReportsScreen(
                             percent = row.percent,
                             barColor = CATEGORY_SLOT_COLORS[categorySlots.getValue(row.categoryId)],
                             onClick = {
-                                onDrillDown(ReportDrillDown.byCategory(state.month, row.categoryId))
+                                onDrillDown(ReportDrillDown.byCategory(state.range, row.categoryId))
                             },
                         )
                     }
@@ -165,7 +176,7 @@ fun ReportsScreen(
                 item(key = "accounts-header") { SectionHeader("账户支出分布", hint = "点一行看明细") }
                 if (state.accountBreakdown.isEmpty()) {
                     item(key = "accounts-empty") {
-                        HintRow("本月没有支出，所以没有账户分布。")
+                        HintRow(state.noAccountExpenseHint)
                     }
                 } else {
                     items(items = state.accountBreakdown, key = { "acct-${it.accountId}" }) { row ->
@@ -176,7 +187,7 @@ fun ReportsScreen(
                             // 账户分布不对应环形图，沿用主题色
                             barColor = MaterialTheme.colorScheme.primary,
                             onClick = {
-                                onDrillDown(ReportDrillDown.byAccount(state.month, row.accountId))
+                                onDrillDown(ReportDrillDown.byAccount(state.range, row.accountId))
                             },
                         )
                     }
@@ -185,13 +196,13 @@ fun ReportsScreen(
         }
     }
 
-    if (showMonthPicker) {
-        YearMonthPickerDialog(
-            current = state.month,
-            onDismiss = { showMonthPicker = false },
+    if (showRangeDialog) {
+        ReportRangeDialog(
+            current = state.range,
+            onDismiss = { showRangeDialog = false },
             onSelect = { picked ->
-                viewModel.setMonth(picked)
-                showMonthPicker = false
+                viewModel.setRange(picked)
+                showRangeDialog = false
             },
         )
     }
@@ -202,16 +213,14 @@ fun ReportsScreen(
     }
 }
 
-/** 趋势区（F10 / R2）：三段开关 + 图；「本月」是逐日柱状，柱子可点开当天流水 */
+/** 趋势区（F10）：画法随范围走——单月/短区间是逐日柱（柱子可点开当天流水），其余按月折线 */
 @Composable
 private fun TrendBlock(state: ReportsUiState, viewModel: ReportsViewModel) {
     TrendSection(
-        span = state.trendSpan,
-        month = state.month,
+        range = state.range,
         points = state.trend,
         daily = state.daily,
         isLoading = state.isTrendLoading,
-        onSpanChange = viewModel::setTrendSpan,
         onDayClick = viewModel::setSelectedDay,
     )
 }
@@ -307,6 +316,8 @@ private fun ChangeSection(state: ReportsUiState) {
         ChangeCell(
             label = "支出环比",
             ratio = state.expenseChangeRatio,
+            // 「跟谁比」随范围走：较上月 / 较上一年 / 较前6个月 / 较上一段
+            comparedTo = state.range.previousLabel,
             // 支出涨是坏消息、收入涨是好消息，箭头方向一样，颜色不一样
             growthIsBad = true,
             modifier = Modifier.weight(1f),
@@ -314,6 +325,7 @@ private fun ChangeSection(state: ReportsUiState) {
         ChangeCell(
             label = "收入环比",
             ratio = state.incomeChangeRatio,
+            comparedTo = state.range.previousLabel,
             growthIsBad = false,
             modifier = Modifier.weight(1f),
         )
@@ -324,6 +336,7 @@ private fun ChangeSection(state: ReportsUiState) {
 private fun ChangeCell(
     label: String,
     ratio: Double?,
+    comparedTo: String,
     growthIsBad: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -339,7 +352,7 @@ private fun ChangeCell(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = ReportFormatting.change(ratio),
+            text = ReportFormatting.change(ratio, comparedTo),
             style = MaterialTheme.typography.titleSmall,
             color = color,
             fontWeight = FontWeight.Medium,
