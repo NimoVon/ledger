@@ -220,8 +220,8 @@ class ReportsViewModelTest {
         assertEquals(10_000L, state.previousSummary.expenseCents)
         assertEquals(0.25, state.expenseChangeRatio!!, 1e-9)
         assertEquals(-0.5, state.incomeChangeRatio!!, 1e-9)
-        assertEquals("较上月 ↑25.0%", ReportFormatting.change(state.expenseChangeRatio))
-        assertEquals("较上月 ↓50.0%", ReportFormatting.change(state.incomeChangeRatio))
+        assertEquals("较上月 25.0%", ReportFormatting.change(state.expenseChangeRatio))
+        assertEquals("较上月 50.0%", ReportFormatting.change(state.incomeChangeRatio))
     }
 
     @Test
@@ -251,14 +251,14 @@ class ReportsViewModelTest {
         assertEquals("2026年10月", october.rangeLabel)
         assertEquals(1_100L, october.summary.expenseCents)
         assertEquals(700L, october.previousSummary.expenseCents)
-        assertEquals("较上月 ↑57.1%", ReportFormatting.change(october.expenseChangeRatio))
+        assertEquals("较上月 57.1%", ReportFormatting.change(october.expenseChangeRatio))
 
         vm.showPreviousRange()
         val september = vm.awaitRange(ReportRange.Month(YearMonth.of(2026, 9)))
         assertEquals("2026年9月", september.rangeLabel)
         assertEquals(700L, september.summary.expenseCents)
         assertEquals(300L, september.previousSummary.expenseCents)
-        assertEquals("较上月 ↑133.3%", ReportFormatting.change(september.expenseChangeRatio))
+        assertEquals("较上月 133.3%", ReportFormatting.change(september.expenseChangeRatio))
 
         vm.showNextRange()
         val back = vm.awaitRange(ReportRange.Month(YearMonth.of(2026, 10)))
@@ -401,7 +401,7 @@ class ReportsViewModelTest {
         assertEquals("2026年1月", january.rangeLabel)
         assertEquals(900L, january.summary.expenseCents)
         assertEquals(300L, january.previousSummary.expenseCents)
-        assertEquals("较上月 ↑200.0%", ReportFormatting.change(january.expenseChangeRatio))
+        assertEquals("较上月 200.0%", ReportFormatting.change(january.expenseChangeRatio))
 
         // 再往回一年的 12 月：上月没有记录 → 环比无意义
         vm.setMonth(YearMonth.of(2025, 12))
@@ -433,7 +433,7 @@ class ReportsViewModelTest {
         val january = vm.awaitRange(ReportRange.Month(YearMonth.of(2027, 1)))
         assertEquals(500L, january.summary.expenseCents)
         assertEquals(700L, january.previousSummary.expenseCents)
-        assertEquals("较上月 ↓28.6%", ReportFormatting.change(january.expenseChangeRatio))
+        assertEquals("较上月 28.6%", ReportFormatting.change(january.expenseChangeRatio))
 
         // 直选与箭头等价：从 2027-01 退一个月，回到同一个 2026-12
         vm.showPreviousRange()

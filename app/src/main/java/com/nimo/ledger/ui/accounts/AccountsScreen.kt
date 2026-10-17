@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.ledger.data.local.entity.AccountEntity
 import com.nimo.ledger.data.repository.LedgerRepository
+import com.nimo.ledger.domain.model.AccountType
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.EmptyTone
@@ -238,6 +240,15 @@ private fun AccountRow(
     LedgerListItem(
         title = account.name,
         subtitle = account.type.label + if (account.isArchived) " · 已归档" else "",
+        // 账户类型图标 24dp：信用卡用卡、其余用钱包（§5.1 Wallet / Card）
+        leadingIcon = {
+            Icon(
+                imageVector = if (account.type == AccountType.CREDIT) LedgerIcons.Card else LedgerIcons.Wallet,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
         // 当前余额（推导值），不是建账时的初始余额
         trailingText = Money.formatCurrency(balanceCents),
         trailingContent = onAdjust?.let { adjust ->

@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.domain.filter.TransactionFilter
 import com.nimo.ledger.domain.stats.BudgetStatus
+import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
@@ -353,12 +356,38 @@ private fun ChangeCell(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            text = ReportFormatting.change(ratio, comparedTo),
-            style = MaterialTheme.typography.titleSmall,
-            color = color,
-            fontWeight = FontWeight.Medium,
-        )
+        // 箭头用图标而不是 ↑↓ 字符：字符基线随字体漂移，16dp 时尤其明显（§5.1 TrendUp / TrendDown）
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            when (ReportFormatting.changeDirection(ratio)) {
+                ChangeDirection.UP -> {
+                    Icon(
+                        imageVector = LedgerIcons.ArrowUp,
+                        contentDescription = "上升",
+                        tint = color,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(2.dp))
+                }
+
+                ChangeDirection.DOWN -> {
+                    Icon(
+                        imageVector = LedgerIcons.ArrowDown,
+                        contentDescription = "下降",
+                        tint = color,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(2.dp))
+                }
+
+                ChangeDirection.NONE -> Unit
+            }
+            Text(
+                text = ReportFormatting.change(ratio, comparedTo),
+                style = MaterialTheme.typography.titleSmall,
+                color = color,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }
 

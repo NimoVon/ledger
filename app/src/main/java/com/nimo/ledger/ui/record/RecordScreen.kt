@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -502,7 +504,14 @@ private fun RecordFormBody(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // 日期图标 20dp：可点的日期字段要一眼看出「这里能点」（§5.1 Calendar）
                 TextButton(onClick = onPickDate) {
+                    Icon(
+                        imageVector = LedgerIcons.Calendar,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(state.form.occurredOn)
                 }
                 if (state.form.occurredOn != Dates.today()) {
