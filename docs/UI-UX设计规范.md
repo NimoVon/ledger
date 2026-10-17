@@ -553,7 +553,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | 表单打开（任何页 → 记一笔 / 转账） | `SLIDE_VERTICAL`（自下而上） | 位移 1/3 屏 |
 | 表单返回（含从下钻页打开编辑页再返回） | `SLIDE_VERTICAL`（下落） | 位移 1/3 屏 |
 
-判据只有一处：`navMotionOf(initialRoute, targetRoute, isPop)`——pop 时先看 `initialRoute` 是否是表单（是就 `SLIDE_VERTICAL`，不因为下层是二级页而改成横向），其余按 `PageKind { TAB, DETAIL, FORM }` 决定。缓动统一 `FastOutSlowInEasing`，**不要**在调用点另写 `tween` 时长。已知缺口：未接 Android 14 预测式返回、未读系统「减少动画」（AA-7 / 批 F 的 F-4），无拖拽返回手势。
+判据只有一处：`navMotionOf(initialRoute, targetRoute, isPop)`——pop 时先看 `initialRoute` 是否是表单（是就 `SLIDE_VERTICAL`，不因为下层是二级页而改成横向），其余按 `PageKind { TAB, DETAIL, FORM }` 决定。缓动统一 `FastOutSlowInEasing`，**不要**在调用点另写 `tween` 时长。已知缺口：未接 Android 14 预测式返回、无拖拽返回手势。系统「减少动画」（AA-7 / 批 F 的 F-4）**已于 2026-10-17 接上**：`rememberAnimationsEnabled()` 读 `animator_duration_scale`，0 时四个转场返回 `None`（证据 `docs/测试报告.md` §26，含正/负对照）。
 
 **Tab 切换语义（2026-10-17 修，`NavHostController.switchTab`）**：①下钻页是压在统计页之上的**一次性**结果，切到任何 Tab 前先把它丢掉（不跟 Tab 状态一起存）；②目标若是起始 Tab「明细」，用 `popBackStack(起始页, inclusive = false, saveState = true)` 而不是 `navigate + restoreState`——后者会把压在起始页之上的那段（统计页）当成起始页自己的历史整段恢复回来，表现就是「在下钻页点统计没反应」「在统计页点明细没反应」。唯一入口 `ui/LedgerRoutes.kt` 的 `NavHostController.switchTab`，底栏不再内联导航参数；判据由 `ui/LedgerDrillDownNavigationTest` 的 10 例钉住，见 `docs/测试报告.md` §20。
 
@@ -685,7 +685,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | AA-4 | P1 | 图表语义已做（`DONUT_DESCRIPTION` / `dailyDescription` / `dayDescription` / `trendDescription`），柱状图每格是独立可点 Box | 保留；确认相邻格子朗读不会被合并成长句（mergeDescendants 只在格子内部用，**待真机确认**） |
 | AA-5 | P1 | 金额朗读：TalkBack 会逐字读「¥」与小数点 | 在 LedgerAmount 上加 semantics contentDescription，用「支出 12 元 3 角 4 分」式中文口语；**该文案应由 Money 层提供（新增函数），触及金额核心模块，标 P1 待确认** |
 | AA-6 | P1 | 表单焦点顺序应为 金额 → 分类 → 账户 → 日期 → 备注 → 保存 | 现状按声明顺序，基本正确；用 focusProperties 显式固定，**真机 TalkBack 验证待做** |
-| AA-7 | P1 | 未处理「减少动画」偏好 | 页面过渡/骨架淡入包 LocalMotionDurationScale，或读 Settings.Global.ANIMATOR_DURATION_SCALE；**最低要求：减少动画时不播骨架淡入** |
+| AA-7 ✅ **已修 2026-10-17** | P1 | 未处理「减少动画」偏好 | 页面过渡/骨架淡入包 LocalMotionDurationScale，或读 Settings.Global.ANIMATOR_DURATION_SCALE；**最低要求：减少动画时不播骨架淡入** —— 已读 `animator_duration_scale`（`rememberAnimationsEnabled()`）+ 四个转场 0 时返回 `None`（F-4）；骨架淡入归 G-9，届时复用同一接点。证据见 `docs/测试报告.md` §26 |
 | AA-8 | P1 | 200% 文本缩放 | 见 §10.5 逐屏清单（当前只有 MonthSummaryBar 有断言） |
 
 ---
@@ -848,10 +848,10 @@ cd /d/git/ledger
 | F-1 | 补 13 个 LedgerIcons（§5.1），替换「›」与「↑↓」字符 | 图标在 24dp / 20dp / 16dp 三档清晰（截图） |
 | F-2 ✅ **已完成 2026-10-17** | fontScale ≥1.5 三处竖排（G-6）。实装：门槛收到 `ui/components/FontScale.kt`（`STACK_FONT_SCALE = 1.5f` + `stackAtLargeFont`，`MonthSummaryBar.stackSummaryCells` 改为委托）；`FilterBar` ≥1.5 时「筛选 + 清空」一行、chips 独占下一行；`LedgerSectionHeader` 新增 `stack` 参数，`DayHeader` 据此把支出/收入竖排；`BudgetProgressBar` 两段文字改竖排 | `@Config(qualifiers = "w411dp-h891dp-xxhdpi")` + `CompositionLocalProvider(LocalDensity provides Density(density, fontScale))` 的 9 例组件测试（1.0 与 2.0 各一组几何断言），真机 1440×3200（384dp 宽）跑 1.0 / 1.5 / 2.0 三档：1.5 下 chips 从 x98 起独占整行、日段头「支出 ¥774.00」在日期下面、预算行「已超支 ¥274.00」在「已用 …」下面；2.0 下「分类：餐饮」完整显示（E-1 遗留的裁字已消失）。红绿：三处 `val stack = ...` 改 `false` 时 3 例必红（详见 `docs/测试报告.md` §25.3） |
 | F-3 | 分类预设 emoji 网格（C-6） | 对话框 UI 测试 |
-| F-4 | 「减少动画」偏好（AA-7） | 手动验证；§7.4 的转场目前未读这个偏好（见 `docs/测试报告.md` §19.6） |
+| F-4 ✅ **已完成 2026-10-17** | 「减少动画」偏好（AA-7）。实装：新增 `ui/MotionPreference.kt`——`animationsEnabled(scale) = scale > 0f`、`readAnimatorScale()`、`rememberAnimationsEnabled()`（读 `Settings.Global.ANIMATOR_DURATION_SCALE` + `ContentObserver`，设置里一开一关立刻生效）；`LedgerNavMotion` 四个转场加 `animated` 参数，false 时返回 `None`；`LedgerApp` 在 `NavHost` 前读一次并传给四个方向 | 7 例组件/纯函数测试（阈值 2 + 读设置 1 + 组合读值 2 + 4 路由 × 4 方向全为 `None` 1 + 反向 1）；真机**正/负对照**（同一套「明细→统计」操作、设备上连拍 3 张再 pull）：倍率 10 时帧间差 25.87% / 34.23%（拍法对动画敏感），倍率 0 时 0.00% 且三张截图字节数完全相同；两次都校验「点前明细、点后统计」。见 `docs/测试报告.md` §26 |
 | F-5 ✅ **已完成 2026-10-17** | 金额输入全角归一化（来源是 §22 真机走查的输入侧发现，原计划单独成批）：新增 `Money.normalizeAmountInput`，在 **输入口**把全角数字 `０-９`、句号 `。` / `．` / `｡`、逗号 `，`、负号 `－` / `−` / `﹣`、全角空格 `U+3000` 换成半角；`Money.parseCents` 与 CSV/JSON 导入的严格口径不动。接线 7 个 `KeyboardType.Decimal` 输入框（记一笔 / 转账经 `::setAmount`，账户编辑 / 余额校准 / 预算编辑 / 明细筛选上下限就地调） | 8 例测试（函数级 3 + ViewModel 接线 2 + 源码级守门 `AmountInputSourceTest` 3）；真机逐字符输 `1` `2` `3` + PERIOD + `4` `5` → 字段 `123.45`、复核行 `核对：¥123.45`（修复前同一套按键得「123。 45」且复核行不出现），第二个输入口（账户初始余额）读到 `1.5`，取消后净资产 -¥2,539.00 逐分未变。见 `docs/测试报告.md` §23 |
 
-> 批 F 状态（2026-10-17）：**F-2（fontScale ≥1.5 三处竖排）已完成**——证据见 `docs/测试报告.md` §25（98 套 822 例、行覆盖 71.2%、真机 3 档字体走查净效果为零）；**F-5（金额输入全角归一化）已完成**——它不在 §11 的原始批次里，来源是 §22 真机走查发现的输入侧问题，趁手修掉并单列成 F-5；证据见 `docs/测试报告.md` §23（94 套 808 例、行覆盖 70.6%、真机 10 项走查净效果为零）。**F-1 ~ F-4 未开始**。F-5 的执行要点：①先判断「归一化放输入口还是放解析」，选输入口——字段本身就得是半角，否则 §22 的「核对：¥…」复核行与字段对不上，用户看着全角还能保存更迷惑；②`parseCents` 严格口径与 CSV/JSON 导入路径一律不动；③7 个输入口靠源码级守门 `AmountInputSourceTest` 兜底，但那只网只认表里列出的文件，新增金额输入框要手动补 `amountFieldFiles`。
+> 批 F 状态（2026-10-17）：**F-4（接系统「减少动画」偏好）已完成**——证据见 `docs/测试报告.md` §26（99 套 829 例、行覆盖 71.2%、真机正负对照：倍率 10 帧间差 25.87% / 34.23%，倍率 0 帧间差 0.00%）；**F-2（fontScale ≥1.5 三处竖排）已完成**——证据见 `docs/测试报告.md` §25（98 套 822 例、行覆盖 71.2%、真机 3 档字体走查净效果为零）；**F-5（金额输入全角归一化）已完成**——它不在 §11 的原始批次里，来源是 §22 真机走查发现的输入侧问题，趁手修掉并单列成 F-5；证据见 `docs/测试报告.md` §23（94 套 808 例、行覆盖 70.6%、真机 10 项走查净效果为零）。**F-1（13 个 LedgerIcons）与 F-3（分类 emoji 网格）未开始**。F-5 的执行要点：①先判断「归一化放输入口还是放解析」，选输入口——字段本身就得是半角，否则 §22 的「核对：¥…」复核行与字段对不上，用户看着全角还能保存更迷惑；②`parseCents` 严格口径与 CSV/JSON 导入路径一律不动；③7 个输入口靠源码级守门 `AmountInputSourceTest` 兜底，但那只网只认表里列出的文件，新增金额输入框要手动补 `amountFieldFiles`。
 
 ### 批 P3：待拍板项（不默认做）
 
@@ -908,6 +908,6 @@ cd /d/git/ledger
 
 **UI 设计师**：DSH UI 设计师 Agent
 **设计系统日期**：2026-10-16
-**实施状态（2026-10-17）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24；批 F 的 F-2（fontScale ≥1.5 三处竖排）见 §25；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；批 E 的 E-4 / E-7 / E-8 与批 F 的 F-1 / F-3 / F-4 待排期
+**实施状态（2026-10-17）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24；批 F 的 F-2（fontScale ≥1.5 三处竖排）见 §25，F-4（接「减少动画」偏好）见 §26；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；批 E 的 E-4 / E-7 / E-8 与批 F 的 F-1 / F-3 待排期
 **QA 流程**：批 D/E/F 每批结束跑 testDebugUnitTest --rerun + lint + assembleDebug，并为新组件补截图断言
 
