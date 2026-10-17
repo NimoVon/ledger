@@ -9,10 +9,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -28,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -51,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nimo.ledger.data.local.DataStoreLastUsedCategoryStore
+import com.nimo.ledger.data.local.entity.CategoryEntity
 import com.nimo.ledger.data.local.entity.TransactionEntity
 import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.domain.model.TransactionType
@@ -62,9 +69,28 @@ import com.nimo.ledger.ui.transfer.TransferFormSection
 import com.nimo.ledger.ui.transfer.TransferUiState
 import com.nimo.ledger.ui.transfer.TransferViewModel
 import com.nimo.ledger.util.Dates
+import com.nimo.ledger.util.Money
 
 /** 预选了「上次用过的分类」时那句提示的 tag：走查/UI 测试按它取文案，不靠截图认字 */
 internal const val LAST_USED_CATEGORY_HINT_TEST_TAG: String = "record-last-category-hint"
+
+/** 底部主按钮「保存」的 tag（R-4）：与顶栏「保存」同一个动作、同一份 disabled 逻辑 */
+internal const val RECORD_SAVE_BOTTOM_TEST_TAG: String = "record-save-bottom"
+
+/** 顶栏「保存」的 tag：两处按钮文案相同，测试必须按 tag 取，不能按文案 */
+internal const val RECORD_SAVE_TOP_TEST_TAG: String = "record-save-top"
+
+/** 金额复核行（R-7）：只有金额能解析成合法分时才出现 */
+internal const val AMOUNT_REVIEW_TEST_TAG: String = "record-amount-review"
+
+/** 分类 chip 区（R-2）：限高 + 内部纵向滚 */
+internal const val CATEGORY_CHIPS_TEST_TAG: String = "record-category-chips"
+
+/**
+ * 分类 chip 区的最大高度（R-2）：约 3 行 chip（每行 40dp + 4dp 间距）。
+ * 分类多到 20+ 时，账户/日期/备注不再被挤到屏幕外。
+ */
+internal const val CATEGORY_CHIPS_MAX_HEIGHT_DP: Int = 168
 
 /**
  * 记一笔 / 改一笔（F03 收支，F04 转账入口）。
@@ -149,6 +175,21 @@ fun RecordScreen(
 
     val isSaving = transferState?.isSaving ?: state.isSaving
 
+    // 「保存」只跟着同一个展示决策：表单露出来了才有保存。
+    // 顶栏与底部主按钮（R-4）共用这一份判断，加按钮不新增一条分支。
+    val showSave = if (transferState != null) {
+        transferState.isFormVisible
+    } else {
+        state.screen == RecordScreenState.Form
+    }
+    val onSave: () -> Unit = {
+        if (transferViewModel != null) {
+            transferViewModel.save()
+        } else {
+            viewModel.save()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -167,28 +208,24 @@ fun RecordScreen(
                     }
                 },
                 actions = {
-                    // 「保存」只跟着同一个展示决策：表单露出来了才有保存
-                    val showSave = if (transferState != null) {
-                        transferState.isFormVisible
-                    } else {
-                        state.screen == RecordScreenState.Form
-                    }
                     if (showSave) {
                         TextButton(
-                            onClick = {
-                                if (transferViewModel != null) {
-                                    transferViewModel.save()
-                                } else {
-                                    viewModel.save()
-                                }
-                            },
+                            onClick = onSave,
                             enabled = !isSaving,
+                            modifier = Modifier.testTag(RECORD_SAVE_TOP_TEST_TAG),
                         ) {
                             Text(if (isSaving) "保存中…" else "保存")
                         }
                     }
                 },
             )
+        },
+        // 底部主按钮（R-4）：大屏单手够不到顶栏，表单底部再给一个同动作的保存。
+        // 不新增步骤——「3 次点击记账」仍是 点按钮 → 输金额 → 点保存。
+        bottomBar = {
+            if (showSave) {
+                RecordSaveBar(isSaving = isSaving, onSave = onSave)
+            }
         },
     ) { innerPadding ->
         val contentModifier = Modifier
@@ -406,18 +443,24 @@ private fun RecordFormBody(
             }
         }
 
-        OutlinedTextField(
-            value = state.form.amountText,
-            onValueChange = viewModel::setAmount,
-            label = { Text("金额") },
-            prefix = { Text("¥") },
-            singleLine = true,
-            textStyle = MaterialTheme.typography.headlineSmall,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(amountFocus),
-        )
+        // 金额 + 复核行（R-7）：复核行紧贴金额框下 12dp，所以两者同组；
+        // 放进外层 Column 会吃到表单统一的 16dp 间距，不是设计要的那 12dp。
+        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+            OutlinedTextField(
+                value = state.form.amountText,
+                onValueChange = viewModel::setAmount,
+                label = { Text("金额") },
+                prefix = { Text("¥") },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.headlineSmall,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(amountFocus),
+            )
+            // 能解析成合法金额才显示；空/非法输入不在这里猜，交给下面的错误提示
+            AmountReviewLine(cents = Money.parseCents(state.form.amountText)?.takeIf { it > 0 })
+        }
 
         FieldSection(title = "分类", hint = state.lastUsedCategoryHint) {
             if (state.categories.isEmpty()) {
@@ -426,29 +469,12 @@ private fun RecordFormBody(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                state.categories.forEach { category ->
-                    FilterChip(
-                        selected = state.form.categoryId == category.id,
-                        onClick = { viewModel.setCategory(category.id) },
-                        label = {
-                            Text(
-                                listOfNotNull(category.icon, category.name).joinToString(" "),
-                            )
-                        },
-                    )
-                }
-                // 内联新建（附.1 R3）：记到一半发现没合适分类，不用退出这一笔；建好自动选中。
-                // 一个可用分类都没有时它也在：否则用户会以为"这里没救"
-                FilterChip(
-                    selected = false,
-                    onClick = onCreateCategory,
-                    label = { Text(CREATE_CATEGORY_LABEL) },
-                )
-            }
+            CategoryChips(
+                categories = state.categories,
+                selectedCategoryId = state.form.categoryId,
+                onSelectCategory = viewModel::setCategory,
+                onCreateCategory = onCreateCategory,
+            )
         }
 
         FieldSection(title = "账户") {
@@ -518,6 +544,106 @@ private fun RecordFormBody(
                 text = "删除后它会立刻从流水里消失，底部提示条里可以撤销。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * 底部主按钮「保存」（R-4）：全宽 52dp，与顶栏「保存」同一个动作、同一份 disabled 逻辑。
+ *
+ * 为什么两处都留：大屏单手够不到顶栏右上角，但习惯顶栏的人也不该被改掉肌肉记忆。
+ */
+@Composable
+internal fun RecordSaveBar(isSaving: Boolean, onSave: () -> Unit) {
+    Surface(tonalElevation = 3.dp) {
+        Button(
+            onClick = onSave,
+            enabled = !isSaving,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .height(52.dp)
+                .testTag(RECORD_SAVE_BOTTOM_TEST_TAG),
+        ) {
+            Text(if (isSaving) "保存中…" else "保存")
+        }
+    }
+}
+
+/**
+ * 金额复核行（R-7）：紧贴金额框下 12dp 的一行 bodySmall / onSurfaceVariant。
+ *
+ * 只有金额能解析成合法分（> 0）时才占位——非法输入由校验错误说，不在这里再写一遍。
+ */
+@Composable
+internal fun AmountReviewLine(cents: Long?) {
+    if (cents == null) return
+    Text(
+        text = "核对：" + Money.formatCurrency(cents),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .padding(top = 12.dp)
+            .testTag(AMOUNT_REVIEW_TEST_TAG),
+    )
+}
+
+/**
+ * 分类 chip 区（R-2）：最多 [CATEGORY_CHIPS_MAX_HEIGHT_DP] 高，超出在框内纵向滚动，
+ * 不再把账户 / 日期 / 备注挤出屏幕。
+ *
+ * 选中项不在可视区时（进页面预选了「上次用过的分类」、或点了框外的分类）自动滚到可见。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun CategoryChips(
+    categories: List<CategoryEntity>,
+    selectedCategoryId: Long?,
+    onSelectCategory: (Long) -> Unit,
+    onCreateCategory: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val chipsScrollState = rememberScrollState()
+    val selectedChipRequester = remember { BringIntoViewRequester() }
+    // 限高之后选中项可能落在框外：选中变化就把那一颗滚进来
+    LaunchedEffect(selectedCategoryId) {
+        if (selectedCategoryId != null) selectedChipRequester.bringIntoView()
+    }
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(max = CATEGORY_CHIPS_MAX_HEIGHT_DP.dp)
+            .verticalScroll(chipsScrollState)
+            .testTag(CATEGORY_CHIPS_TEST_TAG),
+    ) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            categories.forEach { category ->
+                val selected = selectedCategoryId == category.id
+                FilterChip(
+                    selected = selected,
+                    onClick = { onSelectCategory(category.id) },
+                    label = {
+                        Text(
+                            listOfNotNull(category.icon, category.name).joinToString(" "),
+                        )
+                    },
+                    modifier = if (selected) {
+                        Modifier.bringIntoViewRequester(selectedChipRequester)
+                    } else {
+                        Modifier
+                    },
+                )
+            }
+            // 内联新建（附.1 R3）：记到一半发现没合适分类，不用退出这一笔；建好自动选中。
+            // 一个可用分类都没有时它也在：否则用户会以为"这里没救"
+            FilterChip(
+                selected = false,
+                onClick = onCreateCategory,
+                label = { Text(CREATE_CATEGORY_LABEL) },
             )
         }
     }

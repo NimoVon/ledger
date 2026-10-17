@@ -100,7 +100,8 @@ class RecordScreenTransferTest {
         composeRule.onNodeWithTag(AMOUNT_FIELD_TAG).performTextInput("200")
         composeRule.onNodeWithTag(TO_ACCOUNT_TAG_PREFIX + alipayId).performClick()
         composeRule.onNodeWithText("备注").performScrollTo().performTextInput("搬家备用金")
-        composeRule.onNodeWithText("保存").performClick()
+        // 现在顶栏与表单底部各有一个「保存」（R-4），按 tag 取才不会撞成两个节点
+        composeRule.onNodeWithTag(RECORD_SAVE_TOP_TEST_TAG).performClick()
 
         awaitRows(1)
         val row = runBlocking { repository.observeAllTransactions().first() }.single()
