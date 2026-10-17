@@ -505,10 +505,10 @@ Column(
 
 | 组件 | 现状（文件） | 加固项 |
 | --- | --- | --- |
-| 逐日柱状图 | app/src/main/java/com/nimo/ledger/ui/reports/TrendChart.kt（160dp 高、可点格子、刻意绕过 Canvas 保无障碍） | ① 柱子间隙 1dp 保持；② 选中格底色 primary.copy(alpha=0.10f) → 0.14f（深色下 0.10 几乎看不见）；③ 柱顶 2dp 圆角保留 |
+| 逐日柱状图 | app/src/main/java/com/nimo/ledger/ui/reports/TrendChart.kt（160dp 高、可点格子、刻意绕过 Canvas 保无障碍） | ① 柱子间隙 1dp 保持；② 选中格底色 primary.copy(alpha=0.10f) → 0.14f（深色下 0.10 几乎看不见）→ **✅ 2026-10-17 已做**（`SELECTED_DAY_HIGHLIGHT_ALPHA = 0.14f` + `dayCellHighlight(primary)`，真机像素 (32,45,56) vs 邻居 (15,20,24)，见 `docs/测试报告.md` §24）；③ 柱顶 2dp 圆角保留 |
 | 月度折线图 | 同文件 TrendCanvas | 折线 1.5dp + 圆点保留；**最后一个点用实心 4dp 圆点**强调「当前月」 |
 | 分类环形图 | app/src/main/java/com/nimo/ledger/ui/reports/CategoryDonut.kt（180dp / 环宽 26dp / 起点 -90°） | ① 扇形间 2dp surface 缝（见 §2.2）；② 选中态「压暗未选中 + 选中描边 +6dp」保留；③ 洞内合计在 fontScale ≥ 1.5 时降级换行，不要 Ellipsis |
-| 气泡（DayTooltip / DonutTooltip） | TrendChart.kt / CategoryDonut.kt（172dp / 通栏、16dp 圆角、浮 4dp） | **必须避开 FAB**（S-1） |
+| 气泡（DayTooltip / DonutTooltip） | TrendChart.kt / CategoryDonut.kt（172dp / 通栏、16dp 圆角、浮 4dp） | **必须避开 FAB**（S-1）→ **✅ 2026-10-17 已做**：`Modifier.clearOfFloatingActionButton()`（`ui/reports/TooltipFabClearance.kt`）把「气泡 + 88dp」整体 `bringIntoView`，「查看明细」改成行尾 18dp 箭头，见 `docs/测试报告.md` §24 |
 | y 轴 | ChartYAxis（52dp 宽、自绘 Layout 保中线对齐） | 保留；刻度文字与网格线中线对齐是硬要求，不许改成 Column |
 
 ---
@@ -609,7 +609,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 | ID | 优先级 | 问题 | 改法 |
 | --- | --- | --- | --- |
-| S-1 | **P0** | docs/测试报告.md §10 第 (9) 条：DayTooltip / DonutTooltip 落在屏幕下沿时被 FAB 遮挡，「查看明细」点不到 | 两条独立修法，建议都做：① 气泡出现时自动滚动，使气泡底边位于 FAB 顶边之上（内容区底边减 72dp，`FAB_BOTTOM_RESERVE = 88.dp` 已定义）；② 「查看明细」文案从右下角移到标题行左侧或改成行尾 ChevronRight 图标，避开与 FAB 的右下重叠区 |
+| S-1 | **P0** | docs/测试报告.md §10 第 (9) 条：DayTooltip / DonutTooltip 落在屏幕下沿时被 FAB 遮挡，「查看明细」点不到 | 两条独立修法，建议都做：① 气泡出现时自动滚动，使气泡底边位于 FAB 顶边之上（内容区底边减 72dp，`FAB_BOTTOM_RESERVE = 88.dp` 已定义）；② 「查看明细」文案从右下角移到标题行左侧或改成行尾 ChevronRight 图标，避开与 FAB 的右下重叠区 —— **✅ 2026-10-17 两条都做**：① 实测气泡底边 2495 + 88dp = 内容区底边 2825、比 FAB 顶边 2555 高 16dp；② 两个气泡的标题行改为行尾 18dp ChevronRight（`contentDescription` 仍为「查看明细」）。证据 `docs/测试报告.md` §24 |
 | S-2 | P1 | 5 个 SectionHeader 让页面很长，找「支出排行」要滑很久 | 段头改 `stickyHeader`（LazyColumn 原生支持）；hint 保留 |
 | S-3 | P1 | 环形图 3 色浅色底不达图形阈值 | 同 G-8（2dp 缝） |
 | S-4 | P1 | 段头与明细页日段头同款（好资产）但实现重复 | 同 G-2 |
@@ -751,7 +751,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | PickerCell（年月格） | 40dp | **违规** → D-1 改 44dp |
 | 列表行 | 56–72dp | 通过 |
 | FilterBar「清空」TextButton | M3 默认 40dp 高 | 边界 → 补 minimumInteractiveComponentSize() |
-| 气泡整块可点 | 高 ≥44dp | 通过（但会被 FAB 遮挡，见 S-1） |
+| 气泡整块可点 | 高 ≥44dp | 通过（2026-10-17 起也不再被 FAB 遮挡，见 S-1 / `docs/测试报告.md` §24） |
 | 柱状图可点格子 | 31 天时单格约 11dp 宽 | **宽度不足属图表固有限制**；格子高 160dp 远超 44dp，且提供「点选后气泡下钻」的替代路径。作为已知限制记录，不阻塞发布 |
 
 ### 10.3 屏幕阅读器动线脚本（设计预期）
@@ -834,12 +834,12 @@ cd /d/git/ledger
 | E-2 ✅ **已完成 2026-10-17** | 记一笔表单底部主按钮「保存」+ 金额复核行（R-4 / R-7）。实装：`showSave` / `onSave` 各收敛成一份，顶栏 `TextButton`（`record-save-top`）与 `Scaffold.bottomBar` → `RecordSaveBar`（`record-save-bottom`，52dp 按钮、键盘弹出时在 IME 之上）共用；金额框下 `AmountReviewLine`（`record-amount-review`）在 `Money.parseCents(...) > 0` 时显示「核对：¥1,234.56」，12dp 间距（外层表单 16dp 间距，故用 0dp 内层 Column 收口） | 「3 次点击记账」仍是 点按钮 → 输金额 → 点保存，底栏不新增步骤；4 例组件级测试（复核行缺失 / 千分位文案 / 可点回调 / 保存中禁用）+ 真机 4 项（无键盘贴屏底 `[667,2945][773,3020]`、键盘弹出时 `[667,1799][773,1874]` 在 IME 之上、输入 `1234567` → `核对：¥1,234,567.00`、底部按钮真写入 ¥1.00 后删除还原）。**接线本身无组件级测试**（删 `bottomBar` 那 2 例仍绿），见 `docs/测试报告.md` §22.3 / §22.7 |
 | E-3 ✅ **已完成 2026-10-17** | 分类 chip 区限高 + 自动滚到选中（R-2）。实装：`CategoryChips` 用 `Box(heightIn(max = CATEGORY_CHIPS_MAX_HEIGHT_DP.dp).verticalScroll(...))` 包 `FlowRow`，上限 `CATEGORY_CHIPS_MAX_HEIGHT_DP = 168`（约 3 行）；选中那颗挂 `bringIntoViewRequester`，`LaunchedEffect(selectedCategoryId)` 里 `bringIntoView()`（首次进页沿用上次分类也生效） | 4 例组件级测试（200 颗时高度**正好** 168dp、限高后有 `ScrollBy`、3 颗时 ≤ 72dp、选中项 `assertIsDisplayed`）；红绿：删限高报「分类区高度 2673 px 应正好被限在 504 px（168dp）」，删 `bringIntoView` 报「分类199 … is not displayed」；真机 fontScale 2.0 下 chip 区内滑 `700 1750 → 700 1350` 后 娱乐/医疗 从 y1730 移到 y1320，`分类` 仍 1157、`账户` 仍 `[60,2010][256,2150]` 不动。见 `docs/测试报告.md` §22 |
 | E-4 | 统计页「本月洞察」卡片化 + 段头 sticky（S-5 / S-2） | 截图 |
-| E-5 | **修 FAB 遮挡气泡（S-1）** | 411dp 模拟器 + 真机：点最后一天 / 最后一段扇形都能点到「查看明细」 |
-| E-6 | 环形图 2dp 缝 + 选中格底色 0.10f → 0.14f（S-3 / §6.9） | 截图对比 |
+| E-5 ✅ **已完成 2026-10-17** | 修 FAB 遮挡气泡（S-1），两条修法都做：① 新增 `Modifier.clearOfFloatingActionButton()`（`ui/reports/TooltipFabClearance.kt`）——`BringIntoViewRequester` 把「气泡自身高度 + FAB_BOTTOM_RESERVE（88dp）」当成一个矩形 `bringIntoView`，`DonutTooltip` / `DayTooltip` 各挂一次，宿主 `LazyColumn` 不用改；② 两个气泡标题行右端的「查看明细」文字换成 18dp `LedgerIcons.ChevronRight`（`contentDescription` 仍是「查看明细」，语义合并后读屏照样念） | 真机实测：环形图滚到顶时气泡整块 `[60,2300][1380,2495]`，底边 2495 + 88dp（330px）= 内容区底边 2825，比 FAB 顶边 2555 高 60px（16dp），箭头 `[1267,2334][1335,2402]` 完整可见；点最后一天 10月17日 的气泡能打开日明细；点气泡仍能下钻 `分类：人情`。**411dp 这一档由 Robolectric `@Config(w411dp-h891dp-xxhdpi)` 覆盖，真机 384dp 更窄**；0.36° 的 0.1% 扇形（弧长约 1.7px）手指点不中，**没有写成已验收**。5 例测试 + 红绿见 `docs/测试报告.md` §24 |
+| E-6 ✅ **已完成 2026-10-17** | 环形图 2dp 缝（批 D 已做，`CategoryDonutArcsTest` 7 例）+ 逐日柱选中格底色 0.10f → 0.14f：抽成 `SELECTED_DAY_HIGHLIGHT_ALPHA` / `dayCellHighlight(primary)`（`ui/reports/TrendChart.kt:110` / `:113`），透明度能被单测钉住 | 截图对比 + 像素采样：选中 10月14日 后同一张截图里选中格 (1140~1170, 900) = **(32,45,56)**、隔壁 13日 (1040~1080, 900) = **(15,20,24)**；0.14 混合理论值 (30,45,56)，旧 0.10 是 (26,38,47)，实测贴 0.14。见 `docs/测试报告.md` §24.5 第 7 项 |
 | E-7 | 设置页卡片分组 + 开发项折叠（ST-1 / ST-2 / ST-5） | 截图；自检入口仍可用 |
 | E-8 | 预算页 onLabelClick + 超支刻度（B-4 / B-2） | 预算 UI 测试 |
 
-> 批 E 状态（2026-10-17）：**E-1 ~ E-3 已完成**（E-1 见 `docs/测试报告.md` §21：92 套 792 例、行覆盖 70.4%、真机 9 项；E-2 / E-3 见 §22：93 套 800 例、行覆盖 70.6%、真机 10 项）；**E-4 ~ E-8 未开始**。E-2 / E-3 的执行要点：先写组件级测试再改布局的思路同样适用，但要认出「组件级测试测不到接线」——`RecordSaveBar` 的 2 例在删掉 `Scaffold.bottomBar` 后仍绿，接线只能靠真机证据，已写进 §22.7；`heightIn + verticalScroll` 的限高在 Robolectric 能量到「正好 504px」，真机则要放大字体让内容真的溢出才能看出「硬裁 + 内滚且外层不动」。E-1 的执行要点：先补组件级测试（`TransactionsFilterBarUiTest` 7 例）再改布局——Robolectric 假字体让**宽度**断言失效，只能测高度与滚动，宽度靠真机截图核对；fontScale ≥1.5 的 chip 竖排仍归 F-2 处理（当前 1.5 倍下 chip 右端会被 `LazyRow` 从字形中间裁断）。
+> 批 E 状态（2026-10-17）：**E-1 ~ E-3、E-5、E-6 已完成**（E-1 见 `docs/测试报告.md` §21：92 套 792 例、行覆盖 70.4%、真机 9 项；E-2 / E-3 见 §22：93 套 800 例、行覆盖 70.6%、真机 10 项；E-5 / E-6 见 §24：95 套 813 例、行覆盖 70.7%、真机 10 项）；**E-4、E-7、E-8 未开始**。E-5 的执行要点：气泡避让不要动宿主的 `LazyColumn`，把「气泡 + 88dp 预留」当成一个矩形交给 `bringIntoView` 即可，宿主不需要知道 FAB 在哪；测试里用假 FAB（右下 16dp、150 × 56dp）断言「气泡底边 ≤ 假 FAB 顶边」，但红色证据只有环形图那例——`DayTooltip` 在真实布局里贴图表顶部、够不到 FAB，那例只能守「挂上修饰符不产生副作用 + 箭头在」，不能当几何回归。E-6 的执行要点：`Color.copy(alpha =)` 是 8 位量化（0.14f 存成 36/255 ≈ 0.1412），字面量断言必须放 0.002f 容差，只有「对象相等」的比法才稳。E-2 / E-3 的执行要点：先写组件级测试再改布局的思路同样适用，但要认出「组件级测试测不到接线」——`RecordSaveBar` 的 2 例在删掉 `Scaffold.bottomBar` 后仍绿，接线只能靠真机证据，已写进 §22.7；`heightIn + verticalScroll` 的限高在 Robolectric 能量到「正好 504px」，真机则要放大字体让内容真的溢出才能看出「硬裁 + 内滚且外层不动」。E-1 的执行要点：先补组件级测试（`TransactionsFilterBarUiTest` 7 例）再改布局——Robolectric 假字体让**宽度**断言失效，只能测高度与滚动，宽度靠真机截图核对；fontScale ≥1.5 的 chip 竖排仍归 F-2 处理（当前 1.5 倍下 chip 右端会被 `LazyRow` 从字形中间裁断）。
 
 ### 批 F：图标与字体缩放收口
 
@@ -908,6 +908,6 @@ cd /d/git/ledger
 
 **UI 设计师**：DSH UI 设计师 Agent
 **设计系统日期**：2026-10-16
-**实施状态（2026-10-17）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；批 E 的 E-4 ~ E-8 与批 F 的 F-1 ~ F-4 待排期
+**实施状态（2026-10-17）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；批 E 的 E-4 / E-7 / E-8 与批 F 的 F-1 ~ F-4 待排期
 **QA 流程**：批 D/E/F 每批结束跑 testDebugUnitTest --rerun + lint + assembleDebug，并为新组件补截图断言
 
