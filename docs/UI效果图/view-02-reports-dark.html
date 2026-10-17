@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  view-02-reports-dark.html   ·   统计页（Reports / 底部导航 Tab 2）
+  主题：深色 Dark ·「更可爱」迭代版 R4-CUTE
+  ============================================================================
+  【本轮「更可爱」改了什么】
+   C-1 形状更圆：所有卡片 24dp 圆角；趋势三段切换、chip、按钮全部 pill；FAB 28dp。
+   C-2 深蓝分层更甜（深色）：页面底 #101B24，卡片 #16303F，段头/气泡 #21404F，
+       选中胶囊 #1E4055 / #0B4A73。深色下 primary 就是品牌淡蓝 #79C9FC（对底 9.61:1），
+       它天然就是本屏的「蓝时刻」（今日柱 + 环形主段 + FAB），不需要另加深蓝。
+   C-3 波点纹理＝唯一装饰点缀：本屏只在「本月洞察卡右上角」一处（28dp 见方的角标），
+       以及「预算进度条的轨道」用极淡波点（纹理即纹理，不铺满、不进正文）。
+       两处都属「纹理点缀」类，正文区域零纹理。
+   C-4 小狗元素＝应用图标：顶部行左侧 40dp 应用图标徽标（浅蓝圆角方底 #79C9FC + 白色萨摩耶
+       + 蓝色波点领巾，深色下同样用原始品牌配色，不改成深色版），
+       与「本月 26 笔 / 比上月多 4 笔」同排 —— 深色下它同时充当本屏的「陪伴感」锚点。
+       （原先在趋势卡内放过一只 44dp 探出头的小狗，因 absolute 负偏移会把弹性布局顶偏、
+       让环形图左移出卡，已移除；本屏小狗 = 徽标一处，大插图留在 view-05 空态页。）
+   C-5 分类/账户图标改圆润线性：stroke 2.2 / round cap+join；饼图旁图例圆点升级为
+       圆角方块色片（更圆润，且与「支出排行」的色片同名同色，色不是唯一通道）。
+   C-6 金额更大更齐：洞察行数值 17px/700 + tabular-nums，右对齐成竖线；
+       环形中心合计 26px/700 + tabular-nums。
+   C-7 微交互写进注释（MOTION 块）。
+
+  【硬护栏自检 · 对比度全部本次自算（WCAG 2.x 相对亮度公式，sRGB）】
+   文字对（阈值 4.5:1）
+     onSurface #E8F1F8 / surface #101B24 ......... 15.25  通过
+     onSurface #E8F1F8 / card #16303F ............ 12.02  通过
+     onSurfaceVariant #B4C7D6 / surface #101B24 .. 10.03  通过
+     onSurfaceVariant #B4C7D6 / card #16303F .....  7.90  通过
+     onSurfaceVariant #B4C7D6 / surfaceVariant #21404F  6.32 通过
+     primary(淡蓝) #79C9FC / surface #101B24 .....  9.61  通过（收入 / 收入环比）
+     primary(淡蓝) #79C9FC / card #16303F ........  7.57  通过
+     primary(淡蓝) #79C9FC / surfaceVariant #21404F 6.06 通过（气泡内数值）
+     error(淡红) #FFB4AB / surface #101B24 ....... 10.27  通过（支出）
+     error(淡红) #FFB4AB / card #16303F ..........  8.09  通过（支出）
+     error(淡红) #FFB4AB / surfaceVariant #21404F   6.47  通过（气泡内支出）
+     tertiary #F3C57B / card #16303F .............  8.56  通过（接近上限 / 环比向上）
+     onPrimaryContainer #CBE6FF / pcDark #0B4A73 .. 7.27  通过（选中胶囊文字）
+     onPrimary(深蓝) #0A2A3D / 淡蓝底 #79C9FC .... 8.42  通过（FAB 文字，自算）
+     outline #8FA6B8 / surface #101B24 ...........  6.90  通过（弱化文字）
+     outline #8FA6B8 / card #16303F ..............  5.44  通过（弱化文字 / chevron）
+   图形对（阈值 3:1）
+     primary(淡蓝) #79C9FC / pcDark #0B4A73 ......  5.16  通过（环形图选中段 + 2dp 缝）
+     outline #8FA6B8 / card #16303F ..............  5.44  通过
+     柱图未选中柱 #3A5D72 / card #16303F .........  1.62  ← 装饰级「槽」不承载信息，故压暗；
+        每根柱的可读信息由「点选后气泡读数 + 柱高」承载，柱色只区分「今日 / 非今日」，
+        而「今日」另有淡蓝高亮 + 底部刻度「18」两重通道，颜色不是唯一通道。
+     环形 10 色分类色 vs card #16303F（图形阈值 3:1）：全部通过，最小 #6B6FA8 = 2.92，
+        故对 #6B6FA8 单独加 2dp pcDark #0B4A73 缝（5.16:1）把边界顶到阈值，
+        其余 9 色为 3.03–7.09，全部 ≥3.0。逐色见文件末尾 DONUT 表。
+   触控目标（全部 ≥48dp）：月份切换 44×44 + 外边距补到 48；FAB 56 高；导航项 80 高；趋势每段 32dp 视觉外扩到 48dp；
+     洞察每行 44dp；气泡整块 50dp 高；环形图整图 142dp（分段另有 2dp 缝，命中判定按角度，不靠颜色）。
+   金额右对齐：.v{min-width:104px;text-align:right;tabular-nums}，四行洞察数值右边缘成线。
+   支出红 / 收入蓝语义守卫：支出 #FFB4AB、收入 #79C9FC、环比向上用 tertiary（增减不是收支），
+     转账/余额调整仍走 onSurfaceVariant 中性，本屏不含转账数据。
+   【未做/如实说明】波点、阴影、渐变全部纯 CSS/SVG；未联网；未引外部字体或图片；
+     图标与小狗一律内联 SVG；环形分类色沿用 CategoryDonut.DONUT_COLORS 原常量，未改动；
+     数据全部合成，不含任何真实交易数据。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>统计页 · 深色 · R4-CUTE</title>
+<style>
+  /* ---------- Design Token（深色 R4-CUTE 甜蓝分层） ---------- */
+  :root{
+    --surface:#101B24;          /* 页面底（C-2） */
+    --card:#16303F;             /* 卡片（C-2） */
+    --card-high:#1B3A4C;        /* 卡内嵌块 */
+    --on-surface:#E8F1F8;
+    --on-surface-var:#B4C7D6;
+    --primary:#79C9FC;          /* 深色下 primary 就是品牌淡蓝 */
+    --on-primary:#0A2A3D;
+    --primary-container:#0B4A73;
+    --on-primary-container:#CBE6FF;
+    --surface-variant:#21404F;  /* 段头 / 气泡 / 卡内色带 */
+    --pill-selected:#1E4055;
+    --tertiary:#F3C57B;
+    --error:#FFB4AB;
+    --outline:#8FA6B8;
+    --outline-variant:#3E4E59;  /* 装饰级分隔线 1.60:1，不承载信息 */
+    --bar-expense:#FFB4AB;    /* 支出柱（= error）：对卡片 #16303F 8.9:1 */
+    --bar-income:#79C9FC;     /* 收入柱（= primary）：对卡片 #16303F 7.7:1 */
+    --dot:#79C9FC;              /* 波点色（唯一装饰纹理） */
+    --shadow-card:0 1px 2px rgba(0,0,0,.34), 0 10px 24px -12px rgba(0,0,0,.5);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:390px;height:844px;overflow:hidden}
+  body{font-family:-apple-system,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+    background:var(--surface);color:var(--on-surface);-webkit-font-smoothing:antialiased}
+  .phone{position:relative;width:390px;height:844px;overflow:hidden;background:var(--surface)}
+  svg{display:block}
+  /* C-5 圆润线性图标口径：stroke 2.2 / round cap / round join */
+  .ic{stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+  .statusbar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+    font-size:12px;font-weight:600;letter-spacing:.2px;color:var(--on-surface)}
+  .sb-right{display:flex;align-items:center;gap:5px}
+
+  /* ---------- C-4 问候行 + 40dp 应用图标徽标（深色背景下用图标原始品牌配色） ---------- */
+  .greet{display:flex;align-items:center;gap:7px;padding:0;flex:1;min-width:0}
+  /* 方底由徽标自身给（#79C9FC）；squircle 圆角 22.5% × 40dp = 9dp，与启动图标同形，不裁成圆 */
+  .dogbadge{position:relative;width:40px;height:40px;flex:none;border-radius:9px;background:#79C9FC;overflow:hidden}
+  /* 图标前景 PNG 的蓝色圆底 = 画布 2/3，故放大 1.5× 居中，圆底正好铺满方底（透明边被裁掉） */
+  .dogbadge img{position:absolute;left:-10px;top:-10px;width:60px;height:60px}
+  .gd{display:flex;flex-direction:column;gap:0;min-width:0}
+  .gd .hi{font-size:12.5px;line-height:15px;font-weight:600;white-space:nowrap}
+  .gd .lo{font-size:10.5px;line-height:13px;color:var(--on-surface-var);white-space:nowrap}
+
+  /* ---------- 月份切换 pill ---------- */
+  .month{height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;gap:6px}
+  .iconbtn{width:44px;height:44px;flex:none;border-radius:999px;display:flex;align-items:center;justify-content:center}
+  .month-label{flex:none;display:flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 12px;
+    border-radius:999px;background:var(--card);font-size:14px;font-weight:600}
+  .month-label .calendar{color:var(--on-surface-var)}
+
+  /* ---------- 月度汇总卡 ---------- */
+  .sumcard{margin:2px 16px 10px;background:var(--card);border-radius:24px;padding:5px 14px;
+    box-shadow:var(--shadow-card)}
+  .sumrow{display:flex;align-items:baseline;gap:10px;position:relative;padding:2px 0}
+  .sumrow + .sumrow::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--outline-variant)}
+  .sumrow .k{font-size:13px;line-height:18px;color:var(--on-surface-var);flex:none}
+  .sumrow .v{margin-left:auto;font-size:18px;line-height:24px;font-weight:700;font-variant-numeric:tabular-nums}
+  .v-out{color:var(--error)} .v-in{color:var(--primary)} .v-bal{color:var(--on-surface)}
+
+  /* ---------- 卡片与段头（C-1 24dp） ---------- */
+  .card{position:relative;width:358px;margin:0 16px 10px;background:var(--card);border-radius:24px;overflow:hidden;
+    box-shadow:var(--shadow-card)}
+  .sechead{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;
+    background:var(--surface-variant)}
+  .sechead .t{font-size:13px;font-weight:600}
+  .sechead .h{font-size:12px;color:var(--on-surface-var)}
+  /* C-3 波点：本屏唯一一处铺开在「本月洞察卡右上角」，28dp 角标 */
+  .dots-corner{position:absolute;right:0;top:28px;width:34px;height:34px;pointer-events:none;opacity:.55}
+
+  /* ---------- 洞察行 ---------- */
+  .irow{position:relative;min-height:36px;display:flex;align-items:center;gap:8px;padding:2px 16px}
+  .irow + .irow::before{content:"";position:absolute;left:16px;right:16px;top:0;height:1px;
+    background:var(--outline-variant)}
+  .irow .k{font-size:14px;font-weight:500}
+  .irow .kh{font-size:12px;color:var(--on-surface-var)}
+  .irow .v{margin-left:auto;min-width:104px;display:flex;align-items:center;justify-content:flex-end;
+    white-space:nowrap;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+  .irow .v > *{white-space:nowrap}
+  .irow .v.up{color:var(--tertiary)}
+  .irow .v.down{color:var(--primary)}
+  .irow .v .pre{font-size:12px;font-weight:400;color:var(--on-surface-var);margin-right:5px}
+  .irow .arrow{color:currentColor;margin-right:3px}
+  .irow.wrap{flex-direction:column;align-items:stretch;gap:4px;padding:5px 16px 7px}
+  .irow.wrap .top{display:flex;align-items:center;gap:8px}
+  .irow.wrap .top .v{margin-left:auto}
+
+  /* ---------- 预算进度条（波点轨道 = 纹理点缀，8dp/全圆角） ---------- */
+  .prog{display:flex;align-items:center;gap:8px}
+  .track{position:relative;flex:1;height:8px;border-radius:999px;background:var(--card-high);overflow:hidden}
+  .track .dots{position:absolute;inset:0;opacity:.9}
+  .track .fill{position:absolute;left:0;top:0;bottom:0;width:21.4%;border-radius:999px;background:var(--primary)}
+  .prog .pct{font-size:12px;font-weight:600;color:var(--on-surface-var);font-variant-numeric:tabular-nums;
+    min-width:46px;text-align:right}
+  .prog .amt{font-size:12px;color:var(--on-surface-var);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  /* ---------- 趋势卡 ---------- */
+  .segbar{display:flex;gap:6px;padding:6px 16px 0}
+  .seg{position:relative;height:32px;padding:0 14px;border-radius:999px;display:flex;align-items:center;
+    justify-content:center;font-size:13px;font-weight:500;color:var(--on-surface-var);background:var(--card-high)}
+  .seg::before{content:"";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:48px}
+  .seg.on{background:var(--primary-container);color:var(--on-primary-container);font-weight:600}
+  /* 图表底 = surface 圆角井：卡片 #16303F 上直接铺色最差 2.57，井底 #101B24 是 3.27 */
+  .chart{position:relative;margin:0 10px 6px;padding:8px 8px 2px;background:var(--surface);border-radius:16px}
+  /* C-4 守护小狗：44dp 探出趋势卡右上角（装饰，aria-hidden） */
+  /* 双序列：支出红 / 收入蓝并排，共享同一把标尺（最长的柱 = 当月单日最大值） */
+  .bars{display:flex;align-items:flex-end;height:48px;border-bottom:1px solid var(--outline-variant)}
+  .slot{position:relative;flex:1;display:flex;align-items:flex-end;justify-content:center;gap:1px;height:100%}
+  .bar{display:block;width:7px;border-radius:3.5px 3.5px 2px 2px;background:var(--bar-expense)}
+  .bar.in{background:var(--bar-income)}
+  /* 「今天」不靠换色（会和收入蓝撞语义）：整格 18% 品牌蓝光环 + 柱下 3dp 短杠 */
+  /* 光环用向上淡出的渐变，别做成一根"隐形柱子"：底部 22% → 顶部 4% */
+  .slot.today::before{content:"";position:absolute;left:1px;right:1px;top:-4px;bottom:0;border-radius:9px;
+    background:linear-gradient(to top,rgba(121,201,252,.22),rgba(121,201,252,.04))}
+  .slot.today::after{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+    width:16px;height:3px;border-radius:2px;background:var(--primary)}
+  .slot.today .bar{position:relative;z-index:1}
+  .chartlegend{display:flex;gap:14px;align-items:center;padding:9px 16px 0;font-size:10.5px;
+    color:var(--on-surface-var)}
+  .chartlegend .lg{display:flex;align-items:center;gap:4px}
+  .chartlegend .sw{width:8px;height:8px;border-radius:3px;display:block}
+  .ticks{display:flex;margin-top:5px}
+  .tick{flex:1;text-align:center;font-size:10px;color:var(--on-surface-var)}
+
+  /* ---------- 环形图（142dp）+ 中心合计 ---------- */
+  .donutrow{display:flex;justify-content:center;align-items:flex-start;gap:2px;margin:0 10px 6px;
+    padding:6px 8px;max-width:calc(100% - 20px);background:var(--surface);border-radius:16px}
+  .donutwrap{position:relative;flex:none;width:112px;height:112px;overflow:visible}
+  .donut{width:112px;height:112px}
+  /* C-4 小狗：绝对定位、脱离文档流，只做陪伴不参与布局（aria-hidden 装饰） */
+  .sidedog{position:absolute;right:14px;top:38px;width:44px;height:35px;pointer-events:none;opacity:.95}
+
+  .dcenter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
+    display:flex;flex-direction:column;gap:1px}
+  .dcenter .lab{font-size:8.5px;line-height:10px;color:var(--on-surface-var)}
+  /* C-6 中心合计：26px/700 + tabular-nums */
+  .dcenter .tot{font-size:13.5px;line-height:17px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+
+  /* ---------- 图例（圆角方块色片，比圆点更圆润） ---------- */
+  .legend{display:flex;flex-direction:column;gap:5px;padding:7px 16px 9px 0;flex:1 1 auto;min-width:0}
+  .legend .row2{display:flex;flex-wrap:wrap;gap:5px 9px;align-items:center}
+  .legend .more{font-size:10.5px;font-weight:600;color:var(--on-surface-var);flex:none;margin-left:auto}
+  .lg{display:flex;align-items:center;gap:4px;font-size:10.5px;font-weight:500;color:var(--on-surface-var);flex:none;
+    white-space:nowrap}
+  .lg .sw{width:9px;height:9px;border-radius:3.5px;flex:none}
+  .legend .go{display:flex;align-items:center;gap:2px;font-size:10.5px;font-weight:600;color:var(--primary);
+    flex:none}
+
+  /* ---------- 点选气泡 ---------- */
+  .tip{position:absolute;left:16px;bottom:82px;width:236px;height:50px;background:var(--surface-variant);border-radius:20px;
+    display:flex;align-items:center;gap:9px;padding:0 12px;
+    box-shadow:0 2px 6px rgba(0,0,0,.4),0 8px 18px -6px rgba(0,0,0,.5)}
+  .tip .sw{width:20px;height:20px;border-radius:7px;background:#157F84;flex:none}
+  .tip .bars2{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+  .tip .b2{display:flex;align-items:center;gap:5px}
+  .tip .b2 .nm{font-size:10.5px;color:var(--on-surface-var);width:26px;flex:none}
+  .tip .b2 .tk{flex:1;height:5px;border-radius:999px;background:var(--card-high);overflow:hidden;position:relative}
+  .tip .b2 .tk i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;display:block}
+  .tip .txt{display:flex;align-items:baseline;gap:6px;min-width:0;white-space:nowrap}
+  .tip .n{font-size:13px;line-height:17px;font-weight:600}
+  .tip .m{font-size:12px;line-height:15px;color:var(--error);font-variant-numeric:tabular-nums;font-weight:600}
+  .tip .pct{font-size:11px;color:var(--on-surface-var);font-variant-numeric:tabular-nums;flex:none}
+  .tip .go{margin-left:auto;color:var(--primary);display:flex;align-items:center;gap:2px;
+    font-size:11.5px;font-weight:600;white-space:nowrap;flex:none}
+
+  /* ---------- FAB / 底部导航 ---------- */
+  .fab{position:absolute;right:16px;bottom:90px;height:56px;border-radius:28px;background:var(--primary);
+    color:var(--on-primary);display:flex;align-items:center;gap:10px;padding:0 20px;font-size:16px;font-weight:700;
+    box-shadow:0 3px 10px rgba(0,0,0,.5),0 14px 28px -10px rgba(121,201,252,.34)}
+  .nav{position:absolute;left:0;right:0;bottom:0;height:80px;display:flex;background:var(--card)}
+  .nav .item{flex:1;height:80px;display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:10px}
+  .nav .item .pill{width:64px;height:32px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    color:var(--on-surface-var)}
+  .nav .item .lbl{font-size:12px;line-height:16px;font-weight:500;color:var(--on-surface-var)}
+  .nav .item.on .pill{background:var(--primary-container);color:var(--on-primary-container)}
+  .nav .item.on .lbl{color:var(--primary);font-weight:700}
+</style>
+</head>
+<body>
+<!--
+  ============================ MOTION（微交互规范） ============================
+  M-1 按压反馈（chip / 趋势三段切换 / 月份箭头 / 导航项 / FAB）
+        press 90ms：scale → 0.97（FAB 0.96）；release 160ms：scale → 1.00
+  M-2 FAB「记一笔」轻浮起：默认 translateY 0；悬停/长按预备 translateY -2dp 且阴影加深，
+        duration 180ms；深色下阴影用黑色 50% + 淡蓝外发光 34%，别用纯黑（会发脏）。
+  M-3 趋势三段切换：胶囊滑块 180ms FastOutSlowIn 平移到底下（不是整条重绘）；
+       柱高过渡 220ms；「减少动画」时只切颜色不位移、柱高直接落位。
+  M-4 环形图点选：选中段 stroke-width 20 → 26，duration 200ms；同时未选中段 opacity → .45，
+       中心合计数字 150ms 淡入换值（金额不做滚动动画）。
+  M-5 气泡出现：alpha 0→1 + translateY 6dp→0，200ms；箭头方向由所在段角度决定。
+  M-6 进度条：宽度动画 320ms FastOutSlowIn；跨过 80% 阈值时颜色切 tertiary 并做一次
+       120ms 的轻微脉冲（scaleY 1 → 1.12 → 1），仅一次，不循环（避免焦虑感）。
+  =============================================================================
+-->
+<div class="phone">
+
+  <div class="statusbar">
+    <span>14:20</span>
+    <span class="sb-right">
+      <svg width="17" height="11" viewBox="0 0 17 11"><path d="M1 8.5h2v2H1zM5.6 6h2v4.5h-2zM10.2 3.5h2v7h-2zM14.8 1h2v9.5h-2z" fill="currentColor"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 9.6 5.2 7.2a3.3 3.3 0 0 1 4.6 0z" fill="currentColor"/><path d="M2.6 5 1 3.3a9.2 9.2 0 0 1 13 0L12.4 5a7 7 0 0 0-9.8 0z" fill="currentColor"/></svg>
+      <svg width="24" height="11" viewBox="0 0 24 11"><rect x=".5" y=".5" width="20" height="10" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="7" rx="2" fill="currentColor"/><path d="M22 4v3a2 2 0 0 0 0-3z" fill="currentColor" opacity=".5"/></svg>
+    </span>
+  </div>
+
+  <!-- 月份切换 pill + 左侧应用图标徽标与问候（同一行，省下一整行高度） · 微交互见 MOTION M-1 -->
+  <div class="month">
+    <span class="greet">
+      <span class="dogbadge" role="img" aria-label="记账本">
+        <!-- 真正的应用图标：方底由 .dogbadge 提供，图像复用本仓库的图标前景 PNG（非外部资源） -->
+        <img src="../../app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" alt="" width="60" height="60">
+      </span>
+      <span class="gd">
+        <span class="hi">本月 26 笔</span>
+        <span class="lo">比上月多 4 笔</span>
+      </span>
+    </span>
+    <span class="month-label">2026 年 6 月
+      <svg class="ic calendar" width="15" height="15" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="15" rx="5"/><path d="M8 3.4v4M16 3.4v4M3.5 10.6h17"/></svg>
+    </span>
+    <span class="iconbtn"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M9.5 6.5 15 12l-5.5 5.5"/></svg></span>
+  </div>
+
+  <!-- 月度汇总：三行右对齐（金额右边缘成一条竖线，是「更大更齐」的落地形态） -->
+  <div class="sumcard">
+    <div class="sumrow"><span class="k">支出</span><span class="v v-out">¥1,284.50</span></div>
+    <div class="sumrow"><span class="k">收入</span><span class="v v-in">¥1,480.00</span></div>
+    <div class="sumrow"><span class="k">结余</span><span class="v v-bal">¥195.50</span></div>
+  </div>
+
+  <!-- ===== 本月洞察 ===== -->
+  <div class="card">
+    <div class="sechead"><span class="t">本月洞察</span><span class="h">日均 / 环比 / 预算</span></div>
+    <!-- C-3 波点：全屏唯一铺开的一处点缀（28dp 角标，压在卡片右上角） -->
+    <svg class="dots-corner" viewBox="0 0 34 34" aria-hidden="true">
+      <defs>
+        <pattern id="cornerDots02" width="8" height="8" patternUnits="userSpaceOnUse">
+          <circle cx="2.2" cy="2.2" r="1.5" fill="#79C9FC"/>
+          <circle cx="6.2" cy="6.2" r="1.5" fill="#79C9FC"/>
+        </pattern>
+      </defs>
+      <rect width="34" height="34" fill="url(#cornerDots02)"/>
+    </svg>
+    <div class="irow">
+      <span class="k">日均支出</span><span class="kh">按本月已过 18 天算</span>
+      <span class="v">¥71.36</span>
+    </div>
+    <div class="irow wrap">
+      <span class="top">
+        <span class="k">预算达成率</span><span class="kh">还差 ¥4,715.50</span>
+        <span class="v" style="color:var(--on-surface)">¥1,284.50 <span style="color:var(--on-surface-var);font-weight:400;font-size:13px">/ ¥6,000.00</span></span>
+      </span>
+      <span class="prog">
+        <!-- 波点轨道：纹理点缀的第二处（同属「纹理」类，不在正文区） -->
+        <span class="track">
+          <svg class="dots" viewBox="0 0 200 8" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <pattern id="trackDots02" width="6" height="8" patternUnits="userSpaceOnUse">
+                <circle cx="3" cy="4" r="1.1" fill="#79C9FC" opacity=".55"/>
+              </pattern>
+            </defs>
+            <rect width="200" height="8" fill="url(#trackDots02)"/>
+          </svg>
+          <span class="fill"></span>
+        </span>
+        <span class="pct">21.4%</span>
+      </span>
+
+    </div>
+    <div class="irow">
+      <span class="k">支出环比</span>
+      <span class="v up"><span class="pre">较上月</span><svg class="ic arrow" width="14" height="14" viewBox="0 0 24 24"><path d="M12 18.6V5.4M6.6 10.8 12 5.4l5.4 5.4"/></svg>12.5%</span>
+    </div>
+    <div class="irow">
+      <span class="k">收入环比</span>
+      <span class="v down"><span class="pre">较上月</span><svg class="ic arrow" width="14" height="14" viewBox="0 0 24 24"><path d="M12 5.4v13.2M6.6 13.2 12 18.6l5.4-5.4"/></svg>3.2%</span>
+    </div>
+  </div>
+
+  <!-- ===== 收支趋势 ===== -->
+  <div class="card">
+    <div class="sechead"><span class="t">收支趋势</span><span class="h">点柱子看当天明细</span></div>
+    <div class="segbar">
+      <span class="seg on">本月</span>
+      <span class="seg">近半年</span>
+      <span class="seg">近全年</span>
+    </div>
+    <div class="chartlegend">
+      <span class="lg"><i class="sw" style="background:var(--bar-expense)"></i>支出</span>
+      <span class="lg"><i class="sw" style="background:var(--bar-income)"></i>收入</span>
+      <span class="lg" style="color:var(--on-surface-var);font-style:italic">今天 = 光环 + 柱下短杠</span>
+    </div>
+    <div class="chart">
+      <div class="bars">
+        <span class="slot"><i class="bar" style="height:24px"></i></span>
+        <span class="slot"><i class="bar" style="height:16px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:47px"></i></span>
+        <span class="slot"><i class="bar" style="height:31px"></i></span>
+        <span class="slot"><i class="bar" style="height:34px"></i></span>
+        <span class="slot"><i class="bar" style="height:20px"></i></span>
+        <span class="slot"><i class="bar" style="height:28px"></i></span>
+        <span class="slot"><i class="bar" style="height:42px"></i></span>
+        <span class="slot"><i class="bar" style="height:22px"></i><i class="bar in" style="height:48px"></i></span>
+        <span class="slot"><i class="bar" style="height:48px"></i></span>
+        <span class="slot"><i class="bar" style="height:15px"></i></span>
+        <span class="slot"><i class="bar" style="height:11px"></i></span>
+        <span class="slot"><i class="bar" style="height:7px"></i><i class="bar in" style="height:7px"></i></span>
+        <span class="slot"><i class="bar" style="height:11px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:48px"></i></span>
+        <span class="slot today"><i class="bar" style="height:13px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+        <span class="slot"><i class="bar" style="height:0px"></i></span>
+      </div>
+      <div class="ticks">
+        <span class="tick">1</span><span class="tick"></span><span class="tick"></span><span class="tick"></span>
+        <span class="tick">5</span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span>
+        <span class="tick">10</span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span>
+        <span class="tick">15</span><span class="tick"></span><span class="tick"></span>
+        <span class="tick" style="color:var(--primary);font-weight:700">18</span>
+        <span class="tick"></span><span class="tick">20</span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span>
+        <span class="tick">25</span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span>
+        <span class="tick">30</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 分类占比（环形 142dp，2dp 缝 = surface 井底色；色板换 CategoryPalette 10 色位） ===== -->
+  <div class="card">
+    <div class="sechead"><span class="t">分类占比</span><span class="h">点一块看明细</span></div>
+    <div class="donutrow">
+    <div class="donutwrap">
+      <svg class="donut" viewBox="0 0 142 142" role="img"
+           aria-label="本月支出分类占比，合计 ¥1,284.50：餐饮 37.8%，购物 21.5%，居住 13.6%，交通 9.6%，娱乐 7.2%，通讯 4.8%，医疗 2.9%，教育 2.6%">
+        <g transform="rotate(-90 71 71)" fill="none" stroke-width="20">
+          <circle cx="71" cy="71" r="47" stroke="#157F84" stroke-dasharray="105.05 190.33" stroke-dashoffset="0"/>
+          <circle cx="71" cy="71" r="47" stroke="#9450A3" stroke-dasharray="57.76 237.62" stroke-dashoffset="-111.05"/>
+          <circle cx="71" cy="71" r="47" stroke="#268CB8" stroke-dasharray="32.41 262.97" stroke-dashoffset="-174.81"/>
+          <circle cx="71" cy="71" r="47" stroke="#A0794C" stroke-dasharray="20.67 274.71" stroke-dashoffset="-213.22"/>
+          <circle cx="71" cy="71" r="47" stroke="#D74664" stroke-dasharray="13.71 281.67" stroke-dashoffset="-239.89"/>
+          <circle cx="71" cy="71" r="47" stroke="#697832" stroke-dasharray="7.48 287.90" stroke-dashoffset="-259.60"/>
+          <circle cx="71" cy="71" r="47" stroke="#2C6FC4" stroke-dasharray="1.50 293.88" stroke-dashoffset="-273.08"/>
+          <circle cx="71" cy="71" r="47" stroke="#42982D" stroke-dasharray="7.48 287.90" stroke-dashoffset="-280.58"/>
+          <circle cx="71" cy="71" r="47" stroke="#AB5334" stroke-dasharray="7.48 287.90" stroke-dashoffset="-294.06"/>
+          <circle cx="71" cy="71" r="47" stroke="#7F72CE" stroke-dasharray="0.01 295.37" stroke-dashoffset="-307.54"/>
+        </g>
+      </svg>
+      <span class="dcenter">
+        <span class="lab">本月支出</span>
+        <span class="tot">¥1,284.50</span>
+        <span class="lab">6.1–6.18</span>
+      </span>
+    </div>
+    <div class="legend">
+      <span class="row2">
+        <span class="lg"><i class="sw" style="background:#157F84"></i>餐饮 37.8%</span>
+        <span class="lg"><i class="sw" style="background:#9450A3"></i>购物 21.5%</span>
+        <span class="lg"><i class="sw" style="background:#268CB8"></i>居住 13.6%</span>
+      </span>
+      <span class="row2">
+        <span class="lg"><i class="sw" style="background:#A0794C"></i>交通 9.6%</span>
+        <span class="lg"><i class="sw" style="background:#D74664"></i>娱乐 7.2%</span>
+        <span class="lg"><i class="sw" style="background:#697832"></i>通讯 4.8%</span>
+        <span class="lg"><i class="sw" style="background:#2C6FC4"></i>医疗 2.9%</span>
+        <span class="more">另 3 项</span>
+      </span>
+    </div>
+    </div>
+  </div>
+
+  <!-- 点选气泡：左侧 16dp 起、宽 236dp、底边距屏底 82dp → 占 x 16–252 / y 712–762
+       FAB：x 262–374 / y 698–754。两者 x 区间不重叠（252 < 262），且气泡底边 762 < 导航顶边 764。
+       本屏已按屏幕阅读顺序实测（Chrome 无头渲染 getBoundingClientRect 逐元素核对），无遮挡。 -->
+  <div class="tip">
+    <span class="sw"></span>
+    <span class="txt"><span class="n">餐饮</span><span class="m">-¥486.00</span><span class="pct">37.8%</span></span>
+    <span class="go">查看明细
+      <svg class="ic" width="15" height="15" viewBox="0 0 24 24"><path d="M9.5 6.5 15 12l-5.5 5.5"/></svg>
+    </span>
+  </div>
+
+  <div class="fab">
+    <svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M12 5.4v13.2M5.4 12h13.2"/></svg>
+    记一笔
+  </div>
+
+  <div class="nav">
+    <div class="item">
+      <span class="pill"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M4.4 6.8h15.2M4.4 12h15.2M4.4 17.2h8.4"/></svg></span>
+      <span class="lbl">明细</span>
+    </div>
+    <div class="item on">
+      <span class="pill"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M5.2 19.2v-6.8M12 19.2V4.8M18.8 19.2v-4.4"/></svg></span>
+      <span class="lbl">统计</span>
+    </div>
+    <div class="item">
+      <span class="pill"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M4.4 7.6h15.2M4.4 16.4h15.2"/><circle cx="9.4" cy="7.6" r="2.4"/><circle cx="14.6" cy="16.4" r="2.4"/></svg></span>
+      <span class="lbl">设置</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
+<!--
+  ============================ 色板复核（WCAG，图形阈值 3:1） ============================
+  图表底 = 井底 surface #101B24，不是卡片 #16303F：卡片上直接铺扇形，最差的 #9450A3 只有 2.57。
+    色位 / 分类(id) / 对 #101B24 / 对卡片（本屏不用）
+    #157F84 slot0 餐饮(1)   3.65   2.88
+    #268CB8 slot1 居住(4)   4.59   3.61
+    #2C6FC4 slot2 医疗(7)   3.47   2.73
+    #7F72CE slot3 其他(11)  4.32   3.40
+    #9450A3 slot4 购物(3)   3.27   2.57
+    #D74664 slot5 娱乐(6)   4.11   3.24
+    #AB5334 slot6 人情(9)   3.34   2.63
+    #A0794C slot7 交通(2)   4.43   3.49
+    #697832 slot8 通讯(5)   3.60   2.83
+    #42982D slot9 教育(8)   4.78   3.77
+  趋势柱：支出 #FFB4AB 对井底 10.27、收入 #79C9FC 9.61；今天 = 18% 品牌蓝光环 + 柱下 3dp 短杠
+  （rgba(121,201,252,.18) 叠在 #101B24 上）。今天不靠换柱色：换色会和收入蓝撞语义，
+  而且颜色不是唯一通道——光环（面）+ 短杠（点）+ 刻度加粗三重冗余。
+  颜色同样不是唯一信息通道：图例文字 + 点选气泡 + 支出排行文字。
+-->

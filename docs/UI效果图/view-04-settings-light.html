@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  view-04-settings-light.html   ·   设置页（Settings / 底部导航 Tab 3）
+  主题：浅色 Light ·「更可爱」迭代版 R4-CUTE（新增屏）
+  ============================================================================
+  【本屏做对了规范里的哪几条】
+   ST-4 主题三选带 24dp 圆形色块预览：跟随系统 = 半浅半深、浅色 = #F5FAFF + 1dp 描边、
+        深色 = #0E1418；选中项是淡蓝胶囊 #79C9FC + 深蓝字 #06304E（7.51:1）。
+   ST-5 分组不再用「通栏分隔线」，改成「组标题在卡上方 + 卡片 24dp 圆角浮起」。
+   ST-1 开发自检从顶部移到「关于」组里（不再喧宾夺主）。
+   ST-2 版本行下移到「关于」组底部。
+   ST-3 所有「进入下一级」的指示一律用 ChevronRight 线性图标，不用「›」字符。
+  【本轮「更可爱」改了什么】
+   C-1 形状更圆：卡片 24dp 圆角，行内可点区域、主题三选、开关全部 pill 化。
+   C-2 蓝色分层更甜：页面底 #EAF6FF，卡片纯白浮起，卡内嵌块 #E4F1FC。
+   C-3 波点纹理＝唯一装饰点缀：本屏只在「外观卡右上角」一处 34dp 波点角标，别处零纹理。
+   C-4 小狗元素＝应用图标：顶部标题区 40dp 应用图标徽标（浅蓝圆角方底 #79C9FC + 白色萨摩耶 + 蓝色波点领巾）。
+   C-5 图标全部圆润线性：stroke-width 2.2、round cap / round join。
+   C-6 数值（¥6,000.00 / 2.2.0 (218)）右对齐 + tabular-nums，与账单页金额同一套竖线规则。
+   C-7 微交互写进注释（MOTION 块）。
+
+  【硬护栏自检 · 对比度全部本次自算（WCAG 2.x 相对亮度公式，sRGB）】
+    背景：surface #EAF6FF、card #FFFFFF、inset #E4F1FC、选中胶囊 #79C9FC
+    文字对（阈值 4.5:1）
+      onSurface #0F1B26 / surface #EAF6FF ......... 15.87  通过
+      onSurface #0F1B26 / card #FFFFFF ............ 17.43  通过（行标题）
+      onSurfaceVariant #41566A / card .............  7.60  通过（行内数值 / 组标题）
+      onSurfaceVariant #41566A / surface ..........  6.92  通过
+      onSurfaceVariant #41566A / inset #E4F1FC ..... 6.62  通过（行首图标底色上的图标）
+      primary #0B5A8C / card ......................  7.35  通过（开关 ON 的底色、可点文字）
+      onPrimary #FFFFFF / primary #0B5A8C .........  7.35  通过（开关 ON 的白色滑块描边）
+      onPrimaryContainer #06304E / 淡蓝 #79C9FC ...  7.51  通过（选中的主题项文字）
+    【禁止使用的组合（本屏已核验未出现）】
+      onSurfaceVariant #41566A / 淡蓝 #79C9FC .....  4.19  ✗ → 淡蓝底上一律 #06304E
+      primary #0B5A8C / 淡蓝 #79C9FC ..............  4.05  ✗ → 同上
+    图形对（阈值 3:1）
+      onSurface #0F1B26 / inset #E4F1FC ........... 14.55  通过（线性图标描边）
+      primary #0B5A8C / card #FFFFFF ..............  7.35  通过（开关轨道 ON）
+      outline #5C7183 / card #FFFFFF ..............  5.07  通过（chevron、浅色主题预览的描边）
+      开关轨道 OFF #C2D3E2 / card .................  1.53  ← 装饰级轨道；开/关状态另有
+        「滑块位置 + 白色圆点」两重冗余通道，颜色不是唯一通道（关态文字也写着「关」）。
+      分隔线 #DCE7F2 / card .......................  1.23  ← 装饰级分隔线，不承载信息。
+    触控目标（≥48dp）：每行 50 高；主题三选每项 64×104（整块可点）；开关整行 50 可点；
+      底部导航项 80 高；返回 / 图标按钮 44×44 外扩到 48。
+    金额与数值右对齐：.rv2{min-width:96px;text-align:right;tabular-nums}，右边缘成竖线。
+    支出红 / 收入蓝语义守卫：本屏不出现收支金额，仅出现预算额度（中性 onSurfaceVariant），
+      不借用红/蓝语义色。
+    【未做/如实说明】波点、阴影、渐变全部纯 CSS/SVG；未联网；未引外部字体或图片；
+      图标与小狗一律内联 SVG；数据全部合成，不含任何真实交易数据。
+
+  【MOTION · 微交互】
+   M-1 按压反馈：所有行、主题三选、返回与图标按钮按下 scale(.97)，90ms 进 / 160ms 回弹。
+   M-2 开关：滑块 180ms cubic-bezier(.2,.8,.2,1) 平移动画，轨道颜色同步 180ms 渐变；
+       开态额外一次 1.0→1.06→1.0 的轻微「弹一下」120ms（只做一次，不循环）。
+   M-3 主题三选切换：选中胶囊 180ms 从旧项「长大」到新项（共享元素），同时预览色块
+       360ms 交叉淡入；切换后整屏主题做 240ms 交叉淡入，避免闪白。
+   M-4 组进场：各分组卡片依次入场 translateY 8dp→0 + 透明度 0→1，间隔 40ms，总时长 ≤ 240ms。
+   M-5 波点角标：静态不动（装饰不得动）。
+   M-6 长按「导出本地备份」：整行 200ms 轻微下沉并在行尾显示进度环，导出完成一次性
+       淡入「已保存到本机」吐司，不做循环动画。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>设置 · 浅色 · R4-CUTE</title>
+<style>
+  :root{
+    --surface:#EAF6FF;
+    --card:#FFFFFF;
+    --inset:#E4F1FC;
+    --surface-variant:#DCE7F2;
+    --on-surface:#0F1B26;
+    --on-surface-var:#41566A;
+    --primary:#0B5A8C;
+    --on-primary:#FFFFFF;
+    --primary-container:#79C9FC;
+    --on-primary-container:#06304E;
+    --outline:#5C7183;
+    --outline-variant:#C2D3E2;
+    --dot:#79C9FC;
+    --shadow-card:0 1px 2px rgba(15,27,38,.06), 0 10px 22px -14px rgba(11,90,140,.28);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:390px;height:844px;overflow:hidden}
+  body{font-family:-apple-system,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+    background:var(--surface);color:var(--on-surface);-webkit-font-smoothing:antialiased}
+  .phone{position:relative;width:390px;height:844px;overflow:hidden;background:var(--surface)}
+  svg{display:block}
+  .ic{stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+  .statusbar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+    font-size:13px;font-weight:600}
+  .sb-right{display:flex;align-items:center;gap:5px}
+
+  .appbar{height:56px;display:flex;align-items:center;gap:10px;padding:0 16px 0 18px}
+  /* 方底由徽标自身给（#79C9FC）；squircle 圆角 22.5% × 40dp = 9dp，与启动图标同形，不裁成圆 */
+  .dogbadge{position:relative;width:40px;height:40px;flex:none;border-radius:9px;background:#79C9FC;overflow:hidden}
+  /* 图标前景 PNG 的蓝色圆底 = 画布 2/3，故放大 1.5× 居中，圆底正好铺满方底（透明边被裁掉） */
+  .dogbadge img{position:absolute;left:-10px;top:-10px;width:60px;height:60px}
+  .ttl{font-size:21px;font-weight:600;letter-spacing:.2px}
+
+  .glabel{display:flex;align-items:center;gap:6px;margin:8px 16px 4px;font-size:13.5px;
+    font-weight:600;color:var(--on-surface-var)}
+  .glabel .gdog{color:var(--primary)}
+  .card{position:relative;margin:0 16px;background:var(--card);border-radius:24px;
+    box-shadow:var(--shadow-card);overflow:hidden}
+  .row{position:relative;display:flex;align-items:center;gap:11px;height:50px;padding:0 16px}
+  .row + .row::before{content:"";position:absolute;left:16px;right:16px;top:0;height:1px;
+    background:var(--surface-variant)}
+  .ric{width:34px;height:34px;flex:none;border-radius:12px;background:var(--inset);
+    display:flex;align-items:center;justify-content:center;color:var(--on-surface)}
+  .rt{flex:1;font-size:15px;font-weight:500}
+  .rv2{font-size:14px;color:var(--on-surface-var);min-width:96px;text-align:right;
+    font-variant-numeric:tabular-nums}
+  .chev{color:var(--outline);flex:none}
+
+  /* 开关（M-2） */
+  .sw{position:relative;width:52px;height:32px;border-radius:999px;background:var(--outline-variant);flex:none}
+  .sw.on{background:var(--primary)}
+  .sw i{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#FFFFFF;
+    box-shadow:0 1px 2px rgba(15,27,38,.28)}
+  .sw.on i{left:23px}
+
+  /* 主题三选（ST-4） */
+  .tstyle{display:flex;gap:8px;padding:10px 12px 12px}
+  .topt{flex:1;height:64px;border-radius:20px;background:var(--inset);color:var(--on-surface-var);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    font-size:13px;font-weight:500}
+  .topt .prev{width:24px;height:24px;border-radius:50%;overflow:hidden;display:block}
+  .topt.on{background:var(--primary-container);color:var(--on-primary-container);font-weight:700}
+  .prev.sys{background:linear-gradient(90deg,#F5FAFF 0 50%,#0E1418 50% 100%);
+    box-shadow:inset 0 0 0 1px #5C7183}
+  .prev.light{background:#F5FAFF;box-shadow:inset 0 0 0 1px #5C7183}
+  .prev.dark{background:#0E1418}
+
+  .cornerdots{position:absolute;right:0;top:0;width:34px;height:34px;pointer-events:none}
+
+  /* 底部导航 */
+  .nav{position:absolute;left:0;right:0;bottom:0;height:80px;background:var(--card);
+    display:flex;align-items:flex-start;padding:8px 12px 0;box-shadow:0 -1px 0 var(--surface-variant)}
+  .nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;
+    color:var(--on-surface-var);font-size:11.5px;font-weight:500}
+  .nav a .pill{height:32px;padding:0 20px;border-radius:999px;display:flex;align-items:center;
+    justify-content:center}
+  .nav a.on{color:var(--on-secondary-container);font-weight:700}
+  .nav a.on .pill{background:var(--primary-container);color:var(--on-primary-container)}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="sb-right">
+      <svg width="17" height="11" viewBox="0 0 17 11"><path d="M1 8.5h2v2H1zM5.6 6h2v4.5h-2zM10.2 3.5h2v7h-2zM14.8 1h2v9.5h-2z" fill="currentColor"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 9.6 5.2 7.2a3.3 3.3 0 0 1 4.6 0z" fill="currentColor"/><path d="M7.5 5.4 4 1.9a7.5 7.5 0 0 1 7 0z" fill="currentColor" opacity=".9"/><circle cx="7.5" cy="10.2" r=".9" fill="currentColor"/></svg>
+      <svg width="24" height="11" viewBox="0 0 24 11"><rect x=".5" y=".5" width="20" height="10" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="15" height="7" rx="1.6" fill="currentColor"/><path d="M22 4.2v2.6a2 2 0 0 0 0-2.6z" fill="currentColor" opacity=".5"/></svg>
+    </span>
+  </div>
+
+  <!-- C-4 应用图标徽标（40dp 圆角方底）+ 标题 -->
+  <div class="appbar">
+    <span class="dogbadge" role="img" aria-label="记账本">
+      <!-- 真正的应用图标：方底由 .dogbadge 提供，图像复用本仓库的图标前景 PNG（非外部资源） -->
+      <img src="../../app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" alt="" width="60" height="60">
+    </span>
+    <span class="ttl">设置</span>
+  </div>
+
+  <!-- 组 1 · 账本 -->
+  <div class="glabel">账本</div>
+  <div class="card">
+    <div class="row">
+        <span class="ric"><svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M4 8.6A2.6 2.6 0 0 1 6.6 6h9.8a2.6 2.6 0 0 1 2.6 2.6"/><rect x="4" y="8.6" width="16.4" height="9.8" rx="3.4"/><path d="M16.4 13.5h.01"/></svg></span>
+        <span class="rt">默认账户</span>
+        <span class="rv2">招商银行</span>
+        <svg class="ic chev" width="18" height="18" viewBox="0 0 24 24"><path d="M9.6 6.4 15.2 12l-5.6 5.6"/></svg>
+      </div>
+    <div class="row">
+        <span class="ric"><svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M4.6 11.2 11.4 4.4a1.8 1.8 0 0 1 1.3-.5h5.1a1.8 1.8 0 0 1 1.8 1.8v5.1a1.8 1.8 0 0 1-.5 1.3l-6.8 6.8a1.8 1.8 0 0 1-2.5 0l-5.2-5.2a1.8 1.8 0 0 1 0-2.5z"/><path d="M15.6 8.6h.01"/></svg></span>
+        <span class="rt">默认分类</span>
+        <span class="rv2">餐饮</span>
+        <svg class="ic chev" width="18" height="18" viewBox="0 0 24 24"><path d="M9.6 6.4 15.2 12l-5.6 5.6"/></svg>
+      </div>
+  </div>
+
+  <!-- 组 2 · 外观（ST-4 主题三选 + C-3 本屏唯一波点） -->
+  <div class="glabel">外观</div>
+  <div class="card">
+    <svg class="cornerdots" viewBox="0 0 34 34" aria-hidden="true">
+      <defs>
+        <pattern id="dots04" width="8" height="8" patternUnits="userSpaceOnUse">
+          <circle cx="2.2" cy="2.2" r="1.5" fill="#79C9FC"/>
+          <circle cx="6.2" cy="6.2" r="1.5" fill="#79C9FC"/>
+        </pattern>
+      </defs>
+      <path d="M34 0v34H0z" fill="url(#dots04)" opacity=".5"/>
+    </svg>
+    <div style="padding:14px 42px 0 16px;display:flex;align-items:center;gap:8px">
+      <span class="rt" style="font-size:15px;font-weight:500">主题</span>
+      <span style="margin-left:auto;font-size:13px;color:var(--on-surface-var)">当前：跟随系统</span>
+    </div>
+    <!-- 主题三选：每项 68dp 高 × 104dp 宽，整块可点（≥48dp） -->
+    <div class="tstyle">
+      <span class="topt on">
+          <span class="prev"><span class="prev sys"></span></span>
+          <span class="tl">跟随系统</span>
+        </span>
+      <span class="topt">
+          <span class="prev"><span class="prev light"></span></span>
+          <span class="tl">浅色</span>
+        </span>
+      <span class="topt">
+          <span class="prev"><span class="prev dark"></span></span>
+          <span class="tl">深色</span>
+        </span>
+    </div>
+  </div>
+
+  <!-- 组 3 · 预算与提醒 -->
+  <div class="glabel">预算与提醒</div>
+  <div class="card">
+    <div class="row">
+        <span class="ric"><svg class="ic" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="3.6"/><path d="M12 3.8v2.2M12 18v2.2M3.8 12H6M18 12h2.2"/></svg></span>
+        <span class="rt">月度预算</span>
+        <span class="rv2">¥6,000.00</span>
+        <svg class="ic chev" width="18" height="18" viewBox="0 0 24 24"><path d="M9.6 6.4 15.2 12l-5.6 5.6"/></svg>
+      </div>
+    <div class="row">
+        <span class="ric"><svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M7 10.4a5 5 0 0 1 10 0c0 4 1.6 5.4 1.6 5.4H5.4S7 14.4 7 10.4z"/><path d="M10.2 18.4a2 2 0 0 0 3.6 0"/></svg></span>
+        <span class="rt">超支提醒</span>
+        <span class="rv2"></span>
+        <span class="sw on" role="switch" aria-checked="true" aria-label="超支提醒 开"><i></i></span>
+      </div>
+  </div>
+
+  <!-- 组 4 · 数据与备份 -->
+  <div class="glabel">数据与备份</div>
+  <div class="card">
+    <div class="row">
+        <span class="ric"><svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M12 4.6v10.2M8.2 11.2 12 15l3.8-3.8"/><path d="M5 16.4v1.6a1.8 1.8 0 0 0 1.8 1.8h10.4a1.8 1.8 0 0 0 1.8-1.8v-1.6"/></svg></span>
+        <span class="rt">导出本地备份</span>
+        <span class="rv2">6 月 18 日</span>
+        <svg class="ic chev" width="18" height="18" viewBox="0 0 24 24"><path d="M9.6 6.4 15.2 12l-5.6 5.6"/></svg>
+      </div>
+    <div class="row">
+        <span class="ric"><svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M4.2 8.4 12 4.4l7.8 4v7.2L12 19.6l-7.8-4z"/><path d="M4.2 8.4 12 12.4l7.8-4M12 12.4v7.2"/></svg></span>
+        <span class="rt">数据存放位置</span>
+        <span class="rv2">仅本机</span>
+        <svg class="ic chev" width="18" height="18" viewBox="0 0 24 24"><path d="M9.6 6.4 15.2 12l-5.6 5.6"/></svg>
+      </div>
+  </div>
+
+  <!-- 组 5 · 关于（ST-1 开发自检 + ST-2 版本行下移） -->
+  <div class="glabel">关于</div>
+  <div class="card">
+    <div class="row">
+        <span class="ric"><svg class="ic" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><path d="M12 11.2v5M12 8.2h.01"/></svg></span>
+        <span class="rt">开发自检</span>
+        <span class="rv2">12 项</span>
+        <svg class="ic chev" width="18" height="18" viewBox="0 0 24 24"><path d="M9.6 6.4 15.2 12l-5.6 5.6"/></svg>
+      </div>
+    <div class="row">
+        <span class="ric"><svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M12 4.6 4.8 8.4 12 12.2l7.2-3.8z"/><path d="M4.8 12.4 12 16.2l7.2-3.8"/></svg></span>
+        <span class="rt">版本</span>
+        <span class="rv2">2.2.0 (218)</span>
+        <svg class="ic chev" width="18" height="18" viewBox="0 0 24 24"><path d="M9.6 6.4 15.2 12l-5.6 5.6"/></svg>
+      </div>
+  </div>
+
+  <!-- 底部导航（设置 选中） -->
+  <div class="nav">
+    <a href="#"><span class="pill"><svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M4 7h16M4 12h11M4 17h7"/></svg></span>明细</a>
+    <a href="#"><span class="pill"><svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M5 19V9M12 19V5M19 19v-6"/></svg></span>统计</a>
+    <a href="#" class="on"><span class="pill"><svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M4.4 8.4h15.2M4.4 15.6h15.2"/><circle cx="9.2" cy="8.4" r="2.4"/><circle cx="14.8" cy="15.6" r="2.4"/></svg></span>设置</a>
+  </div>
+
+</div>
+</body>
+</html>

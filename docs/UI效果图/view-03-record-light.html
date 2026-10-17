@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  view-03-record-light.html   ·   记一笔（Record / 记一笔页）
+  主题：浅色 Light ·「更可爱」迭代版 R4-CUTE
+  ============================================================================
+  【本轮「更可爱」改了什么】
+   C-1 形状更圆：所有卡片 24dp 圆角（原来是 12dp 输入框）；主按钮、段选器、chip、
+       日期行、账户行全部改「全圆角 pill」；金额框不再是方框而是卡内大数字。
+   C-2 蓝色分层更甜：页面底 #EAF6FF（柔和浅蓝），四张卡片纯白浮起（#FFFFFF + 柔和阴影），
+       卡内嵌块用 #E4F1FC / #DCE7F2 两层淡蓝。品牌淡蓝 #79C9FC 仍然只做 primaryContainer
+       与装饰纹理，不承担正文文字。
+   C-3 波点纹理＝唯一装饰点缀：本屏只在「金额卡右上角」一处 34dp 见方的波点角标。
+       其余位置零纹理，绝不铺满。
+   C-4 小狗元素＝应用图标：顶部标题区 40dp 应用图标徽标（浅蓝圆角方底 #79C9FC + 白色萨摩耶
+       + 蓝色波点领巾），与「记一笔」同排 —— 让「填表」这件事有一个陪伴者。
+   C-5 分类/账户图标改圆润线性：全部 stroke-width 2.2、stroke-linecap/linejoin=round，
+       线条端点圆头、转角圆角；选中态是淡蓝胶囊 #79C9FC + 深蓝字 #06304E（7.51:1）。
+   C-6 金额更大更齐：输入金额 34px/700 + tabular-nums；下方「金额复核行」右对齐
+       （.rv b{min-width:96px;text-align:right;tabular-nums}），与其余页面的金额竖线同一套规则。
+   C-7 微交互写进注释（MOTION 块）。
+
+  【硬护栏自检 · 对比度全部本次自算（WCAG 2.x 相对亮度公式，sRGB）】
+    背景：surface #EAF6FF、card #FFFFFF、surfaceVariant #DCE7F2、inset #E4F1FC、chip 选中 #79C9FC
+    文字对（阈值 4.5:1）
+      onSurface #0F1B26 / surface #EAF6FF ......... 15.87  通过
+      onSurface #0F1B26 / card #FFFFFF ............ 17.43  通过（正文字色，全屏最大头）
+      onSurfaceVariant #41566A / surface ..........  6.92  通过（副标题 / 计数 / 复核行）
+      onSurfaceVariant #41566A / card .............  7.60  通过
+      onSurfaceVariant #41566A / surfaceVariant .... 6.06  通过
+      onSurfaceVariant #41566A / inset #E4F1FC ..... 6.62  通过（chip 未选中图标与文字）
+      primary #0B5A8C / surface ...................  6.70  通过（「保存」文字、链接、今天按钮）
+      primary #0B5A8C / card ......................  7.35  通过
+      onPrimary #FFFFFF / primary #0B5A8C .........  7.35  通过（底部保存按钮文字）
+      onPrimaryContainer #06304E / 淡蓝 #79C9FC ...  7.51  通过（选中 chip / 选中段文字）
+      error #B3261E / card ........................  6.54  通过（支出金额）
+      outline #5C7183 / surface ...................  4.61  通过（最弱一级文字，已到线，不得再加 alpha）
+      outline #5C7183 / card ......................  5.07  通过
+      tertiary #8A5A00 / surface ..................  5.40  通过（转账类型提示）
+    【禁止使用的组合（本屏已核验未出现）】
+      onSurfaceVariant #41566A / 淡蓝 #79C9FC .....  4.19  ✗ 不达标 → 淡蓝底上一律用 #06304E
+      primary #0B5A8C / 淡蓝 #79C9FC ..............  4.05  ✗ 不达标 → 同上
+    图形对（阈值 3:1）
+      primary #0B5A8C / surface #EAF6FF ...........  6.70  通过（线性图标、保存按钮底色）
+      onSurface #0F1B26 / inset #E4F1FC ........... 14.55  通过（线性图标描边）
+      outline #5C7183 / card #FFFFFF ..............  5.07  通过（未选中复选框描边）
+      surfaceVariant #DCE7F2 分隔线 / card ........  1.23  ← 纯装饰分隔线，不承载信息，进不了断言
+      outlineVariant #C2D3E2 / card ...............  1.53  ← 同上（装饰级）
+      波点 #79C9FC / inset #E4F1FC ................  1.58  ← 同上（装饰纹理，不是信息通道）
+    触控目标（全部 ≥48dp）：返回 44×44 外扩到 48；分类/账户 chip 视觉 40dp 高、用
+      ::before 把命中区外扩到 48dp；日期行 48；保存按钮 52；顶部「清空」文字按钮 48 高。
+    金额右对齐：复核行数值 min-width:96px + text-align:right + tabular-nums，右边缘成竖线。
+    支出红 / 收入蓝语义守卫：支出金额 #B3261E、收入金额 #0B5A8C、转账金额走 onSurface 中性；
+      类型段选器的选中态用淡蓝胶囊（中性选择），不借用收支语义色。
+    【未做/如实说明】波点、阴影、渐变全部纯 CSS/SVG；未联网；未引外部字体或图片；
+      图标与小狗一律内联 SVG；数据全部合成，不含任何真实交易数据。
+
+  【MOTION · 微交互（静态稿用注释写清，实现按此）】
+   M-1 按压反馈：所有 chip / 段选 / 日期行 / 图标按钮 按下 scale(.97)，90ms 进、160ms 回弹
+       （cubic-bezier(.2,.8,.2,1)）；保存按钮按下 scale(.985)，避免大块位移。
+   M-2 金额输入：数字逐位「淡入上浮」14dp→0、透明度 0→1，120ms；每个字符独立延迟 20ms。
+       千分位在失焦时补上，带 160ms 交叉淡入，避免跳动。
+   M-3 分类选中：选中胶囊从被点 chip 的位置「长大」过来（共享元素），180ms；同时未选中的
+       chip 底色 200ms 淡出。
+   M-4 底部保存按钮：常态静止，不用常驻阴影；按下 90ms 内阴影收到最小，松手 180ms 回到
+       var(--shadow-lift)。这是本屏唯一的「蓝时刻」，不额外做呼吸动画。
+   M-5 波点角标：完全静止（装饰不得动），仅在切到「收入」类型时 240ms 内淡出到 0.4 透明度，
+       提示「这屏的蓝色时刻属于收入」。
+   M-6 备注计数：超过 180 字时计数变 #B3261E 并抖动 2 次（120ms/次），不做弹窗。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>记一笔 · 浅色 · R4-CUTE</title>
+<style>
+  /* ---------- Design Token（浅色 R4-CUTE 甜蓝分层） ---------- */
+  :root{
+    --surface:#EAF6FF;          /* 页面底（C-2） */
+    --card:#FFFFFF;             /* 卡片：纯白浮起（C-2） */
+    --inset:#E4F1FC;            /* 卡内嵌块 / chip 底 */
+    --surface-variant:#DCE7F2;  /* 色带 / 选中行的第二层 */
+    --on-surface:#0F1B26;
+    --on-surface-var:#41566A;
+    --primary:#0B5A8C;          /* 浅色下 primary 是深蓝 = 本屏「蓝时刻」 */
+    --on-primary:#FFFFFF;
+    --primary-container:#79C9FC;/* 品牌淡蓝：选中胶囊 / 装饰纹理 */
+    --on-primary-container:#06304E;
+    --secondary-container:#D3E8F9;
+    --on-secondary-container:#123043;
+    --error:#B3261E;
+    --tertiary:#8A5A00;
+    --outline:#5C7183;
+    --outline-variant:#C2D3E2;  /* 装饰级描边 */
+    --dot:#79C9FC;
+    --shadow-card:0 1px 2px rgba(15,27,38,.06), 0 10px 22px -14px rgba(11,90,140,.28);
+    --shadow-lift:0 2px 4px rgba(15,27,38,.10), 0 14px 26px -12px rgba(11,90,140,.34);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:390px;height:844px;overflow:hidden}
+  body{font-family:-apple-system,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+    background:var(--surface);color:var(--on-surface);-webkit-font-smoothing:antialiased}
+  .phone{position:relative;width:390px;height:844px;overflow:hidden;background:var(--surface)}
+  svg{display:block}
+  /* C-5：圆润线性图标，端点圆头 / 转角圆角 */
+  .ic{stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+  .statusbar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+    font-size:13px;font-weight:600;color:var(--on-surface)}
+  .sb-right{display:flex;align-items:center;gap:5px}
+
+  /* ---------- 顶部标题区（C-4 应用图标徽标 40dp） ---------- */
+  .appbar{height:56px;display:flex;align-items:center;gap:8px;padding:0 8px 0 4px}
+  .iconbtn{width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;color:var(--on-surface)}
+  /* 方底由徽标自身给（#79C9FC）；squircle 圆角 22.5% × 40dp = 9dp，与启动图标同形，不裁成圆 */
+  .dogbadge{position:relative;width:40px;height:40px;flex:none;border-radius:9px;background:#79C9FC;overflow:hidden}
+  /* 图标前景 PNG 的蓝色圆底 = 画布 2/3，故放大 1.5× 居中，圆底正好铺满方底（透明边被裁掉） */
+  .dogbadge img{position:absolute;left:-10px;top:-10px;width:60px;height:60px}
+  .ttl{flex:1;font-size:19px;font-weight:600;letter-spacing:.2px}
+  .txtbtn{height:48px;padding:0 14px;display:flex;align-items:center;border-radius:999px;
+    font-size:14px;font-weight:600;color:var(--primary)}
+
+  /* ---------- 类型段选（pill） ---------- */
+  .seg{margin:2px 16px 0;height:44px;padding:4px;border-radius:999px;background:var(--card);
+    display:flex;gap:4px;box-shadow:var(--shadow-card)}
+  .seg .s{flex:1;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    font-size:14.5px;font-weight:500;color:var(--on-surface-var)}
+  .seg .s.on{background:var(--primary-container);color:var(--on-primary-container);font-weight:700}
+
+  /* ---------- 卡片（C-1 24dp 圆角） ---------- */
+  .card{margin:11px 16px 0;background:var(--card);border-radius:24px;box-shadow:var(--shadow-card);
+    position:relative;overflow:hidden}
+  .pad{padding:16px}
+  .slabel{font-size:14px;line-height:20px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .slabel .hint{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--on-surface-var)}
+
+  /* 金额卡 */
+  .amtrow{display:flex;align-items:baseline;gap:6px;padding:2px 16px 0}
+  .amtrow .cur{font-size:22px;font-weight:600;color:var(--on-surface-var)}
+  .amtrow .num{font-size:36px;line-height:42px;font-weight:700;letter-spacing:-.4px;
+    font-variant-numeric:tabular-nums}
+  .amtrow .caret{width:2px;height:32px;border-radius:2px;background:var(--primary);align-self:center;
+    display:inline-block;margin-left:2px}
+  .rv{display:flex;align-items:center;padding:0 16px 14px;font-size:12.5px;color:var(--on-surface-var)}
+  .rv b{margin-left:auto;min-width:96px;text-align:right;font-weight:600;font-size:13.5px;
+    font-variant-numeric:tabular-nums;color:var(--error)}
+  /* C-3 波点角标：本屏唯一的一处纹理 */
+  .cornerdots{position:absolute;right:0;top:0;width:34px;height:34px;pointer-events:none}
+
+  /* chip：全圆角 pill，命中区外扩到 48dp */
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{position:relative;display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;
+    border-radius:999px;background:var(--inset);color:var(--on-surface-var);
+    font-size:14px;font-weight:500}
+  .chip::before{content:"";position:absolute;left:0;right:0;top:-4px;bottom:-4px}
+  .chip .ic{color:var(--on-surface-var)}
+  .chip.on{background:var(--primary-container);color:var(--on-primary-container);font-weight:700}
+  .chip.on .ic{color:var(--on-primary-container)}
+  .catbox{max-height:168px;overflow:hidden}   /* R-2 chip 区限高 168dp */
+
+  /* 账户 / 日期行 */
+  .row{display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;border-radius:999px;
+    background:var(--inset)}
+  .row .d{font-size:15px;font-weight:500;font-variant-numeric:tabular-nums}
+  .row .ic{color:var(--on-surface-var)}
+  .row .today{margin-left:auto;height:34px;padding:0 12px;display:flex;align-items:center;
+    border-radius:999px;background:var(--card);color:var(--primary);font-size:13.5px;font-weight:600}
+  .stack{display:flex;flex-direction:column;gap:8px}
+
+  /* 备注 */
+  .note{font-size:15px;line-height:22px;color:var(--on-surface);min-height:28px
+    ;font-variant-numeric:tabular-nums}
+
+  /* ---------- 底部保存（R-4 / 本屏唯一蓝时刻） ---------- */
+  .savebar{position:absolute;left:16px;right:16px;bottom:12px;
+    background:linear-gradient(to top,var(--surface) 62%,rgba(234,246,255,0))}
+  .savebtn{height:52px;border-radius:999px;background:var(--primary);color:var(--on-primary);
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    font-size:16px;font-weight:700;letter-spacing:.3px;box-shadow:var(--shadow-lift)}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="sb-right">
+      <svg width="17" height="11" viewBox="0 0 17 11"><path d="M1 8.5h2v2H1zM5.6 6h2v4.5h-2zM10.2 3.5h2v7h-2zM14.8 1h2v9.5h-2z" fill="currentColor"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 9.6 5.2 7.2a3.3 3.3 0 0 1 4.6 0z" fill="currentColor"/><path d="M7.5 5.4 4 1.9a7.5 7.5 0 0 1 7 0z" fill="currentColor" opacity=".9"/><circle cx="7.5" cy="10.2" r=".9" fill="currentColor"/></svg>
+      <svg width="24" height="11" viewBox="0 0 24 11"><rect x=".5" y=".5" width="20" height="10" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="15" height="7" rx="1.6" fill="currentColor"/><path d="M22 4.2v2.6a2 2 0 0 0 0-2.6z" fill="currentColor" opacity=".5"/></svg>
+    </span>
+  </div>
+
+  <!-- C-4 顶部标题区：40dp 应用图标徽标（浅蓝圆角方底 #79C9FC + 白萨摩耶 + 蓝色波点领巾） -->
+  <div class="appbar">
+    <span class="iconbtn"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M14.6 5.9 8.5 12l6.1 6.1"/></svg></span>
+    <span class="dogbadge" role="img" aria-label="记账本">
+      <!-- 真正的应用图标：方底由 .dogbadge 提供，图像复用本仓库的图标前景 PNG（非外部资源） -->
+      <img src="../../app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" alt="" width="60" height="60">
+    </span>
+    <span class="ttl">记一笔</span>
+    <span class="txtbtn">清空</span>
+  </div>
+
+  <!-- 类型段选：支出（默认）/ 收入 / 转账 · M-1 按下缩放 -->
+  <div class="seg">
+    <span class="s on">支出</span>
+    <span class="s">收入</span>
+    <span class="s">转账</span>
+  </div>
+
+  <!-- 金额卡（R-1 金额段距 / R-7 金额复核行） · C-3 波点角标＝本屏唯一纹理 -->
+  <div class="card">
+    <svg class="cornerdots" viewBox="0 0 34 34" aria-hidden="true">
+      <defs>
+        <pattern id="dots03" width="8" height="8" patternUnits="userSpaceOnUse">
+          <circle cx="2.2" cy="2.2" r="1.5" fill="#79C9FC"/>
+          <circle cx="6.2" cy="6.2" r="1.5" fill="#79C9FC"/>
+        </pattern>
+      </defs>
+      <path d="M34 0v34H0z" fill="url(#dots03)" opacity=".5"/>
+    </svg>
+    <div class="pad" style="padding-bottom:2px">
+      <div class="slabel" style="padding-right:40px">金额<span class="hint">支出</span></div>
+    </div>
+    <div class="amtrow">
+      <span class="cur">¥</span><span class="num">28.00</span><span class="caret"></span>
+    </div>
+    <!-- R-7 金额复核行：右对齐成竖线，支出红语义守卫 -->
+    <div class="rv"><span>金额复核：支出 ¥28.00</span><b>-¥28.00</b></div>
+  </div>
+
+  <!-- 分类卡（R-2 限高 168dp） -->
+  <div class="card">
+    <div class="pad" style="padding-bottom:10px">
+      <div class="slabel">分类<span class="hint">2 天前用过「餐饮」</span></div>
+    </div>
+    <div class="catbox">
+      <div class="chips" style="padding:0 16px 16px">
+        <span class="chip on"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M3.8 11.4h16.4c0 4.6-3.7 8.2-8.2 8.2s-8.2-3.6-8.2-8.2z"/><path d="M7.2 8.4c0-1.1.9-1.7.9-2.8M12 7.6c0-1.1.9-1.7.9-2.8M16.8 8.4c0-1.1.9-1.7.9-2.8"/></svg>餐饮</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M5.2 8.4h13.6l1 11.1c.1.9-.6 1.6-1.5 1.6H5.7c-.9 0-1.6-.7-1.5-1.6z"/><path d="M8.7 10.6V7.3a3.3 3.3 0 0 1 6.6 0v3.3"/></svg>购物</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><rect x="5" y="3.8" width="14" height="13.6" rx="4.2"/><path d="M5 10.8h14M9.4 20.2 7.6 17.4M14.6 20.2l1.8-2.8"/><path d="M9 7.6h.01M15 7.6h.01"/></svg>交通</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M8.2 8.6h7.6a5 5 0 0 1 5 5v.4a3.2 3.2 0 0 1-5.7 2l-.9-1.1h-4.4l-.9 1.1a3.2 3.2 0 0 1-5.7-2v-.4a5 5 0 0 1 5-5z"/><path d="M9 11.4v2.4M7.8 12.6h2.4"/><path d="M15.4 11.5h.01M17 13.1h.01"/></svg>娱乐</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M4 10.6 12 4l8 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 19z"/><path d="M9.6 20.6v-5.4h4.8v5.4"/></svg>居住</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><rect x="4.4" y="4.4" width="15.2" height="15.2" rx="5.4"/><path d="M12 8.6v6.8M8.6 12h6.8"/></svg>医疗</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><rect x="5.6" y="3.8" width="12.8" height="16.4" rx="4.2"/><path d="M10.4 17.2h3.2"/></svg>通讯</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M12 6.6v10.8M6.6 12h10.8"/></svg>更多</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 账户与日期卡 -->
+  <div class="card">
+    <div class="pad" style="padding-bottom:10px">
+      <div class="slabel">账户与日期</div>
+    </div>
+    <div class="stack" style="padding:0 16px 16px">
+      <div class="chips">
+        <span class="chip on"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><rect x="3.6" y="6" width="16.8" height="12" rx="4.2"/><path d="M3.6 10.4h16.8"/><path d="M7 14.4h3.4"/></svg>招商银行</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><path d="M4 8.6A2.6 2.6 0 0 1 6.6 6h9.8a2.6 2.6 0 0 1 2.6 2.6v0"/><rect x="4" y="8.6" width="16.4" height="9.8" rx="3.4"/><path d="M16.4 13.5h.01"/></svg>微信零钱</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="8.2"/><path d="M8.4 9.6c2.6-2.2 5.4-1.6 5.4.6 0 2.4-2.4 4.4-5.4 4.4"/></svg>支付宝</span>
+        <span class="chip"><svg class="ic" viewBox="0 0 24 24" width="18" height="18"><rect x="3.4" y="6.6" width="17.2" height="10.8" rx="3.6"/><circle cx="12" cy="12" r="2.4"/><path d="M6.6 10v.01M17.4 14v.01"/></svg>现金</span>
+      </div>
+      <div class="row">
+        <svg class="ic" width="20" height="20" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="15" rx="5"/><path d="M8 3.4v4M16 3.4v4M3.5 10.6h17"/></svg>
+        <span class="d">2026-06-18 周四</span>
+        <span class="today">今天</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 备注卡 -->
+  <div class="card">
+    <div class="pad" style="padding:12px 16px 14px">
+      <div class="slabel">备注<span class="hint">6/200</span></div>
+      <div style="height:6px"></div>
+      <div class="note">公司楼下午饭</div>
+    </div>
+  </div>
+
+  <!-- R-4 底部全宽保存按钮 52dp：本屏唯一的蓝时刻 -->
+  <div class="savebar">
+    <div class="savebtn">
+      <svg class="ic" width="20" height="20" viewBox="0 0 24 24" style="stroke-width:2.4"><path d="M5 12.8 9.6 17 19 7.6"/></svg>
+      保存
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  view-05-empty-light.html   ·   明细页空态（Empty state · NEUTRAL tone）
+  主题：浅色 Light ·「更可爱」迭代版 R4-CUTE（新增屏）
+  ============================================================================
+  【这一屏对应规范里的哪一条】
+   规范 §9 空态总表 #1「明细 · 本月无数据」：
+     标题「本月还没有记录」 + 引导「点右下角「记一笔」，3 秒记下第一笔。」
+   本稿在不动原意的前提下把它写得更温和（用户本轮要求「小狗在等你记第一笔」这类文案）：
+     标题  →「小狗在等你记第一笔」
+     副标题 →「本月还没有记录。点右下角「记一笔」，3 秒就能记下第一笔。」
+   规范 §5.2：空态插画只用现有 PNG（app/src/main/res/drawable-nodpi/
+     ic_launcher_foreground.png，本地相对路径 ../../app/src/main/res/drawable-nodpi/…），
+     contentDescription / alt 为空（纯装饰），插画与标题之间留 16dp。
+   G-3：EmptyState 组件补 16dp 间距 + tone(NEUTRAL / FILTERED / ERROR) + actionLabel。
+     本屏是 NEUTRAL tone；actionLabel =「记下第一笔」（次级描边按钮）。
+
+  【本轮「更可爱」改了什么】
+   C-1 形状更圆：卡片 / 空态容器 24–28dp 圆角，月份切换、actionLabel、FAB、导航选中态
+       全部 pill。
+   C-2 蓝色分层更甜：页面底 #EAF6FF，卡片纯白浮起，空态衬底用 #E4F1FC 淡蓝。
+   C-3 波点纹理＝唯一装饰点缀：本屏只在「小狗头身后的那一个 112dp 波点圆」一处，
+       别处零纹理、绝不铺满。
+   C-4 小狗元素：① 顶部 40dp 应用图标徽标（原小狗头像徽标换成真正的应用图标）；
+       ② 空态 64dp 小团小狗头 —— 原 140dp 大插图按本轮用户要求收小，波点晕 112dp ≈ 1.75×。
+       注：此处 60–72dp 是用户本轮显式指定，覆盖规范 §5.2 的 120dp 空态插画口径。
+   C-5 图标圆润线性：stroke-width 2.2、round cap / round join。
+   C-6 金额：本屏没有金额明细，但月份汇总行（支出 / 收入 / 结余）仍然用
+       tabular-nums + 右对齐成竖线，保持「0.00 也是钱」的一致排版。
+   C-7 微交互写进注释（MOTION 块）。
+
+  【硬护栏自检 · 对比度全部本次自算（WCAG 2.x 相对亮度公式，sRGB）】
+    背景：surface #EAF6FF、card #FFFFFF、衬底 pad #E4F1FC、淡蓝 #79C9FC
+    文字对（阈值 4.5:1）
+      onSurface #0F1B26 / surface #EAF6FF ......... 15.87  通过
+      onSurface #0F1B26 / card #FFFFFF ............ 17.43  通过（空态标题）
+      onSurfaceVariant #41566A / surface ..........  6.92  通过（空态引导文字）
+      onSurfaceVariant #41566A / card .............  7.60  通过
+      primary #0B5A8C / surface ...................  6.70  通过（actionLabel 描边与文字）
+      primary #0B5A8C / card ......................  7.35  通过
+      onPrimary #FFFFFF / primary #0B5A8C .........  7.35  通过（FAB 文字）
+      onPrimaryContainer #06304E / 淡蓝 #79C9FC ...  7.51  通过（导航选中胶囊文字）
+    【禁止使用的组合（本屏已核验未出现）】
+      onSurfaceVariant #41566A / 淡蓝 #79C9FC .....  4.19  ✗ → 淡蓝底上一律 #06304E
+      primary #0B5A8C / 淡蓝 #79C9FC ..............  4.05  ✗ → 同上
+    图形对（阈值 3:1）
+      primary #0B5A8C / surface #EAF6FF ...........  6.70  通过（FAB 底色、线性图标）
+      primary #0B5A8C / card #FFFFFF ..............  7.35  通过（actionLabel 1.5dp 描边）
+     应用图标 白狗 #FEFEFE / 图标蓝底 #79C9FC .  1.81  ← 品牌图形自带配色（同启动图标），
+       不是信息通道；狗脸内部靠深色眼/鼻/描边保持 ≥3:1 结构对比，故不进 3:1 断言。
+      波点 #79C9FC / pad #E4F1FC ..................  1.58  ← 装饰纹理，不是信息通道，
+        故不进 3:1 断言；它只负责「这里是空位」的温柔提示，信息由标题与按钮承载。
+      分隔线 #DCE7F2 / card .......................  1.23  ← 装饰级分隔线，不承载信息。
+    触控目标（≥48dp）：月份左右切换 44×44 + 外边距补到 48；actionLabel 48 高；
+      FAB 56；底部导航项 80 高。
+    金额右对齐：.v{min-width:96px;text-align:right;tabular-nums}，三行数值右边缘成竖线。
+    支出红 / 收入蓝语义守卫：支出 ¥0.00 用 #B3261E、收入 ¥0.00 用 #0B5A8C、结余中性；
+      「0」不改变语义色，避免用户在空账本上误判红蓝含义。
+    【未做/如实说明】波点、阴影、渐变全部纯 CSS/SVG；未联网（PNG 走本地相对路径）；
+      未引外部字体；功能图标一律内联 SVG；页眉应用图标徽标与空态小狗头复用 App 已有前景 PNG
+      （本仓库相对路径），未新增图片；
+      数据全部合成，不含任何真实交易数据。
+
+  【MOTION · 微交互】
+   M-1 按压反馈：月份切换、actionLabel、导航项按下 scale(.97)，90ms 进 / 160ms 回弹。
+   M-2 小狗入场：进场时 260ms 内 translateY 10dp→0 + 透明度 0→1 + scale .96→1，
+       只播一次；之后完全静止（装饰不得循环动）。
+   M-3 FAB 轻浮起：常态 var(--shadow-fab)；按下 90ms 内阴影收小并 scale(.97)，
+       松手 180ms 回到常态。
+   M-4 记完第一笔：本屏消失前，小狗 200ms 内轻微上移 4dp 并淡出到 0，
+       列表第一行从下方 8dp 淡入 —— 让「空 → 有」的转变有连续性。
+   M-5 波点圆：静态不动。
+   M-6 下拉刷新：不做（离线 App，没有可刷新的远端数据源），避免给出错误的操作预期。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>明细空态 · 浅色 · R4-CUTE</title>
+<style>
+  :root{
+    --surface:#EAF6FF;
+    --card:#FFFFFF;
+    --inset:#E4F1FC;
+    --surface-variant:#DCE7F2;
+    --on-surface:#0F1B26;
+    --on-surface-var:#41566A;
+    --primary:#0B5A8C;
+    --on-primary:#FFFFFF;
+    --primary-container:#79C9FC;
+    --on-primary-container:#06304E;
+    --secondary-container:#D3E8F9;
+    --on-secondary-container:#123043;
+    --error:#B3261E;
+    --outline:#5C7183;
+    --outline-variant:#C2D3E2;
+    --dot:#79C9FC;
+    --shadow-card:0 1px 2px rgba(15,27,38,.06), 0 10px 22px -14px rgba(11,90,140,.28);
+    --shadow-fab:0 2px 4px rgba(15,27,38,.12), 0 14px 26px -10px rgba(11,90,140,.40);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:390px;height:844px;overflow:hidden}
+  body{font-family:-apple-system,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+    background:var(--surface);color:var(--on-surface);-webkit-font-smoothing:antialiased}
+  .phone{position:relative;width:390px;height:844px;overflow:hidden;background:var(--surface)}
+  svg{display:block}
+  .ic{stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+  .statusbar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+    font-size:13px;font-weight:600}
+  .sb-right{display:flex;align-items:center;gap:5px}
+
+  .appbar{height:56px;display:flex;align-items:center;gap:10px;padding:0 16px 0 18px}
+  /* 方底由徽标自身给（#79C9FC）；squircle 圆角 22.5% × 40dp = 9dp，与启动图标同形，不裁成圆 */
+  .dogbadge{position:relative;width:40px;height:40px;flex:none;border-radius:9px;background:#79C9FC;overflow:hidden}
+  /* 前景 PNG 的蓝色圆底 = 画布 2/3，故放大 1.5× 并居中，圆底正好铺满方底（透明边被裁掉） */
+  .dogbadge img{position:absolute;left:-10px;top:-10px;width:60px;height:60px}
+  .ttl{font-size:21px;font-weight:600;letter-spacing:.2px}
+
+  /* 月份切换 pill */
+  .month{height:48px;margin:0 16px;display:flex;align-items:center;gap:6px;padding:0 6px;
+    background:var(--card);border-radius:999px;box-shadow:var(--shadow-card)}
+  .mbtn{width:44px;height:44px;flex:none;border-radius:999px;display:flex;align-items:center;
+    justify-content:center;color:var(--on-surface)}
+  .mlabel{flex:1;text-align:center;font-size:15.5px;font-weight:600;
+    font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center;gap:6px}
+
+  /* 月份汇总（0.00 也保持同一套金额排版） */
+  .sumcard{margin:12px 16px 0;background:var(--card);border-radius:24px;box-shadow:var(--shadow-card);
+    padding:12px 16px}
+  .sline{display:flex;align-items:center;height:30px;font-size:14px;color:var(--on-surface-var)}
+  .sline .v{margin-left:auto;min-width:96px;text-align:right;font-size:16px;font-weight:700;
+    font-variant-numeric:tabular-nums}
+  .v.out{color:var(--error)}
+  .v.in{color:var(--primary)}
+  .v.net{color:var(--on-surface)}
+
+  /* ---------- 空态区（G-3：12–16dp 间距 + NEUTRAL tone + actionLabel） ---------- */
+  .empty{position:absolute;left:0;right:0;top:212px;bottom:104px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 32px}
+  /* 插图块＝波点晕 112dp（中央小狗头 64dp 的 1.75×）；晕外缘即插图边界，故与标题间距就是 16dp */
+  .art{position:relative;width:112px;height:112px;display:flex;align-items:center;justify-content:center}
+  /* C-3 波点圆：本屏唯一一处装饰纹理（点距/点径仍 11px/1.7px，随之收小的只是圆本身） */
+  .art .dotring{position:absolute;inset:0}
+  /* C-4 小狗头 64dp：前景 PNG 的蓝圆底 = 画布 2/3，故取 96dp 再居中裁到 64dp */
+  .art .doghead{position:relative;width:64px;height:64px;display:block;overflow:hidden}
+  .art .doghead img{position:absolute;left:-16px;top:-16px;width:96px;height:96px}
+
+  .etitle{margin-top:16px;font-size:20px;line-height:26px;font-weight:700;text-align:center}
+  .esub{margin-top:8px;font-size:13.5px;line-height:20px;color:var(--on-surface-var);text-align:center}
+  .act{margin-top:16px;height:48px;padding:0 22px;border-radius:999px;background:var(--card);
+    border:1.5px solid var(--primary);color:var(--primary);display:flex;align-items:center;gap:7px;
+    font-size:15px;font-weight:600}
+
+  /* FAB：本屏唯一的蓝时刻 */
+  .fab{position:absolute;right:16px;bottom:96px;height:56px;padding:0 22px;border-radius:28px;
+    background:var(--primary);color:var(--on-primary);display:flex;align-items:center;gap:8px;
+    font-size:16px;font-weight:700;box-shadow:var(--shadow-fab)}
+
+  .nav{position:absolute;left:0;right:0;bottom:0;height:80px;background:var(--card);
+    display:flex;align-items:flex-start;padding:8px 12px 0;box-shadow:0 -1px 0 var(--surface-variant)}
+  .nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;
+    color:var(--on-surface-var);font-size:11.5px;font-weight:500}
+  .nav a .pill{height:32px;padding:0 20px;border-radius:999px;display:flex;align-items:center;
+    justify-content:center}
+  .nav a.on{color:var(--on-secondary-container);font-weight:700}
+  .nav a.on .pill{background:var(--primary-container);color:var(--on-primary-container)}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="sb-right">
+      <svg width="17" height="11" viewBox="0 0 17 11"><path d="M1 8.5h2v2H1zM5.6 6h2v4.5h-2zM10.2 3.5h2v7h-2zM14.8 1h2v9.5h-2z" fill="currentColor"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 9.6 5.2 7.2a3.3 3.3 0 0 1 4.6 0z" fill="currentColor"/><path d="M7.5 5.4 4 1.9a7.5 7.5 0 0 1 7 0z" fill="currentColor" opacity=".9"/><circle cx="7.5" cy="10.2" r=".9" fill="currentColor"/></svg>
+      <svg width="24" height="11" viewBox="0 0 24 11"><rect x=".5" y=".5" width="20" height="10" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="15" height="7" rx="1.6" fill="currentColor"/><path d="M22 4.2v2.6a2 2 0 0 0 0-2.6z" fill="currentColor" opacity=".5"/></svg>
+    </span>
+  </div>
+
+  <!-- C-4 应用图标徽标（40dp 圆角方底）+ 标题 -->
+  <div class="appbar">
+    <span class="dogbadge" role="img" aria-label="记账本">
+      <!-- 真正的应用图标：方底由 .dogbadge 提供，图像复用本仓库的图标前景 PNG（非外部资源） -->
+      <img src="../../app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" alt="" width="60" height="60">
+    </span>
+    <span class="ttl">明细</span>
+  </div>
+
+  <div class="month">
+    <span class="mbtn"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M14.5 6.5 9 12l5.5 5.5"/></svg></span>
+    <span class="mlabel">2026 年 6 月
+      <svg class="ic" width="16" height="16" viewBox="0 0 24 24" style="color:var(--on-surface-var)"><rect x="3.5" y="5.5" width="17" height="15" rx="5"/><path d="M8 3.4v4M16 3.4v4M3.5 10.6h17"/></svg>
+    </span>
+    <span class="mbtn"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M9.5 6.5 15 12l-5.5 5.5"/></svg></span>
+  </div>
+
+  <!-- 本月汇总：0.00 也保持金额右对齐成竖线（C-6） -->
+  <div class="sumcard">
+    <div class="sline">支出<span class="v out">¥0.00</span></div>
+    <div class="sline">收入<span class="v in">¥0.00</span></div>
+    <div class="sline">结余<span class="v net">¥0.00</span></div>
+  </div>
+
+  <!-- G-3 空态：NEUTRAL tone + 16dp 间距 + actionLabel -->
+  <div class="empty">
+    <div class="art">
+      <!-- C-3 唯一一处波点纹理：小狗头身后的淡蓝波点圆（112dp ＝ 小狗 64dp 的 1.75×，同步收小） -->
+      <svg class="dotring" viewBox="0 0 112 112" aria-hidden="true">
+        <defs>
+          <pattern id="dots05" width="11" height="11" patternUnits="userSpaceOnUse">
+            <circle cx="3" cy="3" r="1.7" fill="#79C9FC"/>
+            <circle cx="8.5" cy="8.5" r="1.7" fill="#79C9FC"/>
+          </pattern>
+          <clipPath id="clip05"><circle cx="56" cy="56" r="56"/></clipPath>
+        </defs>
+        <circle cx="56" cy="56" r="56" fill="#E4F1FC"/>
+        <g clip-path="url(#clip05)"><rect width="112" height="112" fill="url(#dots05)" opacity=".45"/></g>
+      </svg>
+      <!-- C-4 小团小狗头 64dp：复用 App 已有前景 PNG（浅蓝圆底 + 白萨摩耶 + 蓝波点领巾），居中裁到圆底 -->
+      <span class="doghead"><img src="../../app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" alt="" width="96" height="96"></span>
+    </div>
+    <!-- 16dp 间距后才出现标题（规范 §5.2） -->
+    <div class="etitle">小狗在等你记第一笔</div>
+    <div class="esub">本月还没有记录。点右下角「记一笔」，<br>3 秒就能记下第一笔。</div>
+    <div class="act">
+      <svg class="ic" width="18" height="18" viewBox="0 0 24 24" style="stroke-width:2.4"><path d="M12 6.2v11.6M6.2 12h11.6"/></svg>
+      记下第一笔
+    </div>
+  </div>
+
+  <!-- FAB：本屏唯一的蓝时刻（M-3 轻浮起） -->
+  <div class="fab">
+    <svg class="ic" width="20" height="20" viewBox="0 0 24 24" style="stroke-width:2.6"><path d="M12 5.6v12.8M5.6 12h12.8"/></svg>
+    记一笔
+  </div>
+
+  <div class="nav">
+    <a href="#" class="on"><span class="pill"><svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M4 7h16M4 12h11M4 17h7"/></svg></span>明细</a>
+    <a href="#"><span class="pill"><svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M5 19V9M12 19V5M19 19v-6"/></svg></span>统计</a>
+    <a href="#"><span class="pill"><svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M4.4 8.4h15.2M4.4 15.6h15.2"/><circle cx="9.2" cy="8.4" r="2.4"/><circle cx="14.8" cy="15.6" r="2.4"/></svg></span>设置</a>
+  </div>
+
+</div>
+</body>
+</html>

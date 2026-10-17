@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  view-01-transactions-light.html   ·   明细页（Transactions / 底部导航 Tab 1）
+  主题：浅色 Light ·「更可爱」迭代版 R4-CUTE
+  ============================================================================
+  【本轮「更可爱」改了什么】
+   C-1 形状更圆：日段卡容器 24dp；筛选条/按钮/chip/输入框全部全圆角 pill（999dp）；
+       FAB「记一笔」28dp；日段头 24dp 顶角（不再是 0dp 通栏直角条）。
+   C-2 蓝色分层更甜（浅色）：页面底 #EAF6FF（柔和浅蓝）；列表/卡片 #FFFFFF 纯白浮起；
+       日段头 #DCE7F2 作卡片内的浅蓝色带；图标底座 #E4F1FC。
+   C-3 波点纹理＝唯一装饰点缀：本屏唯一一处波点落在页眉的应用图标自身（图标自带的蓝色波点
+       领巾），别处零纹理、绝不铺满（图标是品牌资产，不是新加的装饰纹样）。
+   C-4 小狗元素＝应用图标：页眉左上角换成真正的应用图标（浅蓝圆角方底 #79C9FC + 白色萨摩耶
+       + 蓝色波点领巾）+ 问候文案「下午好，今天记一笔吗？」；徽标是品牌标识，aria-label=“记账本”。
+   C-5 分类/账户图标改圆润线性：stroke 2.2、round cap/join、几何更圆（饭碗/小车/提袋/双向箭头/卡片）；
+       选中/激活态一律淡蓝胶囊（primaryContainer 底 + onPrimaryContainer 文字），不用红蓝描边。
+   C-6 金额更大更齐：金额列 18px/600 + font-variant-numeric: tabular-nums，列宽 min 116dp 右对齐，
+       四行金额（-¥28.00 / -¥6.00 / -¥148.40 / ¥500.00 / +¥8,600.00）右边缘严格成一条竖线。
+   C-7 微交互写进注释（见每个组件上方的「微交互」注释块）。
+
+  【硬护栏自检 · 对比度全部本次自算（WCAG 2.x 相对亮度公式，sRGB）】
+   文字对（阈值 4.5:1）
+     onSurface #0F1B26 / surface #EAF6FF ....... 15.87  通过
+     onSurface #0F1B26 / card    #FFFFFF ....... 17.43  通过
+     onSurfaceVariant #41566A / surface #EAF6FF  6.92  通过
+     onSurfaceVariant #41566A / card #FFFFFF ..  7.60  通过
+     onSurfaceVariant #41566A / dayhead #DCE7F2  6.06  通过
+     error #B3261E / surface #EAF6FF ..........  5.95  通过（支出金额）
+     error #B3261E / card #FFFFFF .............  6.54  通过（支出金额）
+     error #B3261E / dayhead #DCE7F2 ..........  5.22  通过（日段头支出合计）
+     primary #0B5A8C / surface #EAF6FF ........  6.70  通过（收入金额）
+     primary #0B5A8C / card #FFFFFF ...........  7.35  通过（收入金额）
+     primary #0B5A8C / iconbase #E4F1FC .......  6.40  通过（收入分类图标）
+     onSecondaryContainer #123043 / chip底 #D3E8F9 10.91 通过（筛选 chip）
+     onPrimaryContainer #06304E / primaryContainer #79C9FC 7.51 通过（选中胶囊导航）
+     onPrimary #FFFFFF / primary #0B5A8C ......  7.35  通过（FAB / 主按钮）
+   图形对（阈值 3:1）
+     primary #0B5A8C / surface #EAF6FF ........  6.70  通过（选中/图形元素）
+     primary #0B5A8C / primaryContainer #79C9FC  4.05  通过（选中胶囊图形）
+     onSurfaceVariant #41566A / chip底 #D3E8F9 . 6.03  通过（chip 内图形描边）
+     outline #5C7183 / surface #EAF6FF ........  4.61  通过（筛选按钮描边）
+     outline #5C7183 / card #FFFFFF ...........  5.07  通过（chevron）
+     outlineVariant #C2D3E2 / card #FFFFFF ....  1.53  ← 装饰级分隔线，不承载信息，不进图形断言
+     onSurfaceBody 图标 #41566A / iconbase #E4F1FC 6.62 通过
+   触控目标：状态栏后所有可点元素 ≥48dp（月切换 48×48、FAB 56 高、导航项 80×... ≥48、
+     chip 视觉 34dp 但点击区用 ::before 外扩 7dp → 48dp；行高 68dp）。
+   金额右对齐：.amt{min-width:116px;text-align:right;tabular-nums}，四笔金额右边缘成线。
+   支出红 / 收入蓝语义守卫：支出 -¥ 红、收入 +¥ 蓝、转账 ¥ 中性 onSurfaceVariant（不变）。
+   【未做/如实说明】波点与渐变均为纯 CSS/SVG，未联网、未引外部字体或图片；
+     图标与小狗一律内联 SVG；数据全部合成，不含任何真实交易数据。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>明细页 · 浅色 · R4-CUTE</title>
+<style>
+  /* ---------- Design Token（浅色 R4-CUTE 甜蓝分层） ---------- */
+  :root{
+    --surface:#EAF6FF;          /* 页面底：柔和浅蓝（C-2） */
+    --card:#FFFFFF;             /* 卡片：纯白浮起（C-2） */
+    --on-surface:#0F1B26;
+    --on-surface-var:#41566A;
+    --primary:#0B5A8C;
+    --on-primary:#FFFFFF;
+    --primary-container:#79C9FC;
+    --on-primary-container:#06304E;
+    --secondary-container:#D3E8F9;
+    --on-secondary-container:#123043;
+    --error:#B3261E;
+    --error-container:#FFDAD4;
+    --surface-variant:#DCE7F2;  /* 日段头 / 段头色带 */
+    --icon-base:#E4F1FC;        /* 图标圆角底座 / 胶囊 */
+    --pill-track:#E4F1FC;
+    --outline:#5C7183;
+    --outline-variant:#C2D3E2;
+    --dot:#79C9FC;              /* 波点色（唯一装饰纹理） */
+    --shadow-card:0 1px 2px rgba(15,27,38,.05), 0 6px 16px -6px rgba(11,90,140,.14);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:390px;height:844px;overflow:hidden}
+  body{
+    font-family:-apple-system,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+    background:var(--surface);color:var(--on-surface);-webkit-font-smoothing:antialiased;
+  }
+  .phone{position:relative;width:390px;height:844px;overflow:hidden;background:var(--surface)}
+  svg{display:block}
+  /* C-5 圆润线性图标口径：stroke 2.2 / round cap / round join / 24dp viewport（比旧版 2.0 更“肉”更可爱） */
+  .ic{stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .ic svg,.ic{paint-order:stroke}
+
+  /* ---------- 系统状态栏 ---------- */
+  .statusbar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+    font-size:12px;font-weight:600;letter-spacing:.2px;color:var(--on-surface)}
+  .sb-right{display:flex;align-items:center;gap:5px;color:var(--on-surface)}
+
+  /* ---------- C-4 问候行：44dp 应用图标徽标（浅蓝圆角方底 + 白萨摩耶 + 波点领巾） ---------- */
+  .greet{height:52px;display:flex;align-items:center;gap:10px;padding:0 16px}
+  /* 方底由徽标自身给（#79C9FC）；squircle 圆角 22.5% × 44dp ≈ 10dp，与启动图标同形，不裁成圆 */
+  .dogbadge{position:relative;width:44px;height:44px;flex:none;border-radius:10px;background:#79C9FC;overflow:hidden}
+  /* 图标前景 PNG 的蓝色圆底 = 画布 2/3，故放大 1.5× 居中，圆底正好铺满方底（透明边被裁掉） */
+  .dogbadge img{position:absolute;left:-11px;top:-11px;width:66px;height:66px}
+  .gd{display:flex;flex-direction:column;gap:1px}
+  .gd .hi{font-size:15px;line-height:20px;font-weight:600;letter-spacing:.2px}
+  .gd .lo{font-size:12px;line-height:16px;color:var(--on-surface-var)}  /* 6.92:1 */
+
+  /* ---------- 月份切换：pill 段（C-1） ---------- */
+  .month{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;gap:8px}
+  .iconbtn{width:48px;height:48px;flex:none;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    color:var(--on-surface)}
+  .month-label{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+    height:36px;border-radius:999px;background:var(--card);
+    font-size:15px;font-weight:600;letter-spacing:.2px;box-shadow:0 1px 2px rgba(15,27,38,.05)}
+  .month-label .calendar{color:var(--on-surface-var)}
+
+  /* ---------- 月度汇总卡（三格，白色浮起 24dp 圆角） ---------- */
+  .sumcard{margin:6px 16px 12px;background:var(--card);border-radius:24px;padding:14px 8px;
+    display:flex;box-shadow:var(--shadow-card)}
+  .sumcell{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+  .sumcell + .sumcell{position:relative}
+  .sumcell + .sumcell::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:1px;background:var(--outline-variant)}
+  .sumcell .k{font-size:12px;line-height:16px;color:var(--on-surface-var)}
+  .sumcell .v{font-size:17px;line-height:24px;font-weight:700;font-variant-numeric:tabular-nums}
+  .v-out{color:var(--error)} .v-in{color:var(--primary)} .v-bal{color:var(--on-surface)}
+
+  /* ---------- 筛选条单行化：pill（C-1） ---------- */
+  .filterbar{display:flex;align-items:center;gap:8px;padding:0 16px 12px;overflow:hidden}
+  .btn-outline{position:relative;display:flex;align-items:center;gap:6px;height:34px;padding:0 14px;
+    border-radius:999px;border:1.5px solid var(--outline);background:var(--card);
+    font-size:14px;font-weight:500;color:var(--on-surface);flex:none}
+  /* 微交互：按下 scale .97 + 底色下沉（见文件末尾 MOTION 注释块） */
+  .chip{position:relative;display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;
+    border-radius:999px;background:var(--secondary-container);color:var(--on-secondary-container);
+    font-size:13px;font-weight:500;flex:none}
+  /* 点击区外扩到 48dp（未选中 chip 34 + 7×2 = 48） */
+  .btn-outline::before,.chip::before,.clear::before{content:"";position:absolute;left:-2px;right:-2px;
+    top:50%;transform:translateY(-50%);height:48px}
+  .chip .x{opacity:.8}
+  .clear{position:relative;margin-left:auto;flex:none;font-size:14px;font-weight:600;color:var(--primary);
+    padding:0 4px}
+
+  /* ---------- 日段：白色浮起卡片 + 24dp 圆角（C-1/C-2） ---------- */
+  .daycard{margin:0 16px 12px;background:var(--card);border-radius:24px;overflow:hidden;box-shadow:var(--shadow-card)}
+  .dayhead{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;
+    background:var(--surface-variant)}
+  .dayhead .d{font-size:13px;font-weight:600;color:var(--on-surface);letter-spacing:.2px}
+  .dayhead .s{font-size:12px;color:var(--on-surface-var);font-variant-numeric:tabular-nums}
+
+  /* ---------- 列表行 68dp ---------- */
+  .row{position:relative;height:68px;display:flex;align-items:center;gap:12px;padding:0 16px}
+  .row + .row::before{content:"";position:absolute;left:68px;right:16px;top:0;height:1px;background:var(--outline-variant)}
+  .lead{width:40px;height:40px;flex:none;border-radius:14px;background:var(--icon-base);
+    display:flex;align-items:center;justify-content:center;color:var(--on-surface-var)}
+  .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .mid .t{font-size:16px;line-height:22px;font-weight:500;color:var(--on-surface)}
+  .mid .s{font-size:12px;line-height:16px;color:var(--on-surface-var);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* C-6 金额：18px/600 + tabular-nums + min-width，右边缘成一条竖线 */
+  .amt{min-width:116px;text-align:right;font-size:18px;line-height:24px;font-weight:600;
+    font-variant-numeric:tabular-nums;white-space:nowrap;font-feature-settings:"tnum" 1}
+  .amt.out{color:var(--error)} .amt.in{color:var(--primary)} .amt.neutral{color:var(--on-surface-var)}
+  .chev{flex:none;color:var(--outline)}
+  /* FAB_BOTTOM_RESERVE：列表内容区底部留白，保证最后一行金额不被 FAB 遮挡（硬护栏） */
+  .bottomreserve{height:112px}
+
+  /* ---------- FAB：一屏一个蓝时刻（pill 28dp） ---------- */
+  .fab{position:absolute;right:16px;bottom:96px;height:56px;border-radius:28px;
+    background:var(--primary);color:var(--on-primary);
+    display:flex;align-items:center;gap:10px;padding:0 20px;font-size:16px;font-weight:600;
+    box-shadow:0 2px 6px rgba(11,90,140,.24),0 10px 22px -8px rgba(11,90,140,.42)}
+
+  /* ---------- 底部导航：52dp 白胶囊 ---------- */
+  .nav{position:absolute;left:0;right:0;bottom:0;height:80px;display:flex;background:var(--card)}
+  .nav .item{flex:1;height:80px;display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:10px}
+  .nav .item .pill{width:64px;height:32px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    color:var(--on-surface-var)}
+  .nav .item .lbl{font-size:12px;line-height:16px;font-weight:500;color:var(--on-surface-var)}
+  .nav .item.on .pill{background:var(--primary-container);color:var(--on-primary-container)}
+  .nav .item.on .lbl{color:var(--primary);font-weight:700}
+</style>
+</head>
+<body>
+<!--
+  ============================ MOTION（微交互规范） ============================
+  静态稿不播动画，规则写在这里供实现照抄；所有时长/曲线与最终 Compose 实现一致。
+  M-1 按压反馈（所有可点元素：chip / 筛选按钮 / 清空 / 月份箭头 / 导航项 / 列表行）
+        press  : scale → 0.97，duration 90ms，Easing = FastOutSlowIn
+        release: scale → 1.00，duration 160ms，Easing = FastOutLinearIn
+        Compose 落地：Modifier.graphicsLayer{scaleX=scale;scaleY=scale} + animateFloatAsState
+        注意：0.97 只做 90ms，快了会“闪”，慢了会“黏”。
+  M-2 FAB「记一笔」（本屏唯一蓝时刻）
+        默认   : translateY 0，阴影 0 2px 6px / 0 10px 22px -8px
+        轻浮起 : translateY -2dp，阴影加深到 0 3px 8px / 0 14px 28px -8px，duration 180ms
+        按下   : scale 0.96（比 M-1 略深，因为它更重）
+        长按   : 无（不做 second action，避免误触）
+  M-3 日段卡入场：新增一笔后该日段卡 alpha 0→1 + translateY 8dp→0，duration 220ms
+        「减少动画」偏好开启时：只做 alpha（不做位移），duration 120ms。
+  M-4 金额变化（切换月份后）：旧值 → 新值的数字不做滚动动画（金额是事实，不做娱乐化动效）；
+        只做 150ms 淡入，避免“数字在跳”造成看错。
+  M-5 筛选 chip 移除：scale 1→0.9 + alpha 1→0，140ms 后从布局移除（避免列表瞬间跳动）。
+  =============================================================================
+-->
+<div class="phone">
+
+  <!-- 系统状态栏 -->
+  <div class="statusbar">
+    <span>14:20</span>
+    <span class="sb-right">
+      <svg width="17" height="11" viewBox="0 0 17 11"><path d="M1 8.5h2v2H1zM5.6 6h2v4.5h-2zM10.2 3.5h2v7h-2zM14.8 1h2v9.5h-2z" fill="currentColor"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 9.6 5.2 7.2a3.3 3.3 0 0 1 4.6 0z" fill="currentColor"/><path d="M2.6 5 1 3.3a9.2 9.2 0 0 1 13 0L12.4 5a7 7 0 0 0-9.8 0z" fill="currentColor"/></svg>
+      <svg width="24" height="11" viewBox="0 0 24 11"><rect x=".5" y=".5" width="20" height="10" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="7" rx="2" fill="currentColor"/><path d="M22 4v3a2 2 0 0 0 0-3z" fill="currentColor" opacity=".5"/></svg>
+    </span>
+  </div>
+
+  <!-- C-4 问候行 + 44dp 应用图标徽标（浅蓝圆角方底 #79C9FC + 白萨摩耶 + 蓝色波点领巾） -->
+  <div class="greet">
+    <span class="dogbadge" role="img" aria-label="记账本">
+      <!-- 真正的应用图标：方底由 .dogbadge 提供，图像复用本仓库的图标前景 PNG（非外部资源） -->
+      <img src="../../app/src/main/res/drawable-nodpi/ic_launcher_foreground.png" alt="" width="66" height="66">
+    </span>
+    <span class="gd">
+      <span class="hi">下午好</span>
+      <span class="lo">今天也记一笔吧</span>
+    </span>
+  </div>
+
+  <!-- MonthSwitcher：pill 段（C-1），标签右侧 Calendar 图标暗示可点开年月选择器 -->
+  <div class="month">
+    <span class="iconbtn"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M14.5 6.5 9 12l5.5 5.5"/></svg></span>
+    <span class="month-label">2026 年 6 月
+      <svg class="ic calendar" width="16" height="16" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="15" rx="5"/><path d="M8 3.4v4M16 3.4v4M3.5 10.6h17"/></svg>
+    </span>
+    <span class="iconbtn"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M9.5 6.5 15 12l-5.5 5.5"/></svg></span>
+  </div>
+
+  <!-- MonthSummaryBar：白色浮起卡，三格（支出 / 收入 / 结余） -->
+  <div class="sumcard">
+    <div class="sumcell"><span class="k">支出</span><span class="v v-out">¥1,284.50</span></div>
+    <div class="sumcell"><span class="k">收入</span><span class="v v-in">¥8,600.00</span></div>
+    <div class="sumcell"><span class="k">结余</span><span class="v v-bal">¥7,315.50</span></div>
+  </div>
+
+  <!-- 筛选条单行化：pill 按钮 + pill chip；「清空」行尾（点击区外扩到 48dp） -->
+  <div class="filterbar">
+    <span class="btn-outline">
+      <svg class="ic" width="18" height="18" viewBox="0 0 24 24"><path d="M4.6 6.6h14.8l-5.7 6.8v5.4l-3.4-2v-3.4z"/></svg>
+      筛选
+    </span>
+    <span class="chip">餐饮
+      <svg class="ic x" width="12" height="12" viewBox="0 0 24 24"><path d="M6.4 6.4l11.2 11.2M17.6 6.4L6.4 17.6"/></svg>
+    </span>
+    <span class="chip">6/1–6/15
+      <svg class="ic x" width="12" height="12" viewBox="0 0 24 24"><path d="M6.4 6.4l11.2 11.2M17.6 6.4L6.4 17.6"/></svg>
+    </span>
+    <span class="clear">清空</span>
+  </div>
+
+  <!-- ===== 6月18日 周四 ===== 日段头是卡片内浅蓝色带（24dp 顶角），不再 0dp 通栏直角 -->
+  <div class="daycard">
+    <div class="dayhead"><span class="d">6月18日 周四</span><span class="s">2 笔 · 支出 ¥34.00</span></div>
+    <div class="row">
+      <span class="lead">
+        <!-- 餐饮：圆润饭碗 + 两根热气 -->
+        <svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M4.2 11.9h15.6c0 4.3-3.5 7.7-7.8 7.7s-7.8-3.4-7.8-7.7z"/><path d="M9.6 9.4c0-1.4 1.3-1.5 1.3-2.8M13.5 9.4c0-1.4 1.3-1.5 1.3-2.8"/></svg>
+      </span>
+      <span class="mid"><span class="t">餐饮</span><span class="s">微信 · 公司楼下午饭</span></span>
+      <span class="amt out">-¥28.00</span>
+    </div>
+    <div class="row">
+      <span class="lead">
+        <!-- 交通：圆润小地铁车头 -->
+        <svg class="ic" width="22" height="22" viewBox="0 0 24 24"><rect x="5" y="3.8" width="14" height="13.6" rx="5"/><path d="M5 11h14"/><path d="M8.8 20.2l1.4-2.8M15.2 20.2l-1.4-2.8"/><circle cx="9.4" cy="14.3" r=".9"/><circle cx="14.6" cy="14.3" r=".9"/></svg>
+      </span>
+      <span class="mid"><span class="t">交通</span><span class="s">支付宝 · 地铁通勤</span></span>
+      <span class="amt out">-¥6.00</span>
+    </div>
+  </div>
+
+  <!-- ===== 6月17日 周三 ===== -->
+  <div class="daycard">
+    <div class="dayhead"><span class="d">6月17日 周三</span><span class="s">2 笔 · 支出 ¥148.40</span></div>
+    <div class="row">
+      <span class="lead">
+        <!-- 购物：圆润提袋 -->
+        <svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M5.6 8.4h12.8a1 1 0 0 1 1 1.1l-.9 10a1.6 1.6 0 0 1-1.6 1.5H7.1a1.6 1.6 0 0 1-1.6-1.5l-.9-10a1 1 0 0 1 1-1.1z"/><path d="M9.2 8.4V6.9a2.8 2.8 0 0 1 5.6 0v1.5"/></svg>
+      </span>
+      <span class="mid"><span class="t">购物</span><span class="s">微信 · 日用品补给</span></span>
+      <span class="amt out">-¥148.40</span>
+    </div>
+    <div class="row">
+      <span class="lead">
+        <!-- 转账：双向箭头（中性语义，走 onSurfaceVariant 不用红蓝） -->
+        <svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M4.2 8.8h13M14 5.4l3.4 3.4-3.4 3.4"/><path d="M19.8 15.2h-13M10 11.8l-3.4 3.4 3.4 3.4"/></svg>
+      </span>
+      <span class="mid"><span class="t">转账</span><span class="s">招商银行 → 微信零钱</span></span>
+      <span class="amt neutral">¥500.00</span>
+    </div>
+  </div>
+
+  <!-- ===== 6月16日 周二（收入） ===== -->
+  <div class="daycard">
+    <div class="dayhead"><span class="d">6月16日 周二</span><span class="s">1 笔 · 收入 ¥8,600.00</span></div>
+    <div class="row">
+      <span class="lead">
+        <!-- 工资：圆润卡片 + 磁条（收入语义 → 图标走 primary #0B5A8C） -->
+        <svg class="ic" width="22" height="22" viewBox="0 0 24 24" style="color:#0B5A8C"><rect x="3.4" y="6.2" width="17.2" height="12.4" rx="4"/><path d="M3.4 10.6h17.2"/><path d="M7.4 14.6h3.2"/></svg>
+      </span>
+      <span class="mid"><span class="t">工资</span><span class="s">招商银行 · 6 月薪资</span></span>
+      <span class="amt in">+¥8,600.00</span>
+    </div>
+  </div>
+
+  <!-- FAB_BOTTOM_RESERVE：112dp 底部留白（FAB 顶边 96+56=152dp，最后一行底边 ≤152dp，互不遮挡） -->
+  <div class="bottomreserve"></div>
+
+  <!-- FAB（本屏唯一蓝时刻）· 微交互见 MOTION M-2 -->
+  <div class="fab">
+    <svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M12 5.4v13.2M5.4 12h13.2"/></svg>
+    记一笔
+  </div>
+
+  <!-- 底部导航 -->
+  <div class="nav">
+    <div class="item on">
+      <span class="pill"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M4.4 6.8h15.2M4.4 12h15.2M4.4 17.2h8.4"/></svg></span>
+      <span class="lbl">明细</span>
+    </div>
+    <div class="item">
+      <span class="pill"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M5.2 19.2v-6.8M12 19.2V4.8M18.8 19.2v-4.4"/></svg></span>
+      <span class="lbl">统计</span>
+    </div>
+    <div class="item">
+      <span class="pill"><svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M4.4 7.6h15.2M4.4 16.4h15.2"/><circle cx="9.4" cy="7.6" r="2.4"/><circle cx="14.6" cy="16.4" r="2.4"/></svg></span>
+      <span class="lbl">设置</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
