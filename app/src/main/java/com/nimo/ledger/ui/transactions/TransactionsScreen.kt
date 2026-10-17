@@ -13,12 +13,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -176,16 +179,31 @@ fun TransactionsScreen(
     }
 }
 
+/** 筛选条测试标签：整条（高度上限）与 chips 横滚区（可滚动） */
+internal const val FILTER_BAR_TEST_TAG = "filter_bar"
+internal const val FILTER_CHIPS_ROW_TEST_TAG = "filter_chips_row"
+
 /**
- * 筛选入口 + 当前条件摘要。
+ * 单行筛选条的高度上限：Material3 按钮的 48dp 触控目标（视觉 40dp）决定整条高度，
+ * 外面不再加竖向内边距；留 4dp 余量给字体缩放。条件再多也只占这一条。
+ */
+internal const val FILTER_BAR_MAX_HEIGHT_DP = 52
+
+/**
+ * 筛选入口 + 当前条件摘要（设计规范 §8 T-1 / T-2，批 E · E-1）。
+ *
  * 条件文字由 [TransactionFilterSummary] 生成（页面不自己拼字符串），开条件后才出现「清空」。
+ * 布局固定一行：左「筛选」按钮、中间横滚的条件 chips、行尾「清空」——
+ * 之前 chips 是竖排文字列，条件越多这一条越高，列表首屏被挤掉；
+ * 现在高度只取决于「一行」而不是条件数量（[FILTER_BAR_MAX_HEIGHT_DP] 守住这条线）。
  */
 @Composable
-private fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> Unit) {
+internal fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .testTag(FILTER_BAR_TEST_TAG)
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OutlinedButton(onClick = onOpen) {
@@ -197,21 +215,43 @@ private fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> Un
             Spacer(modifier = Modifier.width(6.dp))
             Text("筛选")
         }
-        if (chips.isEmpty()) {
-            Spacer(modifier = Modifier.weight(1f))
-        } else {
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                chips.forEach { chip ->
-                    Text(
-                        text = chip,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        if (chips.isNotEmpty()) {
+            Spacer(modifier = Modifier.width(8.dp))
+            // 深色下也要能看出「还有更多条件」：横滚而不是换行，条件再多也只占一行
+            LazyRow(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(FILTER_CHIPS_ROW_TEST_TAG),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                items(items = chips) { chip -> FilterSummaryChip(text = chip) }
             }
+            Spacer(modifier = Modifier.width(4.dp))
             TextButton(onClick = onClear) { Text("清空") }
         }
+    }
+}
+
+/**
+ * 一条条件：12dp 圆角 + surfaceContainerHigh 底（规范 §4.2 圆角矩阵 / §2 强调容器色阶）。
+ *
+ * 纯展示，不可点——所以要的不是 44dp 触控区，而是「一行放得下」：文字不换行、不加省略号，
+ * 长条件由外层 [LazyRow] 横向滚动来露出。
+ */
+@Composable
+private fun FilterSummaryChip(text: String) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
     }
 }
 
