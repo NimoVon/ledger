@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -41,18 +42,7 @@ import com.nimo.ledger.ui.budgets.BudgetsScreen
 import com.nimo.ledger.ui.transactions.TransactionsScreen
 import com.nimo.ledger.ui.transfer.TransferScreen
 import com.nimo.ledger.util.Money
-
-/** 账户管理：从设置页进入的二级页面，不在底部导航里 */
-private const val ACCOUNTS_ROUTE = "accounts"
-
-/** 分类管理（F02）：同样从设置页进入，不在底部导航里 */
-private const val CATEGORIES_ROUTE = "categories"
-
-/** 预算管理（F09）：同样从设置页进入，不在底部导航里 */
-private const val BUDGETS_ROUTE = "budgets"
-
-/** 记一笔（F03）：全屏表单，由顶层页面的「记一笔」按钮唤起（计划 F03「从任意页面可唤起」） */
-private const val RECORD_ROUTE = "record"
+import kotlinx.coroutines.flow.Flow
 
 /**
  * 「记一笔」按钮的文字：按钮文字与读屏名共用这一份。
@@ -63,42 +53,24 @@ private const val RECORD_ROUTE = "record"
  */
 private const val RECORD_FAB_LABEL = "记一笔"
 
-/** 编辑哪一笔。挂在同一个目的地上作为可选参数：表单、校验、返回逻辑全部复用一套 */
-private const val RECORD_TX_ID_ARG = "txId"
-
-/**
- * 带可选参数的路由模式：导航到 "record" 是新建，导航到 "record?txId=12" 是编辑第 12 笔。
- * 缺省的查询参数由 Navigation 补成 null。
- */
-private const val RECORD_ROUTE_PATTERN = "$RECORD_ROUTE?$RECORD_TX_ID_ARG={$RECORD_TX_ID_ARG}"
-
-/**
- * 转账（F04）：转账页。
- * 新建的入口在记一笔页的「转账」分段（就地渲染同一块转账表单）；
- * 这个路由保留给「编辑转账」——点流水里的转账行进来，转账 ≠ 收支，路由与页面自成一套。
- */
-private const val TRANSFER_ROUTE = "transfer"
-
-/** 编辑哪一笔转账。与记一笔同款：新建时没有这个参数，带 txId 时是编辑 */
-private const val TRANSFER_TX_ID_ARG = "txId"
-
-/** 导航到 "transfer" 是新建，导航到 "transfer?txId=12" 是编辑第 12 笔 */
-private const val TRANSFER_ROUTE_PATTERN = "$TRANSFER_ROUTE?$TRANSFER_TX_ID_ARG={$TRANSFER_TX_ID_ARG}"
-
 /** 顶层导航目的地：底部三个 Tab（明细 / 统计 / 设置） */
 private enum class TopDestination(
     val route: String,
     val label: String,
     val icon: ImageVector,
 ) {
-    TRANSACTIONS("transactions", "明细", LedgerIcons.List),
-    REPORTS("reports", "统计", LedgerIcons.Chart),
-    SETTINGS("settings", "设置", LedgerIcons.Sliders),
+    TRANSACTIONS(LedgerRoutes.TRANSACTIONS, "明细", LedgerIcons.List),
+    REPORTS(LedgerRoutes.REPORTS, "统计", LedgerIcons.Chart),
+    SETTINGS(LedgerRoutes.SETTINGS, "设置", LedgerIcons.Sliders),
 }
 
 /**
  * 应用根界面：底部导航 + NavHost（计划 4.1 页面导航选型 Navigation Compose）。
  * 切换到已选中的 Tab 不重建页面（launchSingleTop + restoreState）。
+ *
+ * 返回栈口径：底部三个 Tab 是平级页（切 Tab 用 popUpTo 起始页 + saveState/restoreState 复用实例）；
+ * 二级页与表单是压栈（返回键自然 pop 回上一层）；统计页下钻是**压在统计页之上的一层明细**，
+ * 所以按返回会回到统计页而不是退出应用（见 [LedgerRoutes.TRANSACTIONS_DRILL]）。
  */
 @Composable
 fun LedgerApp(container: AppContainer) {
@@ -106,13 +78,13 @@ fun LedgerApp(container: AppContainer) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
-    val isTopLevel = TopDestination.entries.any { dest ->
-        currentDestination?.hierarchy?.any { it.route == dest.route } == true
-    }
+    val isTopLevel = currentDestination?.hierarchy?.any { entry ->
+        entry.route != null && entry.route in LedgerRoutes.TOP_LEVEL_ROUTES
+    } == true
     // 记账页/转账页都是沉浸式表单：收起底部导航，避免误切页丢掉已填内容
-    val isRecordPage = currentDestination?.hierarchy?.any { it.route == RECORD_ROUTE_PATTERN } == true
+    val isRecordPage = currentDestination?.hierarchy?.any { it.route == LedgerRoutes.RECORD_PATTERN } == true
     val isTransferPage =
-        currentDestination?.hierarchy?.any { it.route == TRANSFER_ROUTE_PATTERN } == true
+        currentDestination?.hierarchy?.any { it.route == LedgerRoutes.TRANSFER_PATTERN } == true
     val isFormPage = isRecordPage || isTransferPage
 
     // 延迟物理删除（计划 9.2）：删除后立刻从流水消失，「撤销」提示条挂在这里，
@@ -165,7 +137,7 @@ fun LedgerApp(container: AppContainer) {
             // 转账（F04）不再另开一个悬浮按钮：它的入口是记一笔页里的「转账」分段
             if (isTopLevel) {
                 ExtendedFloatingActionButton(
-                    onClick = { navController.navigate(RECORD_ROUTE) { launchSingleTop = true } },
+                    onClick = { navController.navigate(LedgerRoutes.RECORD) { launchSingleTop = true } },
                     modifier = Modifier.semantics { contentDescription = RECORD_FAB_LABEL },
                     icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
                     text = { Text(RECORD_FAB_LABEL) },
@@ -182,24 +154,36 @@ fun LedgerApp(container: AppContainer) {
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
                 .imePadding(),
+            // 转场：Tab 之间淡入淡出，二级页横向推进/退出，表单纵向压上来/落回去（见 LedgerNavMotion）
+            enterTransition = {
+                LedgerNavMotion.enter(initialState.destination.route, targetState.destination.route)
+            },
+            exitTransition = {
+                LedgerNavMotion.exit(initialState.destination.route, targetState.destination.route)
+            },
+            popEnterTransition = {
+                LedgerNavMotion.popEnter(initialState.destination.route, targetState.destination.route)
+            },
+            popExitTransition = {
+                LedgerNavMotion.popExit(initialState.destination.route, targetState.destination.route)
+            },
         ) {
-            composable(TopDestination.TRANSACTIONS.route) {
-                TransactionsScreen(
-                    repository = container.repository,
-                    // 点某一行 → 进编辑页（删除入口也在那页）。保存/删除后返回，列表同源自动刷新
-                    onTransactionClick = { id ->
-                        navController.navigate("$RECORD_ROUTE?$RECORD_TX_ID_ARG=$id") {
-                            launchSingleTop = true
-                        }
-                    },
-                    // 点转账行 → 转账页；剩下的才进记一笔
-                    onTransferClick = { id ->
-                        navController.navigate("$TRANSFER_ROUTE?$TRANSFER_TX_ID_ARG=$id") {
-                            launchSingleTop = true
-                        }
-                    },
+            composable(LedgerRoutes.TRANSACTIONS) {
+                TransactionsEntry(
+                    container = container,
+                    navController = navController,
                     pendingDeletionIds = pendingDeletion.pendingIds,
-                    // 下钻：统计页点了某一行时把条件交给本页（用掉即清，见 DrillDownRequests）
+                    // 普通明细 Tab 不订阅下钻脉冲：同一时刻只允许一个明细页去消费请求，
+                    // 否则隐藏的那一页会先把条件吃掉（见 DrillDownRequests 的 KDoc）
+                    drillDown = null,
+                )
+            }
+            // 下钻出来的明细：压在统计页之上，返回即回到统计页
+            composable(LedgerRoutes.TRANSACTIONS_DRILL) {
+                TransactionsEntry(
+                    container = container,
+                    navController = navController,
+                    pendingDeletionIds = pendingDeletion.pendingIds,
                     drillDown = container.drillDownRequests,
                 )
             }
@@ -208,35 +192,28 @@ fun LedgerApp(container: AppContainer) {
                     repository = container.repository,
                     // 撤销窗口内那几笔数据库里还在：月报要和明细页、账户页一样当它们不存在
                     pendingDeletionIds = pendingDeletion.pendingIds,
-                    // 点排行/账户分布的一行 → 记下"看什么"，再切到明细页由它自己套上条件。
-                    // 请求先落容器再导航：明细页的 ViewModel 早就在跑，切过去立刻就能收到。
+                    // 点排行/账户分布的一行 → 记下"看什么"，再压一层明细页由它自己套上条件。
+                    // 请求先落容器再导航：明细页的 ViewModel 起来时立刻就能收到。
                     onDrillDown = { filter ->
-                        container.drillDownRequests.request(filter)
-                        navController.navigate(TopDestination.TRANSACTIONS.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
+                        navController.openDrillDown(filter, container.drillDownRequests)
                     },
                 )
             }
             composable(TopDestination.SETTINGS.route) {
                 SettingsScreen(
                     container = container,
-                    onOpenAccounts = { navController.navigate(ACCOUNTS_ROUTE) },
-                    onOpenCategories = { navController.navigate(CATEGORIES_ROUTE) },
-                    onOpenBudgets = { navController.navigate(BUDGETS_ROUTE) },
+                    onOpenAccounts = { navController.navigate(LedgerRoutes.ACCOUNTS) },
+                    onOpenCategories = { navController.navigate(LedgerRoutes.CATEGORIES) },
+                    onOpenBudgets = { navController.navigate(LedgerRoutes.BUDGETS) },
                 )
             }
-            composable(CATEGORIES_ROUTE) {
+            composable(LedgerRoutes.CATEGORIES) {
                 CategoriesScreen(
                     repository = container.repository,
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(BUDGETS_ROUTE) {
+            composable(LedgerRoutes.BUDGETS) {
                 BudgetsScreen(
                     repository = container.repository,
                     // 撤销窗口内那几笔数据库里还在：预算口径要和流水页一样当它们不存在（计划 9.2）
@@ -244,7 +221,7 @@ fun LedgerApp(container: AppContainer) {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ACCOUNTS_ROUTE) {
+            composable(LedgerRoutes.ACCOUNTS) {
                 AccountsScreen(
                     repository = container.repository,
                     onBack = { navController.popBackStack() },
@@ -253,9 +230,9 @@ fun LedgerApp(container: AppContainer) {
                 )
             }
             composable(
-                route = RECORD_ROUTE_PATTERN,
+                route = LedgerRoutes.RECORD_PATTERN,
                 arguments = listOf(
-                    navArgument(RECORD_TX_ID_ARG) {
+                    navArgument(LedgerRoutes.RECORD_TX_ID_ARG) {
                         type = NavType.StringType
                         nullable = true
                         defaultValue = null
@@ -265,7 +242,7 @@ fun LedgerApp(container: AppContainer) {
                 RecordScreen(
                     repository = container.repository,
                     // 缺省（新建）时是 null；形如 "12" 时是编辑第 12 笔
-                    editingId = entry.arguments?.getString(RECORD_TX_ID_ARG)?.toLongOrNull(),
+                    editingId = entry.arguments?.getString(LedgerRoutes.RECORD_TX_ID_ARG)?.toLongOrNull(),
                     onBack = { navController.popBackStack() },
                     // 保存成功即返回；流水页观察的是同一份 Room Flow，会自动看到新记录 / 改动
                     onSaved = { navController.popBackStack() },
@@ -277,9 +254,9 @@ fun LedgerApp(container: AppContainer) {
                 )
             }
             composable(
-                route = TRANSFER_ROUTE_PATTERN,
+                route = LedgerRoutes.TRANSFER_PATTERN,
                 arguments = listOf(
-                    navArgument(TRANSFER_TX_ID_ARG) {
+                    navArgument(LedgerRoutes.TRANSFER_TX_ID_ARG) {
                         type = NavType.StringType
                         nullable = true
                         defaultValue = null
@@ -289,7 +266,7 @@ fun LedgerApp(container: AppContainer) {
                 TransferScreen(
                     repository = container.repository,
                     // 缺省（新建）时是 null；形如 "12" 时是编辑第 12 笔
-                    editingId = entry.arguments?.getString(TRANSFER_TX_ID_ARG)?.toLongOrNull(),
+                    editingId = entry.arguments?.getString(LedgerRoutes.TRANSFER_TX_ID_ARG)?.toLongOrNull(),
                     onBack = { navController.popBackStack() },
                     // 保存成功即返回；明细页观察的是同一份 Room Flow，会自动刷新余额与流水
                     onSaved = { navController.popBackStack() },
@@ -305,17 +282,52 @@ fun LedgerApp(container: AppContainer) {
     }
 }
 
+/**
+ * 明细页（普通 Tab 与下钻页共用同一段接线，避免两处改一处漏一处）。
+ *
+ * [drillDown] 只有下钻页才传：它是"一次性脉冲"的消费者，同一时刻只能有一个明细页订阅。
+ */
+@Composable
+private fun TransactionsEntry(
+    container: AppContainer,
+    navController: NavHostController,
+    pendingDeletionIds: Flow<Set<Long>>,
+    drillDown: DrillDownRequests?,
+) {
+    TransactionsScreen(
+        repository = container.repository,
+        // 点某一行 → 进编辑页（删除入口也在那页）。保存/删除后返回，列表同源自动刷新
+        onTransactionClick = { id ->
+            navController.navigate(LedgerRoutes.RECORD + "?" + LedgerRoutes.RECORD_TX_ID_ARG + "=" + id) {
+                launchSingleTop = true
+            }
+        },
+        onTransferClick = { id ->
+            navController.navigate(LedgerRoutes.TRANSFER + "?" + LedgerRoutes.TRANSFER_TX_ID_ARG + "=" + id) {
+                launchSingleTop = true
+            }
+        },
+        pendingDeletionIds = pendingDeletionIds,
+        drillDown = drillDown,
+    )
+}
+
 /** 底部导航栏。抽出来只是为了让 Scaffold 的 bottomBar 保持短小。 */
 @Composable
 private fun LedgerBottomBar(
     currentDestination: NavDestination?,
     onNavigate: (String) -> Unit,
 ) {
+    val onDrillDownPage = currentDestination
+        ?.hierarchy
+        ?.any { it.route == LedgerRoutes.TRANSACTIONS_DRILL } == true
     NavigationBar {
         TopDestination.entries.forEach { dest ->
             val selected = currentDestination
                 ?.hierarchy
-                ?.any { it.route == dest.route } == true
+                ?.any { it.route == dest.route } == true ||
+                // 下钻页是明细页的另一种入口：底栏仍高亮「明细」
+                (dest == TopDestination.TRANSACTIONS && onDrillDownPage)
             NavigationBarItem(
                 selected = selected,
                 onClick = { onNavigate(dest.route) },
