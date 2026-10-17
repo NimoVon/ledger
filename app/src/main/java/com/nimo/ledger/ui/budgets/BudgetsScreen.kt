@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -45,6 +46,7 @@ import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.LedgerProgressBar
 import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.components.MonthSwitcher
+import com.nimo.ledger.ui.components.stackAtLargeFont
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -323,7 +325,10 @@ private fun CategoryBudgetRowItem(row: BudgetCategoryRow, onClick: () -> Unit) {
  * overMarker = true：超支时 100% 处留 2dp 刻度、填充压到 60% 高，一眼看出「越过线多少」。
  */
 @Composable
-private fun BudgetProgressBar(spentCents: Long, budgetCents: Long, status: BudgetStatus) {
+internal fun BudgetProgressBar(spentCents: Long, budgetCents: Long, status: BudgetStatus) {
+    // 字体 ≥1.5：两段文字改竖排。横排时「已用 ¥1,234.00 / ¥5,000.00」+「还剩 ¥3,766.00」
+    // 在 2.0 倍字体下会互相挤压、各自折行（B-3 / G-6）。
+    val stack = stackAtLargeFont(LocalDensity.current.fontScale)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         LedgerProgressBar(
             fraction = BudgetCalculator.percent(spentCents, budgetCents).toFloat(),
@@ -332,19 +337,28 @@ private fun BudgetProgressBar(spentCents: Long, budgetCents: Long, status: Budge
             shape = RoundedCornerShape(4.dp),
             overMarker = true,
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "已用 " + Money.formatCurrency(spentCents) + " / " + Money.formatCurrency(budgetCents),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                text = statusLabel(status, spentCents, budgetCents),
-                style = MaterialTheme.typography.bodySmall,
-                color = statusColor(status),
-            )
+        val usedText = "已用 " + Money.formatCurrency(spentCents) + " / " + Money.formatCurrency(budgetCents)
+        if (stack) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(text = usedText, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = statusLabel(status, spentCents, budgetCents),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = statusColor(status),
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(text = usedText, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = statusLabel(status, spentCents, budgetCents),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = statusColor(status),
+                )
+            }
         }
     }
 }

@@ -1,7 +1,9 @@
 package com.nimo.ledger.ui.transactions
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -12,6 +14,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -136,6 +140,51 @@ class TransactionsFilterBarUiTest {
         assertTrue(
             "单条条件只占一行（<= 36 dp），实测 ${chipHeight.value} dp——换行就是把一条条件拆成两行",
             chipHeight.value <= 36f,
+        )
+    }
+
+    /** 按指定字体倍数列出筛选条（F-2：≥1.5 时 chips 要换到下一行，不能再被 LazyRow 从字形中间裁断） */
+    private fun showBarAtFontScale(chips: List<String>, fontScale: Float) {
+        composeRule.setContent {
+            val base = LocalDensity.current
+            MaterialTheme {
+                CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
+                    FilterBar(chips = chips, onOpen = {}, onClear = {})
+                }
+            }
+        }
+    }
+
+    private fun boundsOf(text: String) =
+        composeRule.onNodeWithText(text, substring = true).fetchSemanticsNode().boundsInRoot
+
+    @Test
+    fun atNormalFontScale_theChipsShareTheRowWithTheFilterButton() {
+        showBarAtFontScale(chips = longChips, fontScale = 1.0f)
+
+        // 同一行 = 垂直区间重叠
+        assertTrue(
+            "常规字体下 chips 应与筛选按钮同处一行",
+            boundsOf(longChips[0]).top < boundsOf("筛选").bottom - 1f,
+        )
+    }
+
+    @Test
+    fun atLargeFontScale_theChipsMoveToTheirOwnFullWidthLine() {
+        showBarAtFontScale(chips = longChips, fontScale = 2.0f)
+
+        val button = boundsOf("筛选")
+        val chips = boundsOf(longChips[0])
+        assertTrue("大字下 chips 必须落在按钮下面（buttonBottom=${button.bottom} chipsTop=${chips.top}）", chips.top >= button.bottom - 1f)
+        // 宽度只能量「行」（LazyRow 是 fillMaxWidth），不能量 chip 文字——
+        // Robolectric 的假字体把每个字量成 1px 宽，这里 chip 只有 11px（E-1 记录过同一个坑）
+        val rowWidth = sizeOf(FILTER_CHIPS_ROW_TEST_TAG).width
+        val barWidth = sizeOf(FILTER_BAR_TEST_TAG).width
+        val paddingPx = with(composeRule.density) { 16.dp.roundToPx() }
+        val expected = barWidth - 2 * paddingPx
+        assertTrue(
+            "大字下 chips 行应独占整宽（row=" + rowWidth + ", bar=" + barWidth + ", expected=" + expected + "）",
+            Math.abs(rowWidth - expected) <= 2,
         )
     }
 

@@ -1,5 +1,7 @@
 package com.nimo.ledger.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +25,8 @@ import androidx.compose.ui.unit.dp
  *
  * @param hint 右侧一行小字（「点一行看明细」「日均 / 环比 / 预算」），纯提示，不参与点击
  * @param trailing 右侧自定义内容（明细页要同时放"支出 X"和"收入 Y"，[hint] 放不下时用它）
+ * @param stack 字体放大到 [STACK_FONT_SCALE] 以上时改竖排：标题一行，hint / trailing 各占下面一行。
+ *   横排时标题拿 weight(1f)、右侧内容只能挤在剩下的宽度里，2.0 倍字体下「支出 ¥972.00」会被折断。
  */
 @Composable
 fun LedgerSectionHeader(
@@ -30,30 +34,50 @@ fun LedgerSectionHeader(
     modifier: Modifier = Modifier,
     hint: String? = null,
     trailing: (@Composable () -> Unit)? = null,
+    stack: Boolean = false,
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.weight(1f),
-            )
-            if (hint != null) {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = hint,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        if (stack && (hint != null || trailing != null)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(text = title, style = MaterialTheme.typography.labelLarge)
+                if (hint != null) {
+                    Text(
+                        text = hint,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (trailing != null) trailing()
             }
-            if (trailing != null) {
-                Spacer(Modifier.width(8.dp))
-                trailing()
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                if (hint != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = hint,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (trailing != null) {
+                    Spacer(Modifier.width(8.dp))
+                    trailing()
+                }
             }
         }
     }

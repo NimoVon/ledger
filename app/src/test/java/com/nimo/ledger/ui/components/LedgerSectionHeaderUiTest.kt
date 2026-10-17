@@ -6,6 +6,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,6 +71,27 @@ class LedgerSectionHeaderUiTest {
         composeRule.onNodeWithText("10月17日 周五").assertIsDisplayed()
         composeRule.onNodeWithText("支出 ¥25.00").assertIsDisplayed()
         composeRule.onNodeWithText("收入 ¥0.00").assertIsDisplayed()
+    }
+
+    @Test
+    fun stack_putsHintAndTrailingBelowTheTitle() {
+        // 字体 ≥1.5 时标题独占一行、提示与 trailing 各占下面一行（F-2 的共用机制）
+        composeRule.setContent {
+            MaterialTheme {
+                LedgerSectionHeader(
+                    title = "10月17日 周五",
+                    hint = "当日合计",
+                    stack = true,
+                    trailing = { Text("支出 ¥972.00") },
+                )
+            }
+        }
+
+        fun top(text: String) = composeRule.onNodeWithText(text).fetchSemanticsNode().boundsInRoot.top
+        fun bottom(text: String) = composeRule.onNodeWithText(text).fetchSemanticsNode().boundsInRoot.bottom
+
+        assertTrue("提示应在标题下面", top("当日合计") >= bottom("10月17日 周五") - 1f)
+        assertTrue("trailing 应在提示下面", top("支出 ¥972.00") >= bottom("当日合计") - 1f)
     }
 
     @Test

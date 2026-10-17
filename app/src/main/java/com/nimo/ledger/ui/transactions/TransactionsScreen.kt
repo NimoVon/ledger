@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,6 +49,7 @@ import com.nimo.ledger.ui.DrillDownRequests
 import com.nimo.ledger.ui.components.MonthSummaryBar
 import com.nimo.ledger.ui.components.MonthSwitcher
 import com.nimo.ledger.ui.components.YearMonthPickerDialog
+import com.nimo.ledger.ui.components.stackAtLargeFont
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -199,37 +201,59 @@ internal const val FILTER_BAR_MAX_HEIGHT_DP = 52
  */
 @Composable
 internal fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(FILTER_BAR_TEST_TAG)
-            .padding(horizontal = 16.dp),
+    // 字体 ≥1.5：按钮 + 清空占一行、条件 chips 独占下一行。横排时 chips 只剩「按钮和清空之间」那点宽度，
+    // 1.5 倍下 chip 会被 LazyRow 边界从字形中间裁断（E-1 真机截图里「支付宝」只剩「支付」+半个字）。
+    val stack = stackAtLargeFont(LocalDensity.current.fontScale)
+    val barModifier = Modifier
+        .fillMaxWidth()
+        .testTag(FILTER_BAR_TEST_TAG)
+        .padding(horizontal = 16.dp)
+    if (stack) {
+        Column(modifier = barModifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FilterOpenButton(onOpen = onOpen)
+                if (chips.isNotEmpty()) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = onClear) { Text("清空") }
+                }
+            }
+            if (chips.isNotEmpty()) FilterChipsRow(chips = chips, modifier = Modifier.fillMaxWidth())
+        }
+    } else {
+        Row(modifier = barModifier, verticalAlignment = Alignment.CenterVertically) {
+            FilterOpenButton(onOpen = onOpen)
+            if (chips.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(8.dp))
+                FilterChipsRow(chips = chips, modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.width(4.dp))
+                TextButton(onClick = onClear) { Text("清空") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterOpenButton(onOpen: () -> Unit) {
+    OutlinedButton(onClick = onOpen) {
+        Icon(
+            imageVector = LedgerIcons.Filter,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text("筛选")
+    }
+}
+
+/** 条件 chips：横滚而不是换行——条件再多也只占一行（竖排时这一行独占整宽） */
+@Composable
+private fun FilterChipsRow(chips: List<String>, modifier: Modifier = Modifier) {
+    LazyRow(
+        modifier = modifier.testTag(FILTER_CHIPS_ROW_TEST_TAG),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedButton(onClick = onOpen) {
-            Icon(
-                imageVector = LedgerIcons.Filter,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("筛选")
-        }
-        if (chips.isNotEmpty()) {
-            Spacer(modifier = Modifier.width(8.dp))
-            // 深色下也要能看出「还有更多条件」：横滚而不是换行，条件再多也只占一行
-            LazyRow(
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag(FILTER_CHIPS_ROW_TEST_TAG),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                items(items = chips) { chip -> FilterSummaryChip(text = chip) }
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-            TextButton(onClick = onClear) { Text("清空") }
-        }
+        items(items = chips) { chip -> FilterSummaryChip(text = chip) }
     }
 }
 
@@ -262,28 +286,36 @@ private fun FilterSummaryChip(text: String) {
  * 一行 [String] 的 hint 放不下，所以走 trailing 槽位（字号颜色仍是段头的小字规格）。
  */
 @Composable
-private fun DayHeader(group: TransactionDayGroup) {
+internal fun DayHeader(group: TransactionDayGroup) {
     val hasTotals = group.expenseCents > 0L || group.incomeCents > 0L
-    LedgerSectionHeader(
-        title = group.label,
-        trailing = if (hasTotals) {
-            {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (group.expenseCents > 0L) {
-                        DayTotalText("支出 " + Money.formatCurrency(group.expenseCents))
-                    }
-                    if (group.incomeCents > 0L) {
-                        DayTotalText("收入 " + Money.formatCurrency(group.incomeCents))
-                    }
-                }
+    // 字体 ≥1.5：日期独占一行，支出/收入竖排在下面。横排时日期拿 weight(1f)，
+    // 「支出 ¥972.00」只能挤在剩下的宽度里，2.0 倍下会被折断成两行。
+    val stack = stackAtLargeFont(LocalDensity.current.fontScale)
+    @Composable
+    fun Totals(vertical: Boolean) {
+        val texts = buildList {
+            if (group.expenseCents > 0L) add("支出 " + Money.formatCurrency(group.expenseCents))
+            if (group.incomeCents > 0L) add("收入 " + Money.formatCurrency(group.incomeCents))
+        }
+        if (vertical) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                texts.forEach { DayTotalText(it) }
             }
         } else {
-            null
-        },
-    )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                texts.forEach { DayTotalText(it) }
+            }
+        }
+    }
+    val trailing: (@Composable () -> Unit)? = if (hasTotals) {
+        { Totals(vertical = stack) }
+    } else {
+        null
+    }
+    LedgerSectionHeader(title = group.label, stack = stack, trailing = trailing)
 }
 
 @Composable

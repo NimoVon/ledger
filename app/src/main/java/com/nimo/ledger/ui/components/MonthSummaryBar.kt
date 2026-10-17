@@ -16,16 +16,8 @@ import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.stats.PeriodSummary
 import com.nimo.ledger.util.Money
 
-/**
- * 一行三格放不下、改成竖排的字体倍数门槛。
- *
- * Android 的字体档位是 1.0 / 1.15 / 1.3 / 1.5 / 2.0：1.3 实测三格仍在同一行，
- * 2.0（特大）实测「结余」的金额被折行断成 "-¥600.0" 与 "0"（F15 真机取证），门槛取两者之间的 1.5。
- */
-private const val STACK_FONT_SCALE = 1.5f
-
-/** 字体够大就竖排三格，免得每格只有屏幕三分之一宽、金额被折断（纯函数，便于单测） */
-internal fun stackSummaryCells(fontScale: Float): Boolean = fontScale >= STACK_FONT_SCALE
+/** 字体够大就竖排三格，免得每格只有屏幕三分之一宽、金额被折断（门槛与全应用共用 [STACK_FONT_SCALE]） */
+internal fun stackSummaryCells(fontScale: Float): Boolean = stackAtLargeFont(fontScale)
 
 /**
  * 当月合计：支出 / 收入 / 结余。数字全部来自 StatsCalculator 的 [PeriodSummary]，
