@@ -43,6 +43,7 @@ import com.nimo.ledger.domain.stats.BudgetCalculator
 import com.nimo.ledger.domain.stats.BudgetStatus
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
+import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.components.MonthSwitcher
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
@@ -152,11 +153,7 @@ fun BudgetsScreen(
                     }
                     item(key = "alert") { BudgetAlertLine(state = state) }
                     item(key = "section") {
-                        Text(
-                            text = "分类预算",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
-                        )
+                        LedgerSectionHeader(title = "分类预算")
                     }
                     items(state.rows, key = { it.categoryId }) { row ->
                         CategoryBudgetRowItem(row = row, onClick = { openCategory(row) })

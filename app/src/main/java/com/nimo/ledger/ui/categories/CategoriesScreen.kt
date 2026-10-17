@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -45,6 +45,9 @@ import com.nimo.ledger.domain.validate.CategoryReferences
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.ui.components.LedgerListItem
+import com.nimo.ledger.ui.components.LedgerListItemDivider
+import com.nimo.ledger.ui.components.LedgerSectionHeader
 import kotlinx.coroutines.launch
 
 /** 「新建分类」按钮的文字：按钮文字与读屏名共用（F15 补语义，悬浮按钮的文字在无障碍树上读不出来） */
@@ -154,15 +157,11 @@ fun CategoriesScreen(
                 contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
             ) {
                 state.sections.forEach { section ->
+                    // 段头与统计页 / 明细页共用同一个组件（批 D · D-2）
                     item(key = "header-" + section.kind.name) {
-                        Text(
-                            text = section.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        )
-                        HorizontalDivider()
+                        LedgerSectionHeader(title = section.title)
                     }
-                    items(section.rows, key = { it.id }) { row ->
+                    itemsIndexed(section.rows, key = { _, row -> row.id }) { index, row ->
                         CategoryRowItem(
                             row = row,
                             onClick = { openDialog(CategoryDialogTarget.Edit(row)) },
@@ -170,7 +169,10 @@ fun CategoriesScreen(
                                 scope.launch { viewModel.moveCategory(row.id, direction) }
                             },
                         )
-                        HorizontalDivider()
+                        // 末行不画分隔线
+                        if (index != section.rows.lastIndex) {
+                            LedgerListItemDivider(hasLeading = true)
+                        }
                     }
                 }
             }
@@ -252,37 +254,25 @@ private fun CategoryRowItem(
     onClick: () -> Unit,
     onMove: (MoveDirection) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(
-                start = 16.dp + (if (row.depth == 0) 0.dp else 24.dp),
-                end = 4.dp,
-                top = 4.dp,
-                bottom = 4.dp,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        if (!row.icon.isNullOrBlank()) {
-            Text(text = row.icon, style = MaterialTheme.typography.bodyLarge)
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = row.name, style = MaterialTheme.typography.bodyLarge)
-            if (row.isArchived) {
-                Text(
-                    text = "已停用",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
+    LedgerListItem(
+        title = row.name,
+        subtitle = if (row.isArchived) "已停用" else null,
+        leadingEmoji = row.icon?.takeIf { it.isNotBlank() },
+        trailingContent = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { onMove(MoveDirection.UP) }, enabled = row.canMoveUp) {
+                    Icon(imageVector = LedgerIcons.ArrowUp, contentDescription = "上移 " + row.name)
+                }
+                IconButton(onClick = { onMove(MoveDirection.DOWN) }, enabled = row.canMoveDown) {
+                    Icon(imageVector = LedgerIcons.ArrowDown, contentDescription = "下移 " + row.name)
+                }
             }
-        }
-        IconButton(onClick = { onMove(MoveDirection.UP) }, enabled = row.canMoveUp) {
-            Icon(imageVector = LedgerIcons.ArrowUp, contentDescription = "上移 " + row.name)
-        }
-        IconButton(onClick = { onMove(MoveDirection.DOWN) }, enabled = row.canMoveDown) {
-            Icon(imageVector = LedgerIcons.ArrowDown, contentDescription = "下移 " + row.name)
-        }
-    }
+        },
+        onClick = onClick,
+        // 二级分类缩进一级：缩进放在行外层，点击涟漪跟着缩进，不会盖住父级那行
+        modifier = Modifier.padding(start = if (row.depth == 0) 0.dp else 24.dp),
+    )
 }

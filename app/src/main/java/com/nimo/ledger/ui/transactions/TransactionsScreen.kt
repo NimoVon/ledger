@@ -1,6 +1,7 @@
 package com.nimo.ledger.ui.transactions
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +19,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,6 +39,7 @@ import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.DrillDownRequests
 import com.nimo.ledger.ui.components.MonthSummaryBar
 import com.nimo.ledger.ui.components.MonthSwitcher
@@ -211,35 +212,44 @@ private fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> Un
     }
 }
 
-/** 日段头：日期 + 当日合计 */
+/**
+ * 日段头：日期 + 当日合计。
+ *
+ * 与统计页的段头共用 [LedgerSectionHeader]；当日合计可能要同时给出支出和收入，
+ * 一行 [String] 的 hint 放不下，所以走 trailing 槽位（字号颜色仍是段头的小字规格）。
+ */
 @Composable
 private fun DayHeader(group: TransactionDayGroup) {
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = group.label, style = MaterialTheme.typography.labelLarge)
-            Spacer(modifier = Modifier.weight(1f))
-            if (group.expenseCents > 0L) {
-                Text(
-                    text = "支出 " + Money.formatCurrency(group.expenseCents),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    val hasTotals = group.expenseCents > 0L || group.incomeCents > 0L
+    LedgerSectionHeader(
+        title = group.label,
+        trailing = if (hasTotals) {
+            {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (group.expenseCents > 0L) {
+                        DayTotalText("支出 " + Money.formatCurrency(group.expenseCents))
+                    }
+                    if (group.incomeCents > 0L) {
+                        DayTotalText("收入 " + Money.formatCurrency(group.incomeCents))
+                    }
+                }
             }
-            if (group.incomeCents > 0L) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "收入 " + Money.formatCurrency(group.incomeCents),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
+        } else {
+            null
+        },
+    )
+}
+
+@Composable
+private fun DayTotalText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** 一行流水：分类图标 + 名称 / 账户 · 备注 / 金额 */

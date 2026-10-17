@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -39,6 +39,8 @@ import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.ui.components.LedgerListItem
+import com.nimo.ledger.ui.components.LedgerListItemDivider
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -133,7 +135,7 @@ fun AccountsScreen(
                     NetWorthRow(netWorthCents = state.netWorthCents)
                     HorizontalDivider()
                 }
-                items(state.accounts, key = { it.id }) { account ->
+                itemsIndexed(state.accounts, key = { _, account -> account.id }) { index, account ->
                     AccountRow(
                         account = account,
                         balanceCents = state.balanceOf(account),
@@ -145,7 +147,10 @@ fun AccountsScreen(
                             { adjustAccount = account; adjustError = null }
                         },
                     )
-                    HorizontalDivider()
+                    // 末行不画分隔线：列表底部再多一条线会看着像"还有一行"
+                    if (index != state.accounts.lastIndex) {
+                        LedgerListItemDivider(hasLeading = false)
+                    }
                 }
             }
         }
@@ -228,33 +233,21 @@ private fun AccountRow(
     /** 余额校准入口（F11）；归档账户传 null，整个按钮不显示 */
     onAdjust: (() -> Unit)?,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = account.name, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = account.type.label + if (account.isArchived) " · 已归档" else "",
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        if (onAdjust != null) {
-            IconButton(onClick = onAdjust) {
-                Icon(
-                    imageVector = LedgerIcons.Scale,
-                    contentDescription = "校准 ${account.name} 的余额",
-                )
-            }
-        }
+    LedgerListItem(
+        title = account.name,
+        subtitle = account.type.label + if (account.isArchived) " · 已归档" else "",
         // 当前余额（推导值），不是建账时的初始余额
-        Text(
-            text = Money.formatCurrency(balanceCents),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-    }
+        trailingText = Money.formatCurrency(balanceCents),
+        trailingContent = onAdjust?.let { adjust ->
+            {
+                IconButton(onClick = adjust) {
+                    Icon(
+                        imageVector = LedgerIcons.Scale,
+                        contentDescription = "校准 " + account.name + " 的余额",
+                    )
+                }
+            }
+        },
+        onClick = onClick,
+    )
 }

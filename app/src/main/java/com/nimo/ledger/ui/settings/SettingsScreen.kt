@@ -1,8 +1,8 @@
 package com.nimo.ledger.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nimo.ledger.AppContainer
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.ui.components.LedgerListItem
 import com.nimo.ledger.ui.theme.ThemePreference
 import kotlinx.coroutines.launch
 
@@ -66,39 +67,25 @@ fun SettingsScreen(
         Text(text = "设置", style = MaterialTheme.typography.headlineSmall)
         HorizontalDivider()
         Text(text = "账户", style = MaterialTheme.typography.titleMedium)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onOpenAccounts)
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = "账户管理", style = MaterialTheme.typography.bodyLarge)
-            Text(text = "›", style = MaterialTheme.typography.titleMedium)
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onOpenCategories)
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = "分类管理", style = MaterialTheme.typography.bodyLarge)
-            Text(text = "›", style = MaterialTheme.typography.titleMedium)
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onOpenBudgets)
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = "预算管理", style = MaterialTheme.typography.bodyLarge)
-            Text(text = "›", style = MaterialTheme.typography.titleMedium)
-        }
+        // 三行入口走统一列表行：整页已经有 24dp 页边距，行内水平留白传 0，避免双重缩进
+        LedgerListItem(
+            title = "账户管理",
+            chevron = true,
+            onClick = onOpenAccounts,
+            contentPadding = PaddingValues(horizontal = 0.dp),
+        )
+        LedgerListItem(
+            title = "分类管理",
+            chevron = true,
+            onClick = onOpenCategories,
+            contentPadding = PaddingValues(horizontal = 0.dp),
+        )
+        LedgerListItem(
+            title = "预算管理",
+            chevron = true,
+            onClick = onOpenBudgets,
+            contentPadding = PaddingValues(horizontal = 0.dp),
+        )
         HorizontalDivider()
         Text(text = "外观", style = MaterialTheme.typography.titleMedium)
         // DataStore 是真异步：先按「跟随系统」画一帧，读到盘上的真值再纠正

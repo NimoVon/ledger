@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +37,7 @@ import com.nimo.ledger.domain.filter.TransactionFilter
 import com.nimo.ledger.domain.stats.BudgetStatus
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.components.MonthSummaryBar
 import com.nimo.ledger.ui.components.MonthSwitcher
 import com.nimo.ledger.util.Money
@@ -110,7 +110,7 @@ fun ReportsScreen(
                         modifier = Modifier.heightIn(min = 180.dp),
                     )
                 }
-                item(key = "trend-header") { SectionHeader("收支趋势") }
+                item(key = "trend-header") { LedgerSectionHeader("收支趋势") }
                 item(key = "trend") { TrendBlock(state = state, viewModel = viewModel) }
             }
 
@@ -131,15 +131,15 @@ fun ReportsScreen(
                         append("日均 / 环比")
                         if (state.hasTotalBudget) append(" / 预算")
                     }
-                    SectionHeader(state.insightTitle, hint = hint)
+                    LedgerSectionHeader(state.insightTitle, hint = hint)
                 }
                 item(key = "insight") { InsightSection(state) }
-                item(key = "trend-header") { SectionHeader("收支趋势") }
+                item(key = "trend-header") { LedgerSectionHeader("收支趋势") }
                 item(key = "trend") { TrendBlock(state = state, viewModel = viewModel) }
                 // 先给个总览：谁占了大头；具体数字看下面的排行（占比条用同一套颜色对号）
                 if (state.breakdown.isNotEmpty()) {
                     item(key = "donut-header") {
-                        SectionHeader("分类占比", hint = "点一块看明细")
+                        LedgerSectionHeader("分类占比", hint = "点一块看明细")
                     }
                     item(key = "donut") {
                         CategoryDonutSection(
@@ -152,7 +152,7 @@ fun ReportsScreen(
                         )
                     }
                 }
-                item(key = "breakdown-header") { SectionHeader("支出排行", hint = "点一行看明细") }
+                item(key = "breakdown-header") { LedgerSectionHeader("支出排行", hint = "点一行看明细") }
                 if (state.breakdown.isEmpty()) {
                     item(key = "breakdown-empty") {
                         HintRow(state.noExpenseHint)
@@ -173,7 +173,7 @@ fun ReportsScreen(
                         )
                     }
                 }
-                item(key = "accounts-header") { SectionHeader("账户支出分布", hint = "点一行看明细") }
+                item(key = "accounts-header") { LedgerSectionHeader("账户支出分布", hint = "点一行看明细") }
                 if (state.accountBreakdown.isEmpty()) {
                     item(key = "accounts-empty") {
                         HintRow(state.noAccountExpenseHint)
@@ -357,32 +357,6 @@ private fun ChangeCell(
             color = color,
             fontWeight = FontWeight.Medium,
         )
-    }
-}
-
-/** 段头：与明细页的日段头同款。[hint] 用来交代"这一段的行可以点" */
-@Composable
-private fun SectionHeader(title: String, hint: String? = null) {
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.weight(1f),
-            )
-            if (hint != null) {
-                Text(
-                    text = hint,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
     }
 }
 

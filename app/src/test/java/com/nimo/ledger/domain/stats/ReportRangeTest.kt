@@ -121,6 +121,16 @@ class ReportRangeTest {
         assertThrows(IllegalArgumentException::class.java) { ReportRange.lastMonths(YearMonth.of(2026, 10), 1) }
     }
 
+    @Test
+    fun lastMonths_countsElapsedDaysToToday_whenTheWindowIsStillRunning() {
+        // 5/1 起、10/13 止（今天含当天）：31 + 30 + 31 + 31 + 30 + 12 = 165 天
+        assertEquals(165, ReportRange.lastMonths(YearMonth.of(2026, 10), 6).elapsedDays(today))
+        // 已经整段过去的窗口：整段天数
+        assertEquals(182, ReportRange.lastMonths(YearMonth.of(2026, 3), 6).elapsedDays(today))
+        // 还没开始的窗口：0 天，不数未来
+        assertEquals(0, ReportRange.lastMonths(YearMonth.of(2027, 3), 3).elapsedDays(today))
+    }
+
     // ---- 自然年（1/1–12/31） ----
 
     @Test
@@ -144,6 +154,13 @@ class ReportRangeTest {
         // 2026 年 10 月 12 日 = 该年第 285 天
         assertEquals(285, ReportRange.year(2026).elapsedDays(today))
         assertEquals(365, ReportRange.year(2025).elapsedDays(today))
+    }
+
+    @Test
+    fun onlySingleMonthsAndShortCustomRanges_havePerDayBuckets() {
+        // 逐日柱只属于「单月 / 62 天以内的自选区间」；滚动窗口与自然年没有逐日画法
+        assertTrue(ReportRange.lastMonths(YearMonth.of(2026, 10), 6).days(today).isEmpty())
+        assertTrue(ReportRange.year(2026).days(today).isEmpty())
     }
 
     @Test
