@@ -1,5 +1,6 @@
 package com.nimo.ledger.ui
 
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import com.nimo.ledger.domain.filter.TransactionFilter
 
@@ -79,5 +80,39 @@ internal fun NavHostController.openDrillDown(
     requests.request(filter)
     navigate(LedgerRoutes.TRANSACTIONS_DRILL) {
         launchSingleTop = true
+    }
+}
+
+/**
+ * 切底部 Tab 的唯一实现，分两条路走：
+ *
+ * 1. 非起始 Tab：popUpTo 起始页 + saveState/restoreState，让每个 Tab 复用自己的页面实例。
+ * 2. 回起始 Tab（明细）：直接 `popBackStack(起始页, inclusive = false, saveState = true)`。
+ *    不能走第 1 条：`navigate(起始页) { restoreState = true }` 会把「之前压在起始页之上」的那段
+ *    （比如统计页）当成起始页自己的状态整段恢复回来，用户点「明细」看到的还是统计页
+ *    （实测 `[transactions, reports]` 上点明细 → 仍是 `[transactions, reports]`，见
+ *    LedgerDrillDownNavigationTest 里两条明细 Tab 的用例）。
+ *
+ * 下钻页是压在统计页之上的一次性结果，不能跟着 Tab 的状态一起存（原因见 [LedgerRoutes.TRANSACTIONS_DRILL]
+ * 与这里的 drop 分支）：被 `popUpTo(起始页) { saveState = true }` 和统计页一起弹出时，Navigation 会以
+ * 最深的那个页面为键把这一段整存进 `backStackStates`，紧接着 `navigate(统计) { restoreState = true }`
+ * 又按同一个键整段恢复——下钻页被一起复活，表现就是「站在下钻页点『统计』没反应」。
+ * 所以先把它单独 pop 掉（不保存），再去切 Tab。
+ */
+internal fun NavHostController.switchTab(route: String) {
+    if (currentDestination?.route == LedgerRoutes.TRANSACTIONS_DRILL) {
+        popBackStack(LedgerRoutes.TRANSACTIONS_DRILL, inclusive = true)
+    }
+    if (route == graph.findStartDestination().route) {
+        // saveState 保留统计页的滚动位置与状态，下次点回统计仍然接得上
+        popBackStack(route, inclusive = false, saveState = true)
+        return
+    }
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
     }
 }

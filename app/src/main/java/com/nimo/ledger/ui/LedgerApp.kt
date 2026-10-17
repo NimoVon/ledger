@@ -24,7 +24,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -120,15 +119,8 @@ fun LedgerApp(container: AppContainer) {
             if (!isFormPage) {
                 LedgerBottomBar(
                     currentDestination = currentDestination,
-                    onNavigate = { route ->
-                        navController.navigate(route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
+                    // 切 Tab 的唯一实现（含「先丢掉下钻页」的修复），见 NavHostController.switchTab
+                    onNavigate = navController::switchTab,
                 )
             }
         },
