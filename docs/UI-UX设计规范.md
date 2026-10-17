@@ -831,15 +831,15 @@ cd /d/git/ledger
 | 任务 | 产出 | 验收 |
 | --- | --- | --- |
 | E-1 ✅ **已完成 2026-10-17** | 明细页 FilterBar 单行化 + chips 横滚（T-1 / T-2）：`FilterBar` 改单个 `Row`（左「筛选」按钮 + 中间 `LazyRow` 条件 chips + 行尾「清空」），chip 用 12dp 圆角 + `surfaceContainerHigh` 底、`labelSmall` 单行不省略，无条件时整条只剩按钮 | ~~首屏内容区增加 ≥60dp~~ **实测不成立**：旧实现 0~3 条条件 56dp、6 条 104dp，新实现 1 条与 6 条等高（≤52dp），无条件时只省约 8dp——真实收益是「条高有界、不随条件数增长」。7 例组件级测试 + 真机 9 项走查（含横滚、清空、1.5 倍字体），见 `docs/测试报告.md` §21 |
-| E-2 | 记一笔表单底部主按钮「保存」+ 金额复核行（R-4 / R-7） | 「3 次点击记账」回归（现有测试是否覆盖需确认） |
-| E-3 | 分类 chip 区限高 + 自动滚到选中（R-2） | 20+ 分类的 UI 测试 |
+| E-2 ✅ **已完成 2026-10-17** | 记一笔表单底部主按钮「保存」+ 金额复核行（R-4 / R-7）。实装：`showSave` / `onSave` 各收敛成一份，顶栏 `TextButton`（`record-save-top`）与 `Scaffold.bottomBar` → `RecordSaveBar`（`record-save-bottom`，52dp 按钮、键盘弹出时在 IME 之上）共用；金额框下 `AmountReviewLine`（`record-amount-review`）在 `Money.parseCents(...) > 0` 时显示「核对：¥1,234.56」，12dp 间距（外层表单 16dp 间距，故用 0dp 内层 Column 收口） | 「3 次点击记账」仍是 点按钮 → 输金额 → 点保存，底栏不新增步骤；4 例组件级测试（复核行缺失 / 千分位文案 / 可点回调 / 保存中禁用）+ 真机 4 项（无键盘贴屏底 `[667,2945][773,3020]`、键盘弹出时 `[667,1799][773,1874]` 在 IME 之上、输入 `1234567` → `核对：¥1,234,567.00`、底部按钮真写入 ¥1.00 后删除还原）。**接线本身无组件级测试**（删 `bottomBar` 那 2 例仍绿），见 `docs/测试报告.md` §22.3 / §22.7 |
+| E-3 ✅ **已完成 2026-10-17** | 分类 chip 区限高 + 自动滚到选中（R-2）。实装：`CategoryChips` 用 `Box(heightIn(max = CATEGORY_CHIPS_MAX_HEIGHT_DP.dp).verticalScroll(...))` 包 `FlowRow`，上限 `CATEGORY_CHIPS_MAX_HEIGHT_DP = 168`（约 3 行）；选中那颗挂 `bringIntoViewRequester`，`LaunchedEffect(selectedCategoryId)` 里 `bringIntoView()`（首次进页沿用上次分类也生效） | 4 例组件级测试（200 颗时高度**正好** 168dp、限高后有 `ScrollBy`、3 颗时 ≤ 72dp、选中项 `assertIsDisplayed`）；红绿：删限高报「分类区高度 2673 px 应正好被限在 504 px（168dp）」，删 `bringIntoView` 报「分类199 … is not displayed」；真机 fontScale 2.0 下 chip 区内滑 `700 1750 → 700 1350` 后 娱乐/医疗 从 y1730 移到 y1320，`分类` 仍 1157、`账户` 仍 `[60,2010][256,2150]` 不动。见 `docs/测试报告.md` §22 |
 | E-4 | 统计页「本月洞察」卡片化 + 段头 sticky（S-5 / S-2） | 截图 |
 | E-5 | **修 FAB 遮挡气泡（S-1）** | 411dp 模拟器 + 真机：点最后一天 / 最后一段扇形都能点到「查看明细」 |
 | E-6 | 环形图 2dp 缝 + 选中格底色 0.10f → 0.14f（S-3 / §6.9） | 截图对比 |
 | E-7 | 设置页卡片分组 + 开发项折叠（ST-1 / ST-2 / ST-5） | 截图；自检入口仍可用 |
 | E-8 | 预算页 onLabelClick + 超支刻度（B-4 / B-2） | 预算 UI 测试 |
 
-> 批 E 状态（2026-10-17）：**E-1 已完成**（92 套 792 例、行覆盖 70.4%、真机 9 项走查，见 `docs/测试报告.md` §21）；**E-2 ~ E-8 未开始**。E-1 的执行要点：先补组件级测试（`TransactionsFilterBarUiTest` 7 例）再改布局——Robolectric 假字体让**宽度**断言失效，只能测高度与滚动，宽度靠真机截图核对；fontScale ≥1.5 的 chip 竖排仍归 F-2 处理（当前 1.5 倍下 chip 右端会被 `LazyRow` 从字形中间裁断）。
+> 批 E 状态（2026-10-17）：**E-1 ~ E-3 已完成**（E-1 见 `docs/测试报告.md` §21：92 套 792 例、行覆盖 70.4%、真机 9 项；E-2 / E-3 见 §22：93 套 800 例、行覆盖 70.6%、真机 10 项）；**E-4 ~ E-8 未开始**。E-2 / E-3 的执行要点：先写组件级测试再改布局的思路同样适用，但要认出「组件级测试测不到接线」——`RecordSaveBar` 的 2 例在删掉 `Scaffold.bottomBar` 后仍绿，接线只能靠真机证据，已写进 §22.7；`heightIn + verticalScroll` 的限高在 Robolectric 能量到「正好 504px」，真机则要放大字体让内容真的溢出才能看出「硬裁 + 内滚且外层不动」。E-1 的执行要点：先补组件级测试（`TransactionsFilterBarUiTest` 7 例）再改布局——Robolectric 假字体让**宽度**断言失效，只能测高度与滚动，宽度靠真机截图核对；fontScale ≥1.5 的 chip 竖排仍归 F-2 处理（当前 1.5 倍下 chip 右端会被 `LazyRow` 从字形中间裁断）。
 
 ### 批 F：图标与字体缩放收口
 
