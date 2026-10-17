@@ -189,4 +189,37 @@ class MoneyTest {
             assertEquals(cents, Money.parseCents(shown))
         }
     }
+
+    // ---- 输入口归一化：中文输入法的全角字符 ----
+
+    @Test
+    fun normalizeAmountInput_turnsFullWidthDigitsAndStopIntoHalfWidth() {
+        // 真机（测试报告 §22.5）：搜狗式键盘把小数点打成「。」，字段显示「123。45」，
+        // parseCents 返回 null，§22 的金额复核行消失、保存报格式错。
+        assertEquals("123.45", Money.normalizeAmountInput("123。45"))
+        assertEquals("123.45", Money.normalizeAmountInput("１２３。４５"))
+        assertEquals("123.45", Money.normalizeAmountInput("123．45"))   // 全角句点 U+FF0E
+        assertEquals("123.45", Money.normalizeAmountInput("123｡45"))    // 半角句点 U+FF61
+        assertEquals(12345L, Money.parseCents(Money.normalizeAmountInput("１２３。４５")))
+    }
+
+    @Test
+    fun normalizeAmountInput_handlesSignsGroupedCommasAndFullWidthSpaces() {
+        assertEquals("-5", Money.normalizeAmountInput("－5"))           // 全角连字符
+        assertEquals("-5", Money.normalizeAmountInput("−5"))           // 数学负号
+        assertEquals(-500L, Money.parseCents(Money.normalizeAmountInput("－5")))
+        assertEquals("1,234.50", Money.normalizeAmountInput("１，２３４．５０"))
+        assertEquals(123450L, Money.parseCents(Money.normalizeAmountInput("１，２３４．５０")))
+        assertEquals(1200L, Money.parseCents(Money.normalizeAmountInput("\u300012\u3000")))
+    }
+
+    @Test
+    fun normalizeAmountInput_leavesHalfWidthTextAndUnknownCharactersAlone() {
+        for (text in listOf("", "12.34", "-1.05", "1,234.56", "abc", "12 34")) {
+            assertEquals(text, Money.normalizeAmountInput(text))
+        }
+        // 只做字符替换、不做格式判断：非金额字符原样留下，仍由 parseCents 拒绝
+        assertEquals("123元", Money.normalizeAmountInput("１２３元"))
+        assertNull(Money.parseCents(Money.normalizeAmountInput("１２３元")))
+    }
 }

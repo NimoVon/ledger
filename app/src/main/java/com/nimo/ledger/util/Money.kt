@@ -56,6 +56,33 @@ object Money {
         return magnitude > MAX_AMOUNT_CENTS
     }
 
+    /**
+     * 输入口归一化：把中文输入法常见的全角字符换成半角，返回可直接展示、也可直接喂给
+     * [parseCents] 的文本。**只做字符替换，不做格式判断**——格式仍然只由 [parseCents] 判定。
+     *
+     * 为什么放在输入口而不是让 parse 宽容：搜狗等中文键盘会把小数点打成「。」，字段里就会显示
+     * 「123。45」。只在解析端宽容的话，用户看到的仍是全角、§22 的金额复核行也会与字段对不上；
+     * 归一化放到 onValueChange，字段本身就是半角，复核行、保存、CSV 三条路径口径一致。
+     * 用户粘贴带千分位的展示金额（「1,234.56」）同样原样保留逗号，交给既有分组解析。
+     */
+    fun normalizeAmountInput(input: String): String {
+        if (input.isEmpty()) return input
+        val sb = StringBuilder(input.length)
+        for (ch in input) {
+            sb.append(
+                when (ch) {
+                    in '０'..'９' -> '0' + (ch - '０')     // 全角数字
+                    '。', '．', '｡' -> '.'                 // 句号 / 全角句点 / 半角句点
+                    '，' -> ','                              // 全角逗号（千分位）
+                    '－', '−', '﹣' -> '-'                   // 各类全角/数学负号
+                    '\u3000' -> ' '                         // 全角空格，交给既有 trim()
+                    else -> ch
+                }
+            )
+        }
+        return sb.toString()
+    }
+
     /** 纯格式解析：返回金额绝对值（分），格式非法返回 null。**不做**零值与上限判断，由调用方决定。 */
     private fun parseMagnitudeOrNull(input: String): Long? {
         val text = input.trim()

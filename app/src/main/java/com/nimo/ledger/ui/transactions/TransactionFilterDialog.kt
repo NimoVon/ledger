@@ -120,7 +120,7 @@ fun TransactionFilterDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = minText,
-                        onValueChange = { minText = it; error = null },
+                        onValueChange = { minText = Money.normalizeAmountInput(it); error = null },
                         label = { Text("最低") },
                         prefix = { Text("¥") },
                         singleLine = true,
@@ -129,7 +129,7 @@ fun TransactionFilterDialog(
                     )
                     OutlinedTextField(
                         value = maxText,
-                        onValueChange = { maxText = it; error = null },
+                        onValueChange = { maxText = Money.normalizeAmountInput(it); error = null },
                         label = { Text("最高") },
                         prefix = { Text("¥") },
                         singleLine = true,

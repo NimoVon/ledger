@@ -13,6 +13,7 @@ import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.domain.model.TransactionInput
 import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.domain.stats.BalanceCalculator
+import com.nimo.ledger.util.Money
 import com.nimo.ledger.data.local.toBalanceInput
 import com.nimo.ledger.data.local.toRecordOrNull
 import kotlinx.coroutines.flow.first
@@ -119,6 +120,19 @@ class TransferViewModelTest {
         assertTrue(state.hasNotEnoughAccounts)
         // 账户不够时顶栏连「保存」都不该露出
         assertFalse(state.isFormVisible)
+    }
+
+    @Test
+    fun setAmount_normalizesFullWidthDigitsAndPeriod() = runTest {
+        seedTwoAccounts()
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        vm.setAmount("３０。５")
+
+        val state = vm.awaitState { it.form.amountText.isNotEmpty() }
+        assertEquals("30.5", state.form.amountText)
+        assertEquals(3_050L, Money.parseCents(state.form.amountText))
     }
 
     // ---- 校验：表单层 ----

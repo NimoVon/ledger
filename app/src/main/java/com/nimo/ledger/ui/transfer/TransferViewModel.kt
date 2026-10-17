@@ -260,7 +260,7 @@ class TransferViewModel(
 
     fun setToAccount(accountId: Long) = updateForm { it.copy(toAccountId = accountId) }
 
-    fun setAmount(text: String) = updateForm { it.copy(amountText = text) }
+    fun setAmount(text: String) = updateForm { it.copy(amountText = Money.normalizeAmountInput(text)) }
 
     fun setDate(isoDate: String) = updateForm { it.copy(occurredOn = isoDate) }
 

@@ -77,7 +77,7 @@ fun BudgetEditDialog(
                     OutlinedTextField(
                         value = amount,
                         onValueChange = {
-                            amount = it
+                            amount = Money.normalizeAmountInput(it)
                             localError = null
                         },
                         label = { Text("预算金额") },

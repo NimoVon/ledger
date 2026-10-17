@@ -47,7 +47,7 @@ fun BalanceAdjustDialog(
                 Text(text = "当前账面余额：${Money.formatCurrency(currentBalanceCents)}")
                 OutlinedTextField(
                     value = targetText,
-                    onValueChange = { targetText = it },
+                    onValueChange = { targetText = Money.normalizeAmountInput(it) },
                     label = { Text("实际余额") },
                     prefix = { Text("¥") },
                     singleLine = true,

@@ -353,7 +353,7 @@ class RecordViewModel(
 
     fun setType(type: TransactionType) = updateForm { it.withType(type) }
 
-    fun setAmount(text: String) = updateForm { it.copy(amountText = text) }
+    fun setAmount(text: String) = updateForm { it.copy(amountText = Money.normalizeAmountInput(text)) }
 
     fun setAccount(id: Long) = updateForm { it.copy(accountId = id) }
 

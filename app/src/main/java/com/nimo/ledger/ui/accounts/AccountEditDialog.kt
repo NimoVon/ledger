@@ -106,7 +106,7 @@ fun AccountEditDialog(
                 }
                 OutlinedTextField(
                     value = amountText,
-                    onValueChange = { amountText = it; localError = null },
+                    onValueChange = { amountText = Money.normalizeAmountInput(it); localError = null },
                     label = { Text("初始余额（分计入，可留空=0）") },
                     prefix = { Text("¥") },
                     singleLine = true,

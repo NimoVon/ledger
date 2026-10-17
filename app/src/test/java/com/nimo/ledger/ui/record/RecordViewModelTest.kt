@@ -14,6 +14,7 @@ import com.nimo.ledger.domain.model.TransactionInput
 import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.domain.validate.TransactionValidator
 import com.nimo.ledger.util.Dates
+import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -136,6 +137,27 @@ class RecordViewModelTest {
         }
         assertEquals(listOf(incomeCategoryId), state.categories.map { it.id })
         assertNull("换方向必须清掉支出分类，避免分类与类型不符", state.form.categoryId)
+    }
+
+    @Test
+    fun setAmount_normalizesFullWidthDigitsAndPeriodFromTheChineseKeyboard() = runTest {
+        seed()
+        val vm = newViewModel()
+        vm.awaitLoaded()
+
+        // 真机实测（§22.5）：中文输入法把 "123.45" 打成 "123。45"，复核行不出现、保存报格式错。
+        // 归一化必须发生在输入口——字段本身就得是半角，不能只在解析时宽容。
+        vm.setAmount("１２３。４５")
+        vm.setCategory(expenseCategoryId)
+        vm.setAccount(accountId)
+
+        val state = vm.awaitState { it.form.amountText.isNotEmpty() }
+        assertEquals("123.45", state.form.amountText)
+        // 校验与复核行走的是同一条 parseCents：字段归一化后表单整体可提交
+        val outcome = state.form.toOutcome()
+        val errors = (outcome as? RecordFormOutcome.Invalid)?.errors
+        assertTrue("归一化后不该再有校验错误，实际：$errors", outcome is RecordFormOutcome.Valid)
+        assertEquals(12_345L, (outcome as RecordFormOutcome.Valid).input.amountCents)
     }
 
     // ---- 保存：成功路径 ----
