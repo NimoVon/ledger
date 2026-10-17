@@ -178,7 +178,7 @@
 ### 3.3 字号缩放（F15）与 200% 文本
 
 - 已有：MonthSummaryBar 在 fontScale ≥ 1.5 时三格改竖排（STACK_FONT_SCALE = 1.5f）。这是正确模式，**其他横向拥挤区要照抄**。
-- 需要加固的三处：FilterBar（chips 列 + 「清空」）、DayHeader（日期 + 支出 + 收入）、BudgetProgressBar 下行（「已用 ¥x / ¥y」+ 状态标签）。规则：fontScale ≥ 1.5f 时上述三处一律改 Column 竖排，间距 4–6dp。
+- 需要加固的三处：FilterBar（chips 列 + 「清空」）、DayHeader（日期 + 支出 + 收入）、BudgetProgressBar 下行（「已用 ¥x / ¥y」+ 状态标签）。规则：fontScale ≥ 1.5f 时上述三处一律改 Column 竖排，间距 4–6dp。**✅ 2026-10-17 已全部完成（F-2）**：门槛收到 `ui/components/FontScale.kt`（`STACK_FONT_SCALE` / `stackAtLargeFont`），三处各读 `LocalDensity.current.fontScale`；真机 1.5 / 2.0 走查数字见 `docs/测试报告.md` §25.5。顺带修掉 E-1 遗留的「1.5 倍下 chips 被 `LazyRow` 从字形中间裁断」。
 - 长数字在 200% 缩放下：DonutCenter 已有 maxLines=1 + Ellipsis（会截断金额）。改进：fontScale ≥ 1.5 时改用 titleSmall 降级 + 允许 2 行，宁可换行不要 Ellipsis 吞掉金额。
 
 ---
@@ -572,7 +572,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | G-3 | P0 | EmptyState 里插图与标题之间**没有间距**（Image 后直接 Text） | 加 `Spacer(16.dp)`；文案间距统一 8dp；新增 tone / actionLabel / onAction 可选参数 | app/src/main/java/com/nimo/ledger/ui/components/EmptyState.kt |
 | G-4 | P0 | 预算进度条（8dp/4dp 圆角）与占比条（6dp/3dp）两份实现 | 抽 `LedgerProgressBar`（§6.4） | ui/budgets/BudgetsScreen.kt、ui/reports/ReportsScreen.kt |
 | G-5 | P1 | 金额列宽随内容浮动，右边缘不成线 | 金额统一走 `LedgerAmount`，minWidth 96dp | ui/transactions/TransactionsScreen.kt、ui/accounts/AccountsScreen.kt、ui/reports/ReportsScreen.kt |
-| G-6 | P1 | 字体缩放 ≥1.5 时只有 MonthSummaryBar（`STACK_FONT_SCALE = 1.5f`）做了竖排 | FilterBar / DayHeader / 预算进度条下行 三处补竖排分支 | ui/transactions/TransactionsScreen.kt、ui/budgets/BudgetsScreen.kt |
+| G-6 ✅ **已修 2026-10-17** | P1 | 字体缩放 ≥1.5 时只有 MonthSummaryBar（`STACK_FONT_SCALE = 1.5f`）做了竖排 | FilterBar / DayHeader / 预算进度条下行 三处补竖排分支（F-2：门槛收到 `FontScale.kt`，9 例测试 + 3 档真机走查，见 `docs/测试报告.md` §25） | ui/transactions/TransactionsScreen.kt、ui/budgets/BudgetsScreen.kt、ui/components/FontScale.kt |
 | G-7 | P1 | LedgerIcons 缺 13 个功能图标（见 §5.1） | 按现有口径补 ImageVector（24dp viewport / stroke 2.0f / Round cap+join） | app/src/main/java/com/nimo/ledger/ui/LedgerIcons.kt |
 | G-8 | P1 | 环形图 3 色在浅色底低于图形阈值 3:1 | 扇形间加 2dp surface 缝 + 代码注释说明「颜色非唯一信息通道」 | ui/reports/CategoryDonut.kt |
 | G-9 | P2 | 无统一加载骨架，一律居中转圈 | loading 改骨架块（MonthSummaryBar 三格、列表首屏），转圈只留表单页 | 各 Screen |
@@ -846,12 +846,12 @@ cd /d/git/ledger
 | 任务 | 产出 | 验收 |
 | --- | --- | --- |
 | F-1 | 补 13 个 LedgerIcons（§5.1），替换「›」与「↑↓」字符 | 图标在 24dp / 20dp / 16dp 三档清晰（截图） |
-| F-2 | fontScale ≥1.5 三处竖排（G-6） | `qualifiers = "w411dp-h891dp-xxhdpi"` + fontScale 1.5 / 2.0 截图 |
+| F-2 ✅ **已完成 2026-10-17** | fontScale ≥1.5 三处竖排（G-6）。实装：门槛收到 `ui/components/FontScale.kt`（`STACK_FONT_SCALE = 1.5f` + `stackAtLargeFont`，`MonthSummaryBar.stackSummaryCells` 改为委托）；`FilterBar` ≥1.5 时「筛选 + 清空」一行、chips 独占下一行；`LedgerSectionHeader` 新增 `stack` 参数，`DayHeader` 据此把支出/收入竖排；`BudgetProgressBar` 两段文字改竖排 | `@Config(qualifiers = "w411dp-h891dp-xxhdpi")` + `CompositionLocalProvider(LocalDensity provides Density(density, fontScale))` 的 9 例组件测试（1.0 与 2.0 各一组几何断言），真机 1440×3200（384dp 宽）跑 1.0 / 1.5 / 2.0 三档：1.5 下 chips 从 x98 起独占整行、日段头「支出 ¥774.00」在日期下面、预算行「已超支 ¥274.00」在「已用 …」下面；2.0 下「分类：餐饮」完整显示（E-1 遗留的裁字已消失）。红绿：三处 `val stack = ...` 改 `false` 时 3 例必红（详见 `docs/测试报告.md` §25.3） |
 | F-3 | 分类预设 emoji 网格（C-6） | 对话框 UI 测试 |
 | F-4 | 「减少动画」偏好（AA-7） | 手动验证；§7.4 的转场目前未读这个偏好（见 `docs/测试报告.md` §19.6） |
 | F-5 ✅ **已完成 2026-10-17** | 金额输入全角归一化（来源是 §22 真机走查的输入侧发现，原计划单独成批）：新增 `Money.normalizeAmountInput`，在 **输入口**把全角数字 `０-９`、句号 `。` / `．` / `｡`、逗号 `，`、负号 `－` / `−` / `﹣`、全角空格 `U+3000` 换成半角；`Money.parseCents` 与 CSV/JSON 导入的严格口径不动。接线 7 个 `KeyboardType.Decimal` 输入框（记一笔 / 转账经 `::setAmount`，账户编辑 / 余额校准 / 预算编辑 / 明细筛选上下限就地调） | 8 例测试（函数级 3 + ViewModel 接线 2 + 源码级守门 `AmountInputSourceTest` 3）；真机逐字符输 `1` `2` `3` + PERIOD + `4` `5` → 字段 `123.45`、复核行 `核对：¥123.45`（修复前同一套按键得「123。 45」且复核行不出现），第二个输入口（账户初始余额）读到 `1.5`，取消后净资产 -¥2,539.00 逐分未变。见 `docs/测试报告.md` §23 |
 
-> 批 F 状态（2026-10-17）：**F-5（金额输入全角归一化）已完成**——它不在 §11 的原始批次里，来源是 §22 真机走查发现的输入侧问题，趁手修掉并单列成 F-5；证据见 `docs/测试报告.md` §23（94 套 808 例、行覆盖 70.6%、真机 10 项走查净效果为零）。**F-1 ~ F-4 未开始**。F-5 的执行要点：①先判断「归一化放输入口还是放解析」，选输入口——字段本身就得是半角，否则 §22 的「核对：¥…」复核行与字段对不上，用户看着全角还能保存更迷惑；②`parseCents` 严格口径与 CSV/JSON 导入路径一律不动；③7 个输入口靠源码级守门 `AmountInputSourceTest` 兜底，但那只网只认表里列出的文件，新增金额输入框要手动补 `amountFieldFiles`。
+> 批 F 状态（2026-10-17）：**F-2（fontScale ≥1.5 三处竖排）已完成**——证据见 `docs/测试报告.md` §25（98 套 822 例、行覆盖 71.2%、真机 3 档字体走查净效果为零）；**F-5（金额输入全角归一化）已完成**——它不在 §11 的原始批次里，来源是 §22 真机走查发现的输入侧问题，趁手修掉并单列成 F-5；证据见 `docs/测试报告.md` §23（94 套 808 例、行覆盖 70.6%、真机 10 项走查净效果为零）。**F-1 ~ F-4 未开始**。F-5 的执行要点：①先判断「归一化放输入口还是放解析」，选输入口——字段本身就得是半角，否则 §22 的「核对：¥…」复核行与字段对不上，用户看着全角还能保存更迷惑；②`parseCents` 严格口径与 CSV/JSON 导入路径一律不动；③7 个输入口靠源码级守门 `AmountInputSourceTest` 兜底，但那只网只认表里列出的文件，新增金额输入框要手动补 `amountFieldFiles`。
 
 ### 批 P3：待拍板项（不默认做）
 
@@ -908,6 +908,6 @@ cd /d/git/ledger
 
 **UI 设计师**：DSH UI 设计师 Agent
 **设计系统日期**：2026-10-16
-**实施状态（2026-10-17）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；批 E 的 E-4 / E-7 / E-8 与批 F 的 F-1 ~ F-4 待排期
+**实施状态（2026-10-17）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24；批 F 的 F-2（fontScale ≥1.5 三处竖排）见 §25；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；批 E 的 E-4 / E-7 / E-8 与批 F 的 F-1 / F-3 / F-4 待排期
 **QA 流程**：批 D/E/F 每批结束跑 testDebugUnitTest --rerun + lint + assembleDebug，并为新组件补截图断言
 
