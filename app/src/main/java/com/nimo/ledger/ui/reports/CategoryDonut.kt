@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.stats.CategoryBreakdownRow
+import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.theme.TooltipShape
 import com.nimo.ledger.util.Money
 import kotlin.math.atan2
@@ -60,6 +62,9 @@ internal const val DONUT_CENTER_TEST_TAG = "report-donut-center"
 
 /** 点中一块分类后弹出的占比气泡（R3 优化）：先看数，再点它才下钻——与柱状图同一套交互语言 */
 internal const val DONUT_TOOLTIP_TEST_TAG = "report-donut-tooltip"
+
+/** 气泡行尾的箭头（原来的「查看明细」文字位置会被 FAB 压住，S-1 修法 ②） */
+internal const val DONUT_TOOLTIP_CHEVRON_TEST_TAG = "report-donut-tooltip-chevron"
 
 /** 无障碍描述的头一句（画布上没有可读文字）：读屏听到的是带数字的整句，测试用前缀匹配 */
 internal const val DONUT_DESCRIPTION = "本月支出分类占比"
@@ -277,13 +282,15 @@ private fun CategoryDonutCanvas(
 }
 
 /**
- * 点中一块分类后的占比气泡：分类名 + 金额 + 占比 + 「查看明细」。
+ * 点中一块分类后的占比气泡：分类名 + 金额 + 占比，行尾一个箭头表示"点进去是明细"
+ * （S-1 修法 ②：原来的「查看明细」文字就在右下角，正好被「记一笔」FAB 压住）。
  * 整块可点，点它才把"该分类 + 当前月份"下钻到明细页（F07 的同一条链路，由宿主跳转）。
  */
 @Composable
 private fun DonutTooltip(row: CategoryBreakdownRow, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
+            .clearOfFloatingActionButton()
             .padding(top = 12.dp)
             .fillMaxWidth()
             .testTag(DONUT_TOOLTIP_TEST_TAG)
@@ -296,10 +303,13 @@ private fun DonutTooltip(row: CategoryBreakdownRow, onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = row.name, style = MaterialTheme.typography.labelLarge)
                 Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "查看明细",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                Icon(
+                    imageVector = LedgerIcons.ChevronRight,
+                    contentDescription = TOOLTIP_AFFORDANCE_DESCRIPTION,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .testTag(DONUT_TOOLTIP_CHEVRON_TEST_TAG),
                 )
             }
             Text(

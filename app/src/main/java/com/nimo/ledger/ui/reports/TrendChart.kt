@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,6 +55,7 @@ import com.nimo.ledger.domain.stats.DailyTotal
 import com.nimo.ledger.domain.stats.MonthlyTotal
 import com.nimo.ledger.domain.stats.ReportBucket
 import com.nimo.ledger.domain.stats.ReportRange
+import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.theme.TooltipShape
 import com.nimo.ledger.util.Money
 import java.time.LocalDate
@@ -80,6 +82,9 @@ internal const val CHART_Y_AXIS_TEST_TAG = "report-chart-y-axis"
 /** 点柱子后弹出的金额气泡（R2 优化：先看数，再点进当日明细） */
 internal const val DAY_TOOLTIP_TEST_TAG = "report-day-tooltip"
 
+/** 气泡行尾的箭头（原来的「查看明细」文字位置会被 FAB 压住，S-1 修法 ②） */
+internal const val DAY_TOOLTIP_CHEVRON_TEST_TAG = "report-day-tooltip-chevron"
+
 /** 横轴太挤时的提示语：柱子可以左右滑 */
 internal const val DAY_LABEL_SCROLL_HINT = "左右滑动看整月"
 
@@ -97,6 +102,16 @@ internal const val DAY_LABEL_MIN_SPACING_DP = 44f
 
 /** 金额气泡宽度 */
 private val DAY_TOOLTIP_WIDTH = 172.dp
+
+/**
+ * 选中那一天的格子底色透明度。0.10 在深色主题下几乎看不出来（规范 §6.9 加固项 ②），
+ * 0.14 才够辨认，又不至于把柱子本身压住。
+ */
+internal const val SELECTED_DAY_HIGHLIGHT_ALPHA = 0.14f
+
+/** 选中格子的底色：同一套 primary 只调透明度，浅色 / 深色主题都跟着走 */
+internal fun dayCellHighlight(primary: Color): Color =
+    primary.copy(alpha = SELECTED_DAY_HIGHLIGHT_ALPHA)
 
 /** 图表的头一句：直接念当前范围，读屏听到的是带数字的整句，测试用前缀匹配 */
 internal fun trendHead(range: ReportRange): String = "${range.label}收支趋势"
@@ -301,7 +316,7 @@ private fun DailyBars(
     val expenseColor = MaterialTheme.colorScheme.error
     val incomeColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
-    val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+    val highlight = dayCellHighlight(MaterialTheme.colorScheme.primary)
 
     BoxWithConstraints(
         modifier = modifier
@@ -488,12 +503,13 @@ private fun DailyPlot(
 
 /**
  * 点柱子后弹的金额气泡（R2 优化）：先给一眼能看见的数字，再点一下才进当日明细。
- * 整块可点，并且自己带「查看明细」的提示文字。
+ * 整块可点，行尾一个箭头表示"点进去是当日明细"（S-1 修法 ②：右下的文字会被 FAB 压住）。
  */
 @Composable
 private fun DayTooltip(total: DailyTotal, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier
+            .clearOfFloatingActionButton()
             .width(DAY_TOOLTIP_WIDTH)
             .testTag(DAY_TOOLTIP_TEST_TAG)
             .clickable(onClick = onClick),
@@ -505,10 +521,13 @@ private fun DayTooltip(total: DailyTotal, onClick: () -> Unit, modifier: Modifie
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = tooltipHead(total), style = MaterialTheme.typography.labelMedium)
                 Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "查看明细",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                Icon(
+                    imageVector = LedgerIcons.ChevronRight,
+                    contentDescription = TOOLTIP_AFFORDANCE_DESCRIPTION,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .testTag(DAY_TOOLTIP_CHEVRON_TEST_TAG),
                 )
             }
             Text(
