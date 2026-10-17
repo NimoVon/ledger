@@ -300,8 +300,11 @@ fun LedgerListItem(
     chevron: Boolean = false,
     danger: Boolean = false,
     onClick: (() -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),  // 批 D 实装新增：给「整页已有页边距」的页面关掉行内横留白
 )
 ```
+
+> 实装偏差（2026-10-17，见 `docs/测试报告.md` §17）：实际比本签名单多一个末尾 `contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp)`。设置页整页已有 24dp 页边距，复用时传 `PaddingValues(horizontal = 0.dp)`，否则 24 + 16 会双重缩进。
 
 | 属性 | 值 |
 | --- | --- |
@@ -788,12 +791,14 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 | 任务 | 产出 | 验收 |
 | --- | --- | --- |
-| D-1 | 新增 `LedgerListItem`（§6.1），替换设置/账户/分类/预算四处行 | 现有 UI 测试全绿；截图对比无布局回退 |
-| D-2 | 新增 `LedgerSectionHeader`（§6.2），替换 ReportsScreen.SectionHeader 与 TransactionsScreen.DayHeader | 同上 |
+| D-1 ✅ **已完成 2026-10-17** | 新增 `LedgerListItem`（§6.1），替换设置/账户/分类/预算四处行（实装：设置三行、账户行、分类行已换；**预算行留给 D-3**，因为它要和进度条一起改） | 现有 UI 测试全绿（87 套 748 例）；真机截图对比无布局回退，见 `docs/测试报告.md` §17.3 |
+| D-2 ✅ **已完成 2026-10-17** | 新增 `LedgerSectionHeader`（§6.2），替换 ReportsScreen.SectionHeader（6 处）与 TransactionsScreen.DayHeader | 同上；另在分类页段头、预算页「分类预算」也换上 |
 | D-3 | 新增 `LedgerProgressBar`（§6.4），替换预算进度条与 BreakdownBar | 同上 |
 | D-4 | EmptyState 增 tone / actionLabel / onAction，并修 16dp 插图间距（§6.7） | `EMPTY_STATE_ILLUSTRATION_TEST_TAG` 保留；为 tone 补截图断言 |
 | D-5 | PickerCell 40dp → 44dp（D-1 / AA-2） | 年月选择器 UI 测试 |
 | D-6 | 账户/分类 FAB 与对话框标题文案分离（A-1 / C-1 / AA-1） | TalkBack 真机验证（**本批唯一必须上真机的项**） |
+
+> 批 D 状态（2026-10-17）：**D-1 / D-2 已完成**，门禁 87 套 748 例、行覆盖 70.3%、真机 9 项走查净效果为零（见 `docs/测试报告.md` §17）；D-3 / D-4 / D-5 / D-6 未做。执行顺序按 §12.2 第 2 条先补组件级测试再替换（`LedgerListItemUiTest` 9 例 + `LedgerSectionHeaderUiTest` 4 例）。
 
 回归命令（Windows）：
 
@@ -866,7 +871,7 @@ cd /d/git/ledger
 
 **未验证（本规范中标注「待验证 / 待确认」的项）**：
 1. 所有布局改动**没有**经过编译、真机或截图验证——本文是设计规范，不是已落地的实现。
-2. 屏幕层测试覆盖率低（docs/测试报告.md §10 第 (4) 条：ui.settings 10.3%），批 D/E 的组件替换**缺少测试网**，重构前应先补组件级测试。
+2. 屏幕层测试覆盖率低（docs/测试报告.md §10 第 (4) 条：ui.settings 10.7%），批 D/E 的组件替换**缺少测试网**，重构前应先补组件级测试。**批 D 的 D-1 / D-2 已按此执行**（先写 13 例组件级测试再替换，见 docs/测试报告.md §17.1），D-3 ~ D-6 同样适用。
 3. 31 天逐日图真机密度未构造（§10 第 (8) 条）——S-6 的窄屏加高建议依赖这条，**未验证**。
 4. TalkBack 动线脚本（§10.3）是设计预期，未在真机走过。
 5. 分类 emoji 预设（C-6）、默认沿用上次分类（R-3）、设置页计数副标题（§7.3 第 3 条）涉及产品判断或数据接口确认，等待拍板。
@@ -880,6 +885,6 @@ cd /d/git/ledger
 
 **UI 设计师**：DSH UI 设计师 Agent
 **设计系统日期**：2026-10-16
-**实施状态**：设计规范已交付，等待批 D 排期
+**实施状态**：批 D 已完成 D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`），证据见 [`docs/测试报告.md`](测试报告.md) §17；D-3 ~ D-6 与批 E / 批 F 待排期
 **QA 流程**：批 D/E/F 每批结束跑 testDebugUnitTest --rerun + lint + assembleDebug，并为新组件补截图断言
 
