@@ -1,13 +1,11 @@
 package com.nimo.ledger.ui.budgets
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,6 +41,8 @@ import com.nimo.ledger.domain.stats.BudgetCalculator
 import com.nimo.ledger.domain.stats.BudgetStatus
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
+import com.nimo.ledger.ui.components.EmptyTone
+import com.nimo.ledger.ui.components.LedgerProgressBar
 import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.components.MonthSwitcher
 import com.nimo.ledger.util.Money
@@ -132,6 +132,7 @@ fun BudgetsScreen(
                     title = "加载失败",
                     message = state.errorMessage.orEmpty(),
                     modifier = Modifier.weight(1f),
+                    tone = EmptyTone.ERROR,
                 )
 
                 state.isLoading -> Box(
@@ -317,23 +318,20 @@ private fun CategoryBudgetRowItem(row: BudgetCategoryRow, onClick: () -> Unit) {
     }
 }
 
-/** 手绘进度条（两个 Box）：比 LinearProgressIndicator 少一层 API 版本风险，配色也完全自己说了算 */
+/**
+ * 预算进度条：条形本体统一走 [LedgerProgressBar]（设计规范 §6.4），这里只补下面那行文字。
+ * overMarker = true：超支时 100% 处留 2dp 刻度、填充压到 60% 高，一眼看出「越过线多少」。
+ */
 @Composable
 private fun BudgetProgressBar(spentCents: Long, budgetCents: Long, status: BudgetStatus) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(BudgetCalculator.percent(spentCents, budgetCents).toFloat().coerceIn(0f, 1f))
-                    .fillMaxHeight()
-                    .background(statusColor(status), RoundedCornerShape(4.dp)),
-            )
-        }
+        LedgerProgressBar(
+            fraction = BudgetCalculator.percent(spentCents, budgetCents).toFloat(),
+            color = statusColor(status),
+            height = 8.dp,
+            shape = RoundedCornerShape(4.dp),
+            overMarker = true,
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

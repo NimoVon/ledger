@@ -162,7 +162,7 @@ private fun PickerCell(
         color = container,
         shape = MaterialTheme.shapes.small,
         modifier = modifier
-            .height(40.dp)
+            .height(44.dp)
             .clickable(onClick = onClick),
     ) {
         Box(

@@ -1,6 +1,5 @@
 package com.nimo.ledger.ui.reports
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +35,9 @@ import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.domain.filter.TransactionFilter
 import com.nimo.ledger.domain.stats.BudgetStatus
 import com.nimo.ledger.ui.components.EmptyState
+import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.ui.components.LedgerProgressBar
 import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.components.MonthSummaryBar
 import com.nimo.ledger.ui.components.MonthSwitcher
@@ -93,6 +94,7 @@ fun ReportsScreen(
                 title = "加载失败",
                 message = state.errorMessage.orEmpty(),
                 modifier = contentModifier,
+                tone = EmptyTone.ERROR,
             )
 
             state.isLoading -> Box(contentModifier, Alignment.Center) { CircularProgressIndicator() }
@@ -414,26 +416,12 @@ private fun BreakdownRow(
         }
         if (percent != null) {
             Spacer(modifier = Modifier.height(6.dp))
-            BreakdownBar(fraction = percent, color = barColor)
+            LedgerProgressBar(
+                fraction = percent.toFloat(),
+                color = barColor,
+                height = 6.dp,
+                shape = RoundedCornerShape(3.dp),
+            )
         }
-    }
-}
-
-/** 占比条：用两层 Box 画，宽度就是占比，颜色由调用方给（分类排行 = 环形图那一块的颜色） */
-@Composable
-private fun BreakdownBar(fraction: Double, color: Color) {
-    val shape = RoundedCornerShape(3.dp)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(6.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant, shape),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(fraction.coerceIn(0.0, 1.0).toFloat())
-                .height(6.dp)
-                .background(color, shape),
-        )
     }
 }

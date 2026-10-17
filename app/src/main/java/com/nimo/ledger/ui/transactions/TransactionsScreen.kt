@@ -38,6 +38,7 @@ import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
+import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.DrillDownRequests
@@ -104,6 +105,7 @@ fun TransactionsScreen(
                 title = "加载失败",
                 message = state.errorMessage.orEmpty(),
                 modifier = contentModifier,
+                tone = EmptyTone.ERROR,
             )
 
             // 筛选态下"没有记录"是条件的问题，不是这个月没记账——措辞要分开，否则用户以为数据丢了
@@ -111,6 +113,7 @@ fun TransactionsScreen(
                 title = "没有符合条件的记录",
                 message = "试试放宽条件，或点上面的「清空」。",
                 modifier = contentModifier,
+                tone = EmptyTone.FILTERED,
             )
 
             // 空状态按"本月"表述：切到没有记录的月份不该看起来像坏了

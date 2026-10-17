@@ -57,6 +57,7 @@ import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.domain.validate.TransactionValidator
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
+import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.transfer.TransferFormSection
 import com.nimo.ledger.ui.transfer.TransferUiState
 import com.nimo.ledger.ui.transfer.TransferViewModel
@@ -251,6 +252,7 @@ fun RecordScreen(
                         title = "加载失败",
                         message = state.loadErrorMessage.orEmpty(),
                         modifier = bodyModifier,
+                        tone = EmptyTone.ERROR,
                     )
 
                     // 转账（F04）与余额调整（P1）的编辑入口不在本页：硬套收支表单会写出半截数据

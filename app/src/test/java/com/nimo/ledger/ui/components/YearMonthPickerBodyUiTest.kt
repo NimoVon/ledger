@@ -3,11 +3,15 @@ package com.nimo.ledger.ui.components
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import java.time.YearMonth
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -73,6 +77,15 @@ class YearMonthPickerBodyUiTest {
             composeRule.onNodeWithText(year.toString()).assertIsDisplayed()
         }
         assertEquals("2020–2039", YearMonthPicker.pageLabel(2026))
+    }
+
+    @Test
+    fun everyMonthCell_meetsThe44dpTouchTarget() {
+        // AA-2：40dp 的格子低于 44dp 的最小触控目标，手指按界上下两格容易点错
+        showPicker(YearMonth.of(2026, 10))
+        composeRule.onNodeWithText("2026").performClick()
+
+        composeRule.onNode(hasText("11月") and hasClickAction()).assertHeightIsAtLeast(44.dp)
     }
 
     @Test

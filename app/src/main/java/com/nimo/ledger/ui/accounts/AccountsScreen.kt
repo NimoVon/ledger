@@ -38,6 +38,7 @@ import com.nimo.ledger.data.local.entity.AccountEntity
 import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
+import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.ledger.ui.components.LedgerListItem
 import com.nimo.ledger.ui.components.LedgerListItemDivider
@@ -119,6 +120,7 @@ fun AccountsScreen(
                 title = "加载失败",
                 message = state.errorMessage.orEmpty(),
                 modifier = contentModifier,
+                tone = EmptyTone.ERROR,
             )
 
             state.accounts.isEmpty() -> EmptyState(

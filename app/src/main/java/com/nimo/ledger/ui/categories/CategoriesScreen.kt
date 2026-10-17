@@ -44,6 +44,7 @@ import com.nimo.ledger.domain.model.MoveDirection
 import com.nimo.ledger.domain.validate.CategoryReferences
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
+import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.ledger.ui.components.LedgerListItem
 import com.nimo.ledger.ui.components.LedgerListItemDivider
@@ -144,6 +145,7 @@ fun CategoriesScreen(
                 title = "加载失败",
                 message = state.errorMessage.orEmpty(),
                 modifier = contentModifier,
+                tone = EmptyTone.ERROR,
             )
 
             state.isEmpty -> EmptyState(

@@ -81,6 +81,11 @@ internal fun categoryReferenceHint(references: CategoryReferences?): String {
 }
 
 /**
+ * 分类对话框标题（AA-1）：不能与页内 FAB 的「新建分类」同串；新建与编辑共用，动词留给按钮。
+ */
+internal const val CATEGORY_DIALOG_TITLE: String = "分类信息"
+
+/**
  * 新建 / 编辑分类（F02），并在编辑时提供「删除」（附.1 R3）。
  *
  * @param editing null 表示新建
@@ -119,7 +124,7 @@ fun CategoryEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (editing == null) "新建分类" else "编辑分类") },
+        title = { Text(CATEGORY_DIALOG_TITLE) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (editing == null) {

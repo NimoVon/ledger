@@ -49,6 +49,7 @@ import com.nimo.ledger.data.local.entity.TransactionEntity
 import com.nimo.ledger.data.repository.LedgerRepository
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
+import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.util.Dates
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
@@ -157,6 +158,7 @@ internal fun TransferFormSection(
             title = "加载失败",
             message = state.loadErrorMessage.orEmpty(),
             modifier = modifier,
+            tone = EmptyTone.ERROR,
         )
 
         state.hasNotEnoughAccounts -> EmptyState(

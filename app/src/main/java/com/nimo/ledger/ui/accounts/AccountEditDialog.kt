@@ -50,6 +50,12 @@ internal fun Throwable.toAccountMessage(): String = when (this) {
 }
 
 /**
+ * 账户对话框标题（AA-1）：不能与页内 FAB 的「新建账户」同串，否则读屏器把两个可操作项念成同一个名字。
+ * 新建与编辑共用——标题只说明「这是什么」，动词留给按钮。
+ */
+internal const val ACCOUNT_DIALOG_TITLE: String = "账户信息"
+
+/**
  * 新建/编辑账户表单。金额在 UI 侧先解析成"分"，非法时不发起写入。
  * @param account null 表示新建
  */
@@ -73,7 +79,7 @@ fun AccountEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (account == null) "新建账户" else "编辑账户") },
+        title = { Text(ACCOUNT_DIALOG_TITLE) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
