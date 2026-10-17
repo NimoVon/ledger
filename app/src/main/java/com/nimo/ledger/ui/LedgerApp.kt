@@ -137,6 +137,7 @@ fun LedgerApp(container: AppContainer) {
             }
         },
     ) { innerPadding ->
+        val animationsEnabled = rememberAnimationsEnabled()
         NavHost(
             navController = navController,
             startDestination = TopDestination.TRANSACTIONS.route,
@@ -146,18 +147,35 @@ fun LedgerApp(container: AppContainer) {
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
                 .imePadding(),
-            // 转场：Tab 之间淡入淡出，二级页横向推进/退出，表单纵向压上来/落回去（见 LedgerNavMotion）
+            // 转场：Tab 之间淡入淡出，二级页横向推进/退出，表单纵向压上来/落回去（见 LedgerNavMotion）。
+            // 系统开了「移除动画」（animator_duration_scale = 0）就四个方向都不动：0 时长的位移仍会跳一下（AA-7 / F-4）
             enterTransition = {
-                LedgerNavMotion.enter(initialState.destination.route, targetState.destination.route)
+                LedgerNavMotion.enter(
+                    initialState.destination.route,
+                    targetState.destination.route,
+                    animated = animationsEnabled,
+                )
             },
             exitTransition = {
-                LedgerNavMotion.exit(initialState.destination.route, targetState.destination.route)
+                LedgerNavMotion.exit(
+                    initialState.destination.route,
+                    targetState.destination.route,
+                    animated = animationsEnabled,
+                )
             },
             popEnterTransition = {
-                LedgerNavMotion.popEnter(initialState.destination.route, targetState.destination.route)
+                LedgerNavMotion.popEnter(
+                    initialState.destination.route,
+                    targetState.destination.route,
+                    animated = animationsEnabled,
+                )
             },
             popExitTransition = {
-                LedgerNavMotion.popExit(initialState.destination.route, targetState.destination.route)
+                LedgerNavMotion.popExit(
+                    initialState.destination.route,
+                    targetState.destination.route,
+                    animated = animationsEnabled,
+                )
             },
         ) {
             composable(LedgerRoutes.TRANSACTIONS) {

@@ -87,6 +87,8 @@ internal fun navMotionOf(
  * - 时长 220ms 进 / 180ms 出，比 Navigation 默认的 700ms 快得多，返回不再"拖泥带水"。
  *
  * 动画时长跟随系统"减少动画"设置（动画 scale 为 0 时 Compose 会直接跳到终态）。
+ * 更进一步：`animated = false`（系统「移除动画」）时四个转场直接返回 `None`，
+ * 连位移与淡入都不做——0 时长的位移仍会留下"跳一下"的观感，不如彻底不动（AA-7 / F-4）。
  */
 internal object LedgerNavMotion {
 
@@ -96,8 +98,9 @@ internal object LedgerNavMotion {
     private const val HORIZONTAL_DIVISOR = 4
     private const val VERTICAL_DIVISOR = 3
 
-    fun enter(initialRoute: String?, targetRoute: String?): EnterTransition =
-        when (navMotionOf(initialRoute, targetRoute, isPop = false)) {
+    fun enter(initialRoute: String?, targetRoute: String?, animated: Boolean = true): EnterTransition {
+        if (!animated) return EnterTransition.None
+        return when (navMotionOf(initialRoute, targetRoute, isPop = false)) {
             NavMotionKind.FADE -> fadeIn(tween(durationMillis = ENTER_MILLIS, easing = FastOutSlowInEasing))
             NavMotionKind.SLIDE_HORIZONTAL -> slideInHorizontally(
                 animationSpec = tween(durationMillis = ENTER_MILLIS, easing = FastOutSlowInEasing),
@@ -108,9 +111,11 @@ internal object LedgerNavMotion {
                 initialOffsetY = { it / VERTICAL_DIVISOR },
             ) + fadeIn(tween(durationMillis = ENTER_MILLIS, easing = FastOutSlowInEasing))
         }
+    }
 
-    fun exit(initialRoute: String?, targetRoute: String?): ExitTransition =
-        when (navMotionOf(initialRoute, targetRoute, isPop = false)) {
+    fun exit(initialRoute: String?, targetRoute: String?, animated: Boolean = true): ExitTransition {
+        if (!animated) return ExitTransition.None
+        return when (navMotionOf(initialRoute, targetRoute, isPop = false)) {
             NavMotionKind.FADE -> fadeOut(tween(durationMillis = EXIT_MILLIS))
             NavMotionKind.SLIDE_HORIZONTAL -> slideOutHorizontally(
                 animationSpec = tween(durationMillis = EXIT_MILLIS),
@@ -118,9 +123,11 @@ internal object LedgerNavMotion {
             ) + fadeOut(tween(durationMillis = EXIT_MILLIS))
             NavMotionKind.SLIDE_VERTICAL -> fadeOut(tween(durationMillis = EXIT_MILLIS))
         }
+    }
 
-    fun popEnter(initialRoute: String?, targetRoute: String?): EnterTransition =
-        when (navMotionOf(initialRoute, targetRoute, isPop = true)) {
+    fun popEnter(initialRoute: String?, targetRoute: String?, animated: Boolean = true): EnterTransition {
+        if (!animated) return EnterTransition.None
+        return when (navMotionOf(initialRoute, targetRoute, isPop = true)) {
             NavMotionKind.FADE -> fadeIn(tween(durationMillis = ENTER_MILLIS, easing = FastOutSlowInEasing))
             NavMotionKind.SLIDE_HORIZONTAL -> slideInHorizontally(
                 animationSpec = tween(durationMillis = ENTER_MILLIS, easing = FastOutSlowInEasing),
@@ -128,9 +135,11 @@ internal object LedgerNavMotion {
             ) + fadeIn(tween(durationMillis = ENTER_MILLIS, easing = FastOutSlowInEasing))
             NavMotionKind.SLIDE_VERTICAL -> fadeIn(tween(durationMillis = ENTER_MILLIS, easing = FastOutSlowInEasing))
         }
+    }
 
-    fun popExit(initialRoute: String?, targetRoute: String?): ExitTransition =
-        when (navMotionOf(initialRoute, targetRoute, isPop = true)) {
+    fun popExit(initialRoute: String?, targetRoute: String?, animated: Boolean = true): ExitTransition {
+        if (!animated) return ExitTransition.None
+        return when (navMotionOf(initialRoute, targetRoute, isPop = true)) {
             NavMotionKind.FADE -> fadeOut(tween(durationMillis = EXIT_MILLIS))
             NavMotionKind.SLIDE_HORIZONTAL -> slideOutHorizontally(
                 animationSpec = tween(durationMillis = EXIT_MILLIS),
@@ -141,4 +150,5 @@ internal object LedgerNavMotion {
                 targetOffsetY = { it / VERTICAL_DIVISOR },
             ) + fadeOut(tween(durationMillis = EXIT_MILLIS))
         }
+    }
 }
