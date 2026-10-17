@@ -79,6 +79,10 @@ interface CategoryDao {
     @Query("UPDATE categories SET name = :name WHERE id = :id")
     suspend fun rename(id: Long, name: String)
 
+    /** 只改图标（emoji）。名字、层级、停用状态一概不动，也不涉及表结构。 */
+    @Query("UPDATE categories SET icon = :icon WHERE id = :id")
+    suspend fun setIcon(id: Long, icon: String?)
+
     @Query("UPDATE categories SET sortOrder = :sortOrder WHERE id = :id")
     suspend fun setSortOrder(id: Long, sortOrder: Int)
 

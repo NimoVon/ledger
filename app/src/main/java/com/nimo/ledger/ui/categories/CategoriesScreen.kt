@@ -192,13 +192,13 @@ fun CategoriesScreen(
             saving = saving,
             errorMessage = dialogError,
             onDismiss = { if (!saving) dialogTarget = null },
-            onSave = { name, kind, parentId ->
+            onSave = { name, kind, parentId, icon ->
                 scope.launch {
                     saving = true
                     val result = if (editing == null) {
-                        viewModel.createCategory(name, kind, parentId).map { }
+                        viewModel.createCategory(name, kind, parentId, icon).map { }
                     } else {
-                        viewModel.renameCategory(editing.id, name)
+                        viewModel.renameCategory(editing.id, name, icon)
                     }
                     saving = false
                     result

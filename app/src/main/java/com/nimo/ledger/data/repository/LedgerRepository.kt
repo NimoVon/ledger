@@ -193,6 +193,7 @@ class LedgerRepository(private val db: AppDatabase) {
         name: String,
         kind: CategoryKind,
         parentId: Long? = null,
+        icon: String? = null,
     ): Result<Long> = withContext(Dispatchers.IO) {
         try {
             val errors = CategoryValidator.validate(
@@ -208,6 +209,7 @@ class LedgerRepository(private val db: AppDatabase) {
                         name = name.trim(),
                         kind = kind,
                         parentId = parentId,
+                        icon = icon?.trim()?.ifEmpty { null },
                         // 计划 F02「排序」：新建排到同级末尾
                         sortOrder = categoryDao.maxSortOrder(kind, parentId) + 1,
                     ),
@@ -220,10 +222,13 @@ class LedgerRepository(private val db: AppDatabase) {
     }
 
     /**
-     * 改名（F02）。只改名字：kind 与 parentId 原样保留。
+     * 改名（F02）。kind 与 parentId 原样保留。
      * 重名检查要排除自己（selfId），否则"把名字改成原名"会被自己挡下来。
+     *
+     * @param icon null = 图标保持原样；空串 = 清掉图标；非空 = 换成这颗 emoji。
+     *   三态是刻意的：对话框里"没动图标"与"主动删掉图标"必须能区分开。
      */
-    suspend fun renameCategory(id: Long, name: String): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun renameCategory(id: Long, name: String, icon: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val existing = categoryDao.getById(id)
                 ?: return@withContext Result.failure(IllegalStateException("分类不存在"))
@@ -236,6 +241,7 @@ class LedgerRepository(private val db: AppDatabase) {
             )
             if (errors.isNotEmpty()) throw CategoryValidationException(errors)
             categoryDao.rename(existing.id, name.trim())
+            if (icon != null) categoryDao.setIcon(existing.id, icon.trim().ifEmpty { null })
             Result.success(Unit)
         } catch (e: CategoryValidationException) {
             Result.failure(e)

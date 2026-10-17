@@ -33,6 +33,14 @@ object DefaultCategories {
         "其他" to "📋",
     )
 
+    /**
+     * 预置分类用到的全部 emoji（去重、保持出现顺序）。
+     *
+     * 「新建分类」对话框的图标宫格与这里保持同一套：`CategoryIconPresetsTest` 会比对两边的集合，
+     * 防止哪天加了默认分类、宫格里却没有那颗图标。
+     */
+    fun presetIcons(): List<String> = (expense.map { it.second } + income.map { it.second }).distinct()
+
     fun all(): List<CategoryEntity> =
         expense.map { (name, icon) -> CategoryEntity(name = name, kind = CategoryKind.EXPENSE, icon = icon) } +
             income.map { (name, icon) -> CategoryEntity(name = name, kind = CategoryKind.INCOME, icon = icon) }

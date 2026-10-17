@@ -68,11 +68,16 @@ class CategoriesViewModel(private val repository: LedgerRepository) : ViewModel(
         .catch { emit(CategoriesUiState(isLoading = false, errorMessage = "读取分类失败，请返回重试")) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CategoriesUiState())
 
-    suspend fun createCategory(name: String, kind: CategoryKind, parentId: Long?): Result<Long> =
-        repository.createCategory(name, kind, parentId)
+    suspend fun createCategory(
+        name: String,
+        kind: CategoryKind,
+        parentId: Long?,
+        icon: String? = null,
+    ): Result<Long> = repository.createCategory(name, kind, parentId, icon)
 
-    suspend fun renameCategory(id: Long, name: String): Result<Unit> =
-        repository.renameCategory(id, name)
+    /** [icon] 为 null 时保留原图标；空串表示清掉（与仓库同一套三态语义）。 */
+    suspend fun renameCategory(id: Long, name: String, icon: String? = null): Result<Unit> =
+        repository.renameCategory(id, name, icon)
 
     /**
      * 停用 / 恢复。两个方向的语义在 Repository：停用级联子分类，恢复只向上恢复祖先链。

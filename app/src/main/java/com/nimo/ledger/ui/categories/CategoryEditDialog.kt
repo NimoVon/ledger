@@ -2,7 +2,9 @@ package com.nimo.ledger.ui.categories
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -37,6 +39,89 @@ internal const val CATEGORY_DELETE_CONFIRM_TEST_TAG = "category-edit-delete-conf
 
 /** 引用明细那行文字的 tag：测试断言"删除被什么挡住了" */
 internal const val CATEGORY_REFERENCE_HINT_TEST_TAG = "category-edit-reference-hint"
+
+/** 图标宫格（新建/编辑分类）的测试 tag 与预置 emoji（C-6 / F-3） */
+internal const val CATEGORY_ICON_GRID_TEST_TAG = "category-icon-grid"
+internal const val CATEGORY_ICON_FIELD_TEST_TAG = "category-icon-field"
+
+/** 单颗预置图标的 tag 前缀：同一颗 emoji 在「宫格 / 输入框 / 外部状态」里会重复出现，测试必须认宫格那一颗 */
+internal const val CATEGORY_ICON_PRESET_TAG_PREFIX = "category-icon-preset-"
+
+/**
+ * 预置图标（emoji）。与 [com.nimo.ledger.data.local.DefaultCategories] 保持同一套，
+ * `CategoryIconPresetsTest` 会比两边的集合，漏一颗就红。
+ */
+internal val CATEGORY_ICON_PRESETS: List<String> = listOf(
+    "🍜", "🚌", "🛍️", "🏠", "📱", "🎮", "💊", "📚", "🎁", "🔁", "📋",
+    "💼", "🏆", "💻", "📈", "🧾", "↩️",
+)
+
+/**
+ * 图标输入上限：最多 2 个码点（emoji + 变体选择符，比如 🛍️ 就是两个），且不切断代理对。
+ *
+ * 用 `String.take(n)` 会按 UTF-16 单元切，容易把 emoji 劈成半个——所以按码点走。
+ */
+internal fun clampCategoryIconInput(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return ""
+    val out = StringBuilder()
+    var index = 0
+    var codePoints = 0
+    while (index < trimmed.length && codePoints < 2) {
+        val codePoint = trimmed.codePointAt(index)
+        out.appendCodePoint(codePoint)
+        index += Character.charCount(codePoint)
+        codePoints++
+    }
+    return out.toString()
+}
+
+/** 交给仓库的图标：空串表示「不要图标」（null），否则就是宫格/输入框里的那一颗。 */
+internal fun normalizedCategoryIcon(raw: String): String? = clampCategoryIconInput(raw).ifEmpty { null }
+
+/**
+ * 图标选择：预置宫格 + 手动输入。抽成独立组件是为了能被 UI 测试直接渲染——
+ * `AlertDialog` 里带 `OutlinedTextField` 在 Robolectric 下永远不 idle（见 `BudgetEditDialogTest` 的注释），
+ * 与 `TransactionFilterDialog` 把正文抽成 `FilterDialogBody` 是同一个套路。
+ *
+ * 再点一次已选的那颗 = 取消选择（宫格是单选，不是开关不了的死状态）。
+ */
+@Composable
+internal fun CategoryIconPicker(
+    icon: String,
+    onIconChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "图标（可选）",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(CATEGORY_ICON_GRID_TEST_TAG),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            CATEGORY_ICON_PRESETS.forEach { preset ->
+                FilterChip(
+                    selected = icon == preset,
+                    onClick = { onIconChange(if (icon == preset) "" else preset) },
+                    label = { Text(preset) },
+                    modifier = Modifier.testTag(CATEGORY_ICON_PRESET_TAG_PREFIX + preset),
+                )
+            }
+        }
+        OutlinedTextField(
+            value = icon,
+            onValueChange = { onIconChange(clampCategoryIconInput(it)) },
+            label = { Text("或手动输入 emoji") },
+            singleLine = true,
+            modifier = Modifier.testTag(CATEGORY_ICON_FIELD_TEST_TAG),
+        )
+    }
+}
 
 /** 校验错误 → 中文提示 */
 internal fun CategoryValidationError.toMessage(): String = when (this) {
@@ -105,13 +190,14 @@ fun CategoryEditDialog(
     saving: Boolean,
     errorMessage: String?,
     onDismiss: () -> Unit,
-    onSave: (name: String, kind: CategoryKind, parentId: Long?) -> Unit,
+    onSave: (name: String, kind: CategoryKind, parentId: Long?, icon: String?) -> Unit,
     onToggleArchived: (() -> Unit)?,
     references: CategoryReferences? = null,
     deleting: Boolean = false,
     onDelete: (() -> Unit)? = null,
 ) {
     var name by remember(editing) { mutableStateOf(editing?.name.orEmpty()) }
+    var icon by remember(editing) { mutableStateOf(editing?.icon.orEmpty()) }
     var kind by remember(editing) { mutableStateOf(editing?.kind ?: CategoryKind.EXPENSE) }
     var parentId by remember(editing) { mutableStateOf(editing?.parentId) }
     var parentExpanded by remember { mutableStateOf(false) }
@@ -154,6 +240,8 @@ fun CategoryEditDialog(
                     label = { Text("分类名称") },
                     singleLine = true,
                 )
+                // 图标（C-6 / F-3）：宫格点选为主，手动输入兜底
+                CategoryIconPicker(icon = icon, onIconChange = { icon = it })
                 if (editing == null) {
                     Column {
                         OutlinedButton(onClick = { parentExpanded = true }) {
@@ -214,6 +302,7 @@ fun CategoryEditDialog(
                         name.trim(),
                         if (editing == null) kind else editing.kind,
                         if (editing == null) parentId else editing.parentId,
+                        normalizedCategoryIcon(icon),
                     )
                 },
             ) { Text(if (saving) "保存中…" else "保存") }
