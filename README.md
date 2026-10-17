@@ -64,9 +64,9 @@ cd /d/git/ledger
 # 覆盖率门禁：核心分层 LINE ≥ 85~95%、整体 ≥ 60%（阈值可拦人，见 docs/测试报告.md §3）
 ```
 
-最近一次门禁（2026-10-17 13:26，改名 + 换图标 + 批 A（R1 月份直选 + R2 单月分析）+ 饼图可点（R2 后续）+ 批 B（R3 分类删除引用护栏 / 恢复默认分类 / 记一笔内联新建，见 [`docs/测试报告.md`](docs/测试报告.md) §13）+ 批 C（R4-L1 淡蓝品牌色板 / 移除 Android 12+ 壁纸动态取色 / 容器圆角 16–24dp / 空态小狗插图，见 §14）+ 批 D（R4 图表 10 色品牌板 / 趋势柱双序列 / 记一笔沿用上次分类，见 §15）+ 批 E（统计范围：本月 / 近 N 个月 / 自然年 / 自定义区间，趋势随粒度切换逐日柱与月折线，见 §16）+ UI 一致性收口（设计规范 §11 批 D 的 D-1 / D-2：`LedgerListItem` 列表行与 `LedgerSectionHeader` 段头组件化，见 §17）+ 三条 UI 反馈修复（记一笔输入法遮挡 / 图表 y 轴刻度与点按气泡 / 月底横轴标签过挤，见 §12）后的 `clean` 构建）：**87 套 748 例，0 失败 0 错误 0 跳过**；行覆盖 70.3%、分支 59.1%；lint 5 项、0 error（5 warning / 0 hint）；
-`app/build/outputs/apk/debug/app-debug.apk` = 14,596,927 字节（13.92 MiB，计划上限 20MB）；
-签名 `app/build/outputs/apk/release/app-release.apk` = 10,119,537 字节（9.65 MiB）；2026-10-16 已装到测试机，卸载后重装再验（14:18 `Success`），冷启动首次安装 150 / 219 ms、重装后 323 / 204 / 204 ms；§13 那轮（饼图可点 + 批 B）重新构建后 21:54 覆盖安装一次（`Success`、`firstInstallTime` 仍为 14:18:39，用户账本数据保留），冷启动 185 ms；批 C（R4-L1）重新构建后 23:07 再覆盖安装一次（同样 `Success`、`firstInstallTime` 仍为 14:18:39），冷启动 215 ms；批 D 重新构建后 2026-10-17 10:14 再覆盖安装一次（同样 `Success`、`firstInstallTime` 仍为 14:18:39），冷启动 196 ms；批 E 重新构建后 11:08 再覆盖安装一次（同样 `Success`、`firstInstallTime` 仍为 14:18:39，用户账本数据保留）；UI 一致性收口（§17）重新构建后 13:28 再覆盖安装一次（同样 `Success`、`firstInstallTime` 仍为 14:18:39，设备内 `base.apk` 的 SHA-256 与本地包逐位一致）。
+最近一次门禁（2026-10-17 13:50，改名 + 换图标 + 批 A（R1 月份直选 + R2 单月分析）+ 饼图可点（R2 后续）+ 批 B（R3 分类删除引用护栏 / 恢复默认分类 / 记一笔内联新建，见 [`docs/测试报告.md`](docs/测试报告.md) §13）+ 批 C（R4-L1 淡蓝品牌色板 / 移除 Android 12+ 壁纸动态取色 / 容器圆角 16–24dp / 空态小狗插图，见 §14）+ 批 D（R4 图表 10 色品牌板 / 趋势柱双序列 / 记一笔沿用上次分类，见 §15）+ 批 E（统计范围：本月 / 近 N 个月 / 自然年 / 自定义区间，趋势随粒度切换逐日柱与月折线，见 §16）+ UI 一致性收口（设计规范 §11 批 D 的 D-1 ~ D-6：`LedgerListItem` / `LedgerSectionHeader` / `LedgerProgressBar` 组件化、`EmptyState` 三色调与动作槽、`PickerCell` 44dp、账户/分类 FAB 与对话框标题文案分离，见 §17 / §18）+ 三条 UI 反馈修复（记一笔输入法遮挡 / 图表 y 轴刻度与点按气泡 / 月底横轴标签过挤，见 §12）后的 `clean` 构建）：**89 套 764 例，0 失败 0 错误 0 跳过**；行覆盖 70.5%、分支 59.3%；lint 5 项、0 error（5 warning / 0 hint）；
+`app/build/outputs/apk/debug/app-debug.apk` = 14,594,781 字节（13.92 MiB，计划上限 20MB）；
+签名 `app/build/outputs/apk/release/app-release.apk` = 10,103,153 字节（9.64 MiB）；2026-10-16 已装到测试机，卸载后重装再验（14:18 `Success`），冷启动首次安装 150 / 219 ms、重装后 323 / 204 / 204 ms；§13 那轮（饼图可点 + 批 B）重新构建后 21:54 覆盖安装一次（`Success`、`firstInstallTime` 仍为 14:18:39，用户账本数据保留），冷启动 185 ms；批 C（R4-L1）重新构建后 23:07 再覆盖安装一次（同样 `Success`、`firstInstallTime` 仍为 14:18:39），冷启动 215 ms；批 D 重新构建后 2026-10-17 10:14 再覆盖安装一次（同样 `Success`、`firstInstallTime` 仍为 14:18:39），冷启动 196 ms；批 E 重新构建后 11:08 再覆盖安装一次（同样 `Success`、`firstInstallTime` 仍为 14:18:39，用户账本数据保留）；UI 一致性收口（§17）重新构建后 13:28 再覆盖安装一次（同样 `Success`、`firstInstallTime` 仍为 14:18:39，设备内 `base.apk` 的 SHA-256 与本地包逐位一致）；D-3 ~ D-6（§18）重新构建后 13:50 再覆盖安装一次（同样 `Success`、`firstInstallTime` 仍为 14:18:39，用户账本数据保留）。
 详细数据见 [`docs/测试报告.md`](docs/测试报告.md)。
 
 首次执行 `gradlew.bat` 会下载一次 Gradle 发行包（约 140MB）。
@@ -130,7 +130,7 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 
 | 文档 | 内容 |
 | --- | --- |
-| [`docs/测试报告.md`](docs/测试报告.md) | 门禁结果、748 例分布、真机 10,000 笔验收、JaCoCo 覆盖率、性能实测、打包体积、数据安全、未覆盖项 |
+| [`docs/测试报告.md`](docs/测试报告.md) | 门禁结果、764 例分布、真机 10,000 笔验收、JaCoCo 覆盖率、性能实测、打包体积、数据安全、未覆盖项 |
 | [`docs/F13-SQLCipher评估.md`](docs/F13-SQLCipher评估.md) | SQLCipher 兼容性/密钥恢复/迁移/体积评估与「不纳入」决策记录 |
 | [`docs/示例数据/README.md`](docs/示例数据/README.md) | 示例备份与 CSV 的格式约定、导入用法 |
 | [`docs/发布与签名.md`](docs/发布与签名.md) | 安装标识与版本规则、发布签名流程、密钥库备份与丢失后果 |
@@ -164,7 +164,7 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 - [x] 批 C（R4-L1 淡蓝品牌皮肤，2026-10-16 深夜）：主题从 Android 12+ 壁纸动态取色改为静态品牌色板（品牌色 `#79C9FC` 取自应用图标主色，浅/深两套 WCAG 对比度逐对断言）、容器圆角统一 16–24dp（新增形状 token）、13 处空态加小狗插图（复用图标前景 PNG，装饰性 `contentDescription = null`）；均已在签名 release 包（真实账本）真机复验，证据见 `docs/测试报告.md` §14
 - [x] 批 D（R4 图表品牌化 + 记一笔沿用上次分类，2026-10-17）：环形图与排行条改用 10 色品牌板（浅深共用一套、按 `categoryId` 稳定映射，同分类跨主题同色）、扇形加 2dp 色缝；深色趋势柱由中性灰改为双序列语义色（支出 `#FFB4AB` / 收入 `#79C9FC`，效果图里「今天」= 18% 品牌蓝光环 + 柱下短杠）；记一笔进页按当前收支方向预选上次用过的分类并提示「N 天前用过「X」」（编辑旧账不预选）；门禁 84 套 708 例、真机 8 项走查净效果为零，证据见 `docs/测试报告.md` §15
 - [x] 批 E（统计范围，2026-10-17）：统计页时间口径从「一个月」升级为「一段范围」——顶部标签统管本月 / 近3、6、12个月 / 今年 / 去年 / 指定月份 / 自定义区间；新增 `ReportRange` 领域模型（半开区间、`previous()` 按整段挪不重叠）与 `ReportRangeDialog`；趋势图随粒度切换「≤62 天逐日柱（点柱看当日明细）/ 更长范围月度折线」；预算行只在单月显示；环比文案与环形图读屏描述随范围改口（真机走查发现并修复 3 处口径 bug）；门禁 85 套 733 例、真机 9 项走查净效果为零，证据见 `docs/测试报告.md` §16
-- [x] UI 一致性收口（设计规范 §11 批 D 的 D-1 / D-2，2026-10-17）：新增 `LedgerListItem`（单行 ≥56dp / 双行 ≥72dp、leading 固定 40dp 列、`chevron` 用矢量图标取代「›」字符、末行不画分隔线）与 `LedgerSectionHeader`（`surfaceVariant` 通栏段头）两个组件，替换设置页三行入口、账户行、分类行与段头、预算段头、统计页 6 处段头、明细日段头；组件级测试先补 13 例（规范 §12.2 要求）；门禁 87 套 748 例、行覆盖 70.3%、真机 9 项走查净效果为零，证据见 `docs/测试报告.md` §17；D-3（进度条）/ D-4（空态）/ D-5（`PickerCell` 44dp）/ D-6（FAB 文案分离）未做
+- [x] UI 一致性收口（设计规范 §11 批 D 的 D-1 ~ D-6，2026-10-17）：新增 `LedgerListItem`（单行 ≥56dp / 双行 ≥72dp、leading 固定 40dp 列、`chevron` 用矢量图标取代「›」字符、末行不画分隔线）、`LedgerSectionHeader`（`surfaceVariant` 通栏段头）与 `LedgerProgressBar`（fraction 可超 1，超支压到 60% 高并在 100% 处留 2dp 刻度，NaN 按 0 处理），替换设置页三行入口、账户行、分类行与段头、预算段头、统计页 6 处段头、明细日段头、预算进度条与排行占比条；`EmptyState` 增加 `EmptyTone { NEUTRAL, FILTERED, ERROR }` 与 `actionLabel` / `onAction`（插图 120dp / 96dp 两档、间距 16dp + 8dp），7 处加载失败挂 ERROR、筛选无结果挂 FILTERED；`PickerCell` 40→44dp；账户/分类对话框标题改为常量「账户信息」/「分类信息」、FAB 仍用「新建账户」/「新建分类」做 `contentDescription`；本批新补 16 例组件级测试（进度条 6、空态由 3 扩到 8、月选择器 44dp 1、标题源码守门 4）；门禁 89 套 764 例、行覆盖 70.5%、真机 8 项走查净效果为零，证据见 `docs/测试报告.md` §18
 - [x] 签名包真机验证（2026-10-16）：装到测试机（`firstInstallTime 2026-10-16 10:20:18`、`versionName 1.0`、签名 v2），冷启动 219 / 150 ms，「应用信息」页显示新图标，启动日志无 `FATAL EXCEPTION`；14:18 卸载后重装 `Success`、冷启动 323 / 204 / 204 ms、首启播种默认分类可见
 
 ## 已知限制
@@ -183,4 +183,5 @@ Room schema JSON 在 `app/schemas/`，必须随 Git 提交（未来迁移测试�
 - 「沿用上次分类」的偏好存在本地 DataStore `ledger-last-category`（键 `last_category_id` / `last_category_used_epoch_day`）；删除流水不会回滚该偏好（记录的是「上次记过哪类」，不是「账本里还有没有」），属设计如此
 - 批 D 的 debug APK 比批 C 大 2,032 字节、签名 release 大 16,384 字节（恰好一格 16 KiB 容器对齐填充，代码侧只新增色板与偏好存储两个文件）；详见 `docs/测试报告.md` §15.3
 - 统计范围（批 E）不持久化：进程被杀/退出应用后回到「本月」；从统计页点分类/账户/当日明细是切到「明细」tab（沿用批 D 的环形图下钻），系统返回键会退出应用，要用底部「统计」tab 回来；自定义区间上限 3660 天，>62 天按月聚合（首尾可能是「部分月」）；选「今年」时未来月补 0 不截断（横轴固定 1–12 月）；预算行只在单月范围出现。详见 `docs/测试报告.md` §16.5
-- UI 一致性收口只完成 D-1 / D-2：D-3（`LedgerProgressBar` 统一预算进度条与排行条）、D-4（`EmptyState` 的 tone / actionLabel / onAction 与 16dp 插图间距）、D-5（`PickerCell` 40→44dp）、D-6（账户/分类 FAB 与对话框标题文案分离，需要真机 TalkBack 验证）未做；设置页用 `contentPadding = PaddingValues(horizontal = 0.dp)` 关掉行内水平留白，是为了不叠加整页 24dp 页边距，其余页面用默认 16dp；分类页父级分类靠外层 24dp padding 右移，分隔线仍按 56dp 缩进，子级分隔线会比父级短一截（有意区分层级）；行内 `IconButton` 最小触控目标 48dp，在 56dp 单行里上下只剩 4dp 余量。详见 `docs/测试报告.md` §17.5
+- UI 一致性收口（设计规范 §11 批 D）已做完 D-1 ~ D-6，但有三处只能靠单测/源码守门：①真实账本里 7 个分类预算与总预算全是「未设置」，`LedgerProgressBar` 的超支刻度与 60% 压缩在真机没有渲染（单测覆盖 `fraction = 1.5` / `0.8` / `NaN`）；②`EmptyState` 的 ERROR 色调需要「加载失败」才能触发，真机复现不了（单测覆盖 96dp 插图与按钮槽）；③D-6 只做了 `uiautomator dump` 文案核对 + 源码守门，没有在真机上用 TalkBack 实测播报。
+- 设置页用 `contentPadding = PaddingValues(horizontal = 0.dp)` 关掉行内水平留白，是为了不叠加整页 24dp 页边距，其余页面用默认 16dp；分类页父级分类靠外层 24dp padding 右移，分隔线仍按 56dp 缩进，子级分隔线会比父级短一截（有意区分层级）；行内 `IconButton` 最小触控目标 48dp，在 56dp 单行里上下只剩 4dp 余量；空态插图 NEUTRAL 120dp、FILTERED / ERROR 96dp 两档是刻意区分。详见 `docs/测试报告.md` §17.5 与 §18.5

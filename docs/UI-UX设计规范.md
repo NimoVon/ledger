@@ -396,6 +396,8 @@ fun LedgerProgressBar(
 
 **无障碍**：进度条本体 contentDescription = null；信息由同行文字承载（避免 TalkBack 读一串百分比）。
 
+**实装（2026-10-17，D-3）**：`ui/components/LedgerProgressBar.kt` 按本签名落地；另做了两件规范没写但必须做的：①`fraction` 为 `NaN` / 无穷时按 0 处理（`fillMaxWidth(NaN)` 会让 Compose 直接抛异常）；②不要给填充条加 `clearAndSetSemantics { }`——它会连调用方与本组件的 `testTag` 一起清掉（超支刻度用 `LEDGER_PROGRESS_OVER_MARKER_TEST_TAG`），而 `Box` 本身没有可聚焦语义，不加也安静。
+
 ### 6.5 LedgerDialog（对话框统一结构）★ P1
 
 **现状**：AlertDialog 直排，标题/说明/字段/错误/按钮五段各写一遍（AccountEditDialog、CategoryEditDialog、BudgetEditDialog、CategoryCreateDialog、BalanceAdjustDialog、YearMonthPickerDialog、CsvImportConfirmDialog、删除确认）。
@@ -487,6 +489,8 @@ Column(
 - 插图 contentDescription = null（装饰，R4 已定），**但必须保留 testTag empty-state-illustration**（既有测试锚点，不许改）。
 - 空态不铺满整屏时要给 heightIn(min = 180.dp)（ReportsScreen 已有此做法，保留）。
 - 空态文案的「下一步」必须可执行；涉及开发功能的文案要挪出用户可见主路径（见 ST-1 / §9 第 10 行）。
+
+**实装（2026-10-17，D-4）**：`EmptyState.kt` 已按本签名改造（`EmptyTone` 三档、120dp / 96dp 两档插图、16dp + 8dp 间距、`actionLabel + onAction` 才渲染按钮）；7 处「加载失败」挂 `ERROR`、明细页「没有符合条件的记录」挂 `FILTERED`，其余保持默认 `NEUTRAL`。`EMPTY_STATE_ILLUSTRATION_TEST_TAG` 与插图 `contentDescription = null` 原样保留。
 
 ### 6.8 MonthSwitcher 与 MonthSummaryBar（保留，微调）
 
@@ -791,14 +795,14 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 | 任务 | 产出 | 验收 |
 | --- | --- | --- |
-| D-1 ✅ **已完成 2026-10-17** | 新增 `LedgerListItem`（§6.1），替换设置/账户/分类/预算四处行（实装：设置三行、账户行、分类行已换；**预算行留给 D-3**，因为它要和进度条一起改） | 现有 UI 测试全绿（87 套 748 例）；真机截图对比无布局回退，见 `docs/测试报告.md` §17.3 |
+| D-1 ✅ **已完成 2026-10-17** | 新增 `LedgerListItem`（§6.1），替换设置/账户/分类/预算四处行（实装：设置三行、账户行、分类行已换；**预算行与 D-3 的进度条一起改完**） | 现有 UI 测试全绿（89 套 764 例）；真机截图对比无布局回退，见 `docs/测试报告.md` §17.3 |
 | D-2 ✅ **已完成 2026-10-17** | 新增 `LedgerSectionHeader`（§6.2），替换 ReportsScreen.SectionHeader（6 处）与 TransactionsScreen.DayHeader | 同上；另在分类页段头、预算页「分类预算」也换上 |
-| D-3 | 新增 `LedgerProgressBar`（§6.4），替换预算进度条与 BreakdownBar | 同上 |
-| D-4 | EmptyState 增 tone / actionLabel / onAction，并修 16dp 插图间距（§6.7） | `EMPTY_STATE_ILLUSTRATION_TEST_TAG` 保留；为 tone 补截图断言 |
-| D-5 | PickerCell 40dp → 44dp（D-1 / AA-2） | 年月选择器 UI 测试 |
-| D-6 | 账户/分类 FAB 与对话框标题文案分离（A-1 / C-1 / AA-1） | TalkBack 真机验证（**本批唯一必须上真机的项**） |
+| D-3 ✅ **已完成 2026-10-17** | 新增 `LedgerProgressBar`（§6.4），替换预算进度条与 `ReportsScreen.BreakdownBar`；`NaN` 按 0 处理、不加 `clearAndSetSemantics`（见 §6.4 实装说明） | `LedgerProgressBarUiTest` 6 例（轨道高度 / 超支刻度出现与不出现 / `overMarker=false` / `NaN` / 无 contentDescription）；真机因账本预算全「未设置」没有渲染，如实写进 `docs/测试报告.md` §18.5 |
+| D-4 ✅ **已完成 2026-10-17** | EmptyState 增 tone / actionLabel / onAction，并修 16dp 插图间距（§6.7）；7 处加载失败挂 ERROR、筛选无结果挂 FILTERED | `EmptyStateTest` 8 例（120 / 96dp、ERROR 仍可见标题说明、按钮槽只在 label + onAction 时渲染）；`EMPTY_STATE_ILLUSTRATION_TEST_TAG` 保留；真机 FILTERED 空态截图见 §18.3 |
+| D-5 ✅ **已完成 2026-10-17** | PickerCell 40dp → 44dp（D-1 / AA-2） | `YearMonthPickerBodyUiTest` 断言月份格 `assertHeightIsAtLeast(44.dp)`；真机布局高度用行距 195px = 52dp = 44 + 8 反证，48dp 是 Compose 的最小触控目标扩展（见 §18.3 第 7 项） |
+| D-6 ✅ **已完成 2026-10-17（TalkBack 未实测）** | 账户/分类 FAB 与对话框标题文案分离（A-1 / C-1 / AA-1）：标题改常量「账户信息」/「分类信息」，FAB 仍是「新建账户」/「新建分类」并保留为 `contentDescription` | `DialogTitleSourceTest` 4 例（纯 JUnit 源码守门 + 常量取值）；真机 `uiautomator dump` 核对标题与 FAB 文案，**TalkBack 实际播报未在真机听测**（见 `docs/测试报告.md` §18.5） |
 
-> 批 D 状态（2026-10-17）：**D-1 / D-2 已完成**，门禁 87 套 748 例、行覆盖 70.3%、真机 9 项走查净效果为零（见 `docs/测试报告.md` §17）；D-3 / D-4 / D-5 / D-6 未做。执行顺序按 §12.2 第 2 条先补组件级测试再替换（`LedgerListItemUiTest` 9 例 + `LedgerSectionHeaderUiTest` 4 例）。
+> 批 D 状态（2026-10-17）：**D-1 ~ D-6 全部完成**。门禁 89 套 764 例、行覆盖 70.5%、真机走查净效果为零（D-1 / D-2 见 `docs/测试报告.md` §17，D-3 ~ D-6 见 §18）。执行顺序按 §12.2 第 2 条先补组件级测试再替换：D-1 / D-2 补了 `LedgerListItemUiTest` 9 例 + `LedgerSectionHeaderUiTest` 4 例，D-3 ~ D-6 又补 16 例（进度条 6、空态由 3 扩到 8、月选择器 44dp 1、标题源码守门 4）。批 E / 批 F 未开始。
 
 回归命令（Windows）：
 
@@ -871,7 +875,7 @@ cd /d/git/ledger
 
 **未验证（本规范中标注「待验证 / 待确认」的项）**：
 1. 所有布局改动**没有**经过编译、真机或截图验证——本文是设计规范，不是已落地的实现。
-2. 屏幕层测试覆盖率低（docs/测试报告.md §10 第 (4) 条：ui.settings 10.7%），批 D/E 的组件替换**缺少测试网**，重构前应先补组件级测试。**批 D 的 D-1 / D-2 已按此执行**（先写 13 例组件级测试再替换，见 docs/测试报告.md §17.1），D-3 ~ D-6 同样适用。
+2. 屏幕层测试覆盖率低（docs/测试报告.md §10 第 (4) 条：ui.settings 10.7%），批 D/E 的组件替换**缺少测试网**，重构前应先补组件级测试。**批 D 的 D-1 ~ D-6 已按此执行**（D-1 / D-2 先写 13 例组件级测试再替换，见 docs/测试报告.md §17.1；D-3 ~ D-6 又补 16 例，见 §18.1）。
 3. 31 天逐日图真机密度未构造（§10 第 (8) 条）——S-6 的窄屏加高建议依赖这条，**未验证**。
 4. TalkBack 动线脚本（§10.3）是设计预期，未在真机走过。
 5. 分类 emoji 预设（C-6）、默认沿用上次分类（R-3）、设置页计数副标题（§7.3 第 3 条）涉及产品判断或数据接口确认，等待拍板。
@@ -885,6 +889,6 @@ cd /d/git/ledger
 
 **UI 设计师**：DSH UI 设计师 Agent
 **设计系统日期**：2026-10-16
-**实施状态**：批 D 已完成 D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`），证据见 [`docs/测试报告.md`](测试报告.md) §17；D-3 ~ D-6 与批 E / 批 F 待排期
+**实施状态**：§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E / 批 F 待排期
 **QA 流程**：批 D/E/F 每批结束跑 testDebugUnitTest --rerun + lint + assembleDebug，并为新组件补截图断言
 
