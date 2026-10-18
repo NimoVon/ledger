@@ -30,10 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +42,7 @@ import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.ui.components.LedgerAmount
 import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.DrillDownRequests
 import com.nimo.ledger.ui.components.MonthSummaryBar
@@ -357,20 +356,7 @@ private fun TransactionRowItem(row: TransactionRow, onClick: () -> Unit) {
                 )
             }
         }
-        Text(
-            text = TransactionTimeline.amountText(row),
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            color = amountColor(row.type),
-        )
+        // 金额列统一走 LedgerAmount（规范 §6.3 / G-5）：96dp 起对齐、颜色与符号一处维护
+        LedgerAmount(cents = row.amountCents, type = row.type, showSign = true)
     }
-}
-
-/** 支出红、收入主色，转账与余额调整用中性色（它们不参与收支，不该抢眼） */
-@Composable
-private fun amountColor(type: TransactionType): Color = when (type) {
-    TransactionType.EXPENSE -> MaterialTheme.colorScheme.error
-    TransactionType.INCOME -> MaterialTheme.colorScheme.primary
-    TransactionType.TRANSFER, TransactionType.BALANCE_ADJUST ->
-        MaterialTheme.colorScheme.onSurfaceVariant
 }

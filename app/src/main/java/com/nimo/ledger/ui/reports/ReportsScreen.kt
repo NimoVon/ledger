@@ -43,6 +43,8 @@ import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.domain.model.TransactionType
+import com.nimo.ledger.ui.components.LedgerAmount
 import com.nimo.ledger.ui.components.LedgerProgressBar
 import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.components.MonthSummaryBar
@@ -299,10 +301,11 @@ private fun DailyAverageRow(amountCents: Long) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
-        Text(
-            text = Money.formatCurrency(amountCents),
+        // 日均支出：金额列统一 LedgerAmount（规范 §6.3 / G-5），保持原来的中性色
+        LedgerAmount(
+            cents = amountCents,
+            type = null,
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -475,11 +478,10 @@ private fun BreakdownRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = Money.formatCurrency(amountCents),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.error,
+            // 排行金额：保持支出红，金额列统一 LedgerAmount（规范 §6.3 / G-5）
+            LedgerAmount(
+                cents = amountCents,
+                type = TransactionType.EXPENSE,
             )
         }
         if (percent != null) {

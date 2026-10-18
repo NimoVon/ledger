@@ -42,9 +42,9 @@ import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.ui.components.LedgerAmount
 import com.nimo.ledger.ui.components.LedgerListItem
 import com.nimo.ledger.ui.components.LedgerListItemDivider
-import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -225,7 +225,12 @@ private fun NetWorthRow(netWorthCents: Long) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(text = "净资产", style = MaterialTheme.typography.bodySmall)
-        Text(text = Money.formatCurrency(netWorthCents), style = MaterialTheme.typography.titleMedium)
+        // 净资产：金额列统一 LedgerAmount（规范 §6.3 / G-5）
+        LedgerAmount(
+            cents = netWorthCents,
+            type = null,
+            style = MaterialTheme.typography.titleMedium,
+        )
     }
 }
 
@@ -249,15 +254,17 @@ private fun AccountRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
-        // 当前余额（推导值），不是建账时的初始余额
-        trailingText = Money.formatCurrency(balanceCents),
-        trailingContent = onAdjust?.let { adjust ->
-            {
-                IconButton(onClick = adjust) {
-                    Icon(
-                        imageVector = LedgerIcons.Scale,
-                        contentDescription = "校准 " + account.name + " 的余额",
-                    )
+        // 当前余额（推导值），不是建账时的初始余额；金额列统一 LedgerAmount（§6.3）
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LedgerAmount(cents = balanceCents, type = null)
+                onAdjust?.let { adjust ->
+                    IconButton(onClick = adjust) {
+                        Icon(
+                            imageVector = LedgerIcons.Scale,
+                            contentDescription = "校准 " + account.name + " 的余额",
+                        )
+                    }
                 }
             }
         },
