@@ -30,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -399,12 +401,22 @@ private fun ChangeCell(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         // 箭头用图标而不是 ↑↓ 字符：字符基线随字体漂移，16dp 时尤其明显（§5.1 TrendUp / TrendDown）
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            when (ReportFormatting.changeDirection(ratio)) {
+        // AA-3：箭头本身是装饰性图形（方向与颜色两道通道都靠它/配色），把方向折进一句话交给读屏；
+        // 图标 contentDescription 置 null，避免「上升 上升 较上月 12.5%」重读。
+        val direction = ReportFormatting.changeDirection(ratio)
+        val changeText = ReportFormatting.change(ratio, comparedTo)
+        val speech = ReportFormatting.changeSpeech(direction, changeText)
+        Row(
+            modifier = Modifier.semantics(mergeDescendants = true) {
+                if (speech != null) contentDescription = speech
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when (direction) {
                 ChangeDirection.UP -> {
                     Icon(
                         imageVector = LedgerIcons.ArrowUp,
-                        contentDescription = "上升",
+                        contentDescription = null,
                         tint = color,
                         modifier = Modifier.size(16.dp),
                     )
@@ -414,7 +426,7 @@ private fun ChangeCell(
                 ChangeDirection.DOWN -> {
                     Icon(
                         imageVector = LedgerIcons.ArrowDown,
-                        contentDescription = "下降",
+                        contentDescription = null,
                         tint = color,
                         modifier = Modifier.size(16.dp),
                     )
@@ -424,7 +436,7 @@ private fun ChangeCell(
                 ChangeDirection.NONE -> Unit
             }
             Text(
-                text = ReportFormatting.change(ratio, comparedTo),
+                text = changeText,
                 style = MaterialTheme.typography.titleSmall,
                 color = color,
                 fontWeight = FontWeight.Medium,

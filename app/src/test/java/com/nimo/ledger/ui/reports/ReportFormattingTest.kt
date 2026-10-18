@@ -61,4 +61,27 @@ class ReportFormattingTest {
         // 默认参数仍走单月口径
         assertEquals("较上月 12.5%", ReportFormatting.change(0.125))
     }
+    /**
+     * AA-3：环比箭头是纯图形（方向只靠图标 + 颜色两道视觉通道），读屏必须能听到「涨还是跌」。
+     * 方向折进一句话，文本本身不变；持平 / 无数据不给方向词。
+     */
+    @Test
+    fun changeSpeech_foldsDirectionIntoOneSpokenSentence() {
+        assertEquals("上升 较上月 12.5%", ReportFormatting.changeSpeech(ChangeDirection.UP, "较上月 12.5%"))
+        assertEquals("下降 较上月 12.5%", ReportFormatting.changeSpeech(ChangeDirection.DOWN, "较上月 12.5%"))
+        // 持平 / 无数据：方向没有信息量，读屏直接念文本
+        assertEquals(null, ReportFormatting.changeSpeech(ChangeDirection.NONE, "较上月 持平"))
+        assertEquals(null, ReportFormatting.changeSpeech(ChangeDirection.NONE, "较上月 —"))
+    }
+
+    /** 与图形同一门槛：0.05% 以下算持平，不该硬造一个「上升」 */
+    @Test
+    fun changeSpeech_usesTheSameThresholdAsTheArrow() {
+        val text = ReportFormatting.change(0.00004)
+        assertEquals(null, ReportFormatting.changeSpeech(ReportFormatting.changeDirection(0.00004), text))
+        assertEquals(
+            "上升 " + ReportFormatting.change(0.125),
+            ReportFormatting.changeSpeech(ReportFormatting.changeDirection(0.125), ReportFormatting.change(0.125)),
+        )
+    }
 }

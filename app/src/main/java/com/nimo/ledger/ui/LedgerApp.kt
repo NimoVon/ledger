@@ -341,7 +341,8 @@ private fun LedgerBottomBar(
             NavigationBarItem(
                 selected = selected,
                 onClick = { onNavigate(dest.route) },
-                icon = { Icon(imageVector = dest.icon, contentDescription = dest.label) },
+                // AA-3：底栏图标是装饰性图形，标签已经由 label 暴露给读屏，图标不再重复念一遍
+                icon = { Icon(imageVector = dest.icon, contentDescription = null) },
                 label = { Text(dest.label) },
             )
         }

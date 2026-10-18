@@ -47,6 +47,15 @@ object ReportFormatting {
         return if (ratio > 0) ChangeDirection.UP else ChangeDirection.DOWN
     }
 
+    /**
+     * AA-3：环比箭头是纯图形（方向只靠图标 + 颜色两道视觉通道），读屏拿不到「涨还是跌」。
+     * 把方向折进一句话：「上升 较上月 12.5%」；持平 / 无数据返回 null，读屏直接念文本。
+     */
+    fun changeSpeech(direction: ChangeDirection, changeText: String): String? = when (direction) {
+        ChangeDirection.UP -> "上升 " + changeText
+        ChangeDirection.DOWN -> "下降 " + changeText
+        ChangeDirection.NONE -> null
+    }
     /** 千分之一单位 → "12.5%" */
     private fun formatTenths(tenths: Long): String =
         (tenths / 10).toString() + "." + (tenths % 10) + "%"
