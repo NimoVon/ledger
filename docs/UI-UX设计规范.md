@@ -567,14 +567,14 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 | ID | 优先级 | 问题 | 改法 | 涉及文件 |
 | --- | --- | --- | --- | --- |
-| G-1 | P0 | 列表行 8 处各写一份，右侧箭头用「›」字符（字符基线随字体漂移） | 抽 `LedgerListItem`（§6.1），箭头改用 `LedgerIcons.ChevronRight` | app/src/main/java/com/nimo/ledger/ui/settings/SettingsScreen.kt、ui/accounts/AccountsScreen.kt、ui/categories/CategoriesScreen.kt、ui/budgets/BudgetsScreen.kt |
-| G-2 | P0 | `SectionHeader` 与 `DayHeader` 是同款实现两份 | 抽 `LedgerSectionHeader`（§6.2），两处改为调用它 | ui/reports/ReportsScreen.kt、ui/transactions/TransactionsScreen.kt |
-| G-3 | P0 | EmptyState 里插图与标题之间**没有间距**（Image 后直接 Text） | 加 `Spacer(16.dp)`；文案间距统一 8dp；新增 tone / actionLabel / onAction 可选参数 | app/src/main/java/com/nimo/ledger/ui/components/EmptyState.kt |
-| G-4 | P0 | 预算进度条（8dp/4dp 圆角）与占比条（6dp/3dp）两份实现 | 抽 `LedgerProgressBar`（§6.4） | ui/budgets/BudgetsScreen.kt、ui/reports/ReportsScreen.kt |
-| G-5 | P1 | 金额列宽随内容浮动，右边缘不成线 | 金额统一走 `LedgerAmount`，minWidth 96dp | ui/transactions/TransactionsScreen.kt、ui/accounts/AccountsScreen.kt、ui/reports/ReportsScreen.kt |
+| G-1 ✅ **已修 2026-10-17（D-1 落地）** | P0 | 列表行 8 处各写一份，右侧箭头用「›」字符（字符基线随字体漂移） | 抽 `LedgerListItem`（§6.1），箭头改用 `LedgerIcons.ChevronRight` | app/src/main/java/com/nimo/ledger/ui/settings/SettingsScreen.kt、ui/accounts/AccountsScreen.kt、ui/categories/CategoriesScreen.kt、ui/budgets/BudgetsScreen.kt |
+| G-2 ✅ **已修 2026-10-17（D-2 落地）** | P0 | `SectionHeader` 与 `DayHeader` 是同款实现两份 | 抽 `LedgerSectionHeader`（§6.2），两处改为调用它 | ui/reports/ReportsScreen.kt、ui/transactions/TransactionsScreen.kt |
+| G-3 ✅ **已修 2026-10-17（D-4 落地）** | P0 | EmptyState 里插图与标题之间**没有间距**（Image 后直接 Text） | 加 `Spacer(16.dp)`；文案间距统一 8dp；新增 tone / actionLabel / onAction 可选参数 | app/src/main/java/com/nimo/ledger/ui/components/EmptyState.kt |
+| G-4 ✅ **已修 2026-10-17（D-3 落地）** | P0 | 预算进度条（8dp/4dp 圆角）与占比条（6dp/3dp）两份实现 | 抽 `LedgerProgressBar`（§6.4） | ui/budgets/BudgetsScreen.kt、ui/reports/ReportsScreen.kt |
+| G-5 ❌ **未做（2026-10-18 复核：`LedgerAmount` 组件尚不存在，金额列仍各自排版）** | P1 | 金额列宽随内容浮动，右边缘不成线 | 金额统一走 `LedgerAmount`，minWidth 96dp | ui/transactions/TransactionsScreen.kt、ui/accounts/AccountsScreen.kt、ui/reports/ReportsScreen.kt |
 | G-6 ✅ **已修 2026-10-17** | P1 | 字体缩放 ≥1.5 时只有 MonthSummaryBar（`STACK_FONT_SCALE = 1.5f`）做了竖排 | FilterBar / DayHeader / 预算进度条下行 三处补竖排分支（F-2：门槛收到 `FontScale.kt`，9 例测试 + 3 档真机走查，见 `docs/测试报告.md` §25） | ui/transactions/TransactionsScreen.kt、ui/budgets/BudgetsScreen.kt、ui/components/FontScale.kt |
-| G-7 ✅ **已修 2026-10-17** | P1 | LedgerIcons 缺 13 个功能图标（见 §5.1） | 按现有口径补 ImageVector（24dp viewport / stroke 2.0f / Round cap+join） | app/src/main/java/com/nimo/ledger/ui/LedgerIcons.kt —— F-1 已补齐 13 个并加 `strokeIcon()`，其中 4 个已接界面（箭头 16dp / 日历 20dp / 钱包·卡 24dp），其余 10 个待 E-7 / E-8 / F13 接线。证据见 `docs/测试报告.md` §28 |
-| G-8 | P1 | 环形图 3 色在浅色底低于图形阈值 3:1 | 扇形间加 2dp surface 缝 + 代码注释说明「颜色非唯一信息通道」 | ui/reports/CategoryDonut.kt |
+| G-7 ✅ **已修 2026-10-17** | P1 | LedgerIcons 缺 13 个功能图标（见 §5.1） | 按现有口径补 ImageVector（24dp viewport / stroke 2.0f / Round cap+join） | app/src/main/java/com/nimo/ledger/ui/LedgerIcons.kt —— F-1 已补齐 13 个并加 `strokeIcon()`，其中 4 个已接界面（箭头 16dp / 日历 20dp / 钱包·卡 24dp），其余 10 个待 E-7 / F13 接线。证据见 `docs/测试报告.md` §28 |
+| G-8 ✅ **已修 2026-10-17** | P1 | 环形图 3 色在浅色底低于图形阈值 3:1 | 扇形间加 2dp surface 缝 + 代码注释说明「颜色非唯一信息通道」 | ui/reports/CategoryDonut.kt |
 | G-9 | P2 | 无统一加载骨架，一律居中转圈 | loading 改骨架块（MonthSummaryBar 三格、列表首屏），转圈只留表单页 | 各 Screen |
 | G-10 | P2 | 屏幕左右边距：设置页 24dp、其余 16dp | 统一 16dp（设置页改卡片分组后自然统一） | ui/settings/SettingsScreen.kt |
 
@@ -625,7 +625,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | B-1 | P1 | TotalBudgetCard 与 CategoryBudgetRowItem 结构几乎一致却各写一份 | 抽 `BudgetRow(name, budgetCents?, spentCents, status, depth, subtitleOverride)`；总预算 = depth 0 + 固定标题 |
 | B-2 | P0 | 进度条无超支可视化：fraction > 1 只是全红到底，看不出超了多少 | `LedgerProgressBar(overMarker = true)`：100% 处画 2dp 刻度，超出部分用 60% 高度填充 |
 | B-3 | P1 | 「已用 ¥x / ¥y」+ 状态标签在窄屏/大字号下会挤 | fontScale ≥1.5 或宽度不足时改两行竖排 |
-| B-4 | P1 | 预算页的 MonthSwitcher 标签不可点（与明细/统计不一致） | 传 `onLabelClick` 打开 YearMonthPickerDialog（组件已通用，成本约 1 行） |
+| B-4 | P1 | 预算页的 MonthSwitcher 标签不可点（与明细/统计不一致） | 传 `onLabelClick` 打开 YearMonthPickerDialog（组件已通用，成本约 1 行）；**2026-10-18 已修，见 `docs/测试报告.md` §29** |
 | B-5 | P1 | 分类预算行没有编辑入口暗示 | 走 G-1 行尾 chevron；**不给行内删除**（误触风险），删除留在编辑对话框 |
 | B-6 | P2 | 未设预算的分类混在列表里 | 顺序保持分类树；仅在顶部加一行筛选（全部 / 已设 / 未设）——P2，需产品确认 |
 | B-7 | P1 | 页脚「预算只看支出…」口径说明是好资产 | 保留；文字前加 `LedgerIcons.Info`（14dp / onSurfaceVariant） |
@@ -837,9 +837,9 @@ cd /d/git/ledger
 | E-5 ✅ **已完成 2026-10-17** | 修 FAB 遮挡气泡（S-1），两条修法都做：① 新增 `Modifier.clearOfFloatingActionButton()`（`ui/reports/TooltipFabClearance.kt`）——`BringIntoViewRequester` 把「气泡自身高度 + FAB_BOTTOM_RESERVE（88dp）」当成一个矩形 `bringIntoView`，`DonutTooltip` / `DayTooltip` 各挂一次，宿主 `LazyColumn` 不用改；② 两个气泡标题行右端的「查看明细」文字换成 18dp `LedgerIcons.ChevronRight`（`contentDescription` 仍是「查看明细」，语义合并后读屏照样念） | 真机实测：环形图滚到顶时气泡整块 `[60,2300][1380,2495]`，底边 2495 + 88dp（330px）= 内容区底边 2825，比 FAB 顶边 2555 高 60px（16dp），箭头 `[1267,2334][1335,2402]` 完整可见；点最后一天 10月17日 的气泡能打开日明细；点气泡仍能下钻 `分类：人情`。**411dp 这一档由 Robolectric `@Config(w411dp-h891dp-xxhdpi)` 覆盖，真机 384dp 更窄**；0.36° 的 0.1% 扇形（弧长约 1.7px）手指点不中，**没有写成已验收**。5 例测试 + 红绿见 `docs/测试报告.md` §24 |
 | E-6 ✅ **已完成 2026-10-17** | 环形图 2dp 缝（批 D 已做，`CategoryDonutArcsTest` 7 例）+ 逐日柱选中格底色 0.10f → 0.14f：抽成 `SELECTED_DAY_HIGHLIGHT_ALPHA` / `dayCellHighlight(primary)`（`ui/reports/TrendChart.kt:110` / `:113`），透明度能被单测钉住 | 截图对比 + 像素采样：选中 10月14日 后同一张截图里选中格 (1140~1170, 900) = **(32,45,56)**、隔壁 13日 (1040~1080, 900) = **(15,20,24)**；0.14 混合理论值 (30,45,56)，旧 0.10 是 (26,38,47)，实测贴 0.14。见 `docs/测试报告.md` §24.5 第 7 项 |
 | E-7 | 设置页卡片分组 + 开发项折叠（ST-1 / ST-2 / ST-5） | 截图；自检入口仍可用 |
-| E-8 | 预算页 onLabelClick + 超支刻度（B-4 / B-2） | 预算 UI 测试 |
+| E-8 ✅ **已完成 2026-10-18** | 预算页 onLabelClick + 超支刻度（B-4 / B-2）。实装：`BudgetsUiState` 暴露 `month`，ViewModel 新增 `setMonth(YearMonth)`（先清 `loadError` 再切 `month` 流），`moveMonth(delta)` 改为 `setMonth(month.value.plusMonths(delta))`——上下月与直选共用一条路，与明细页 `TransactionsViewModel` 同构；`BudgetsScreen` 给 `MonthSwitcher` 传 `onLabelClick` 打开通用 `YearMonthPickerDialog`（`onSelect` → `setMonth` → 关闭）；超支刻度那一半（B-2）在 D-3 已落地，本轮复核 `LedgerProgressBar(overMarker = true)` 仍在位 | 1 例 ViewModel 单测（跨年直跳 5 个月，断言 `month` / `monthLabel` / 总预算金额都换到目标月那行）+ 1 例 Robolectric 接线测试（点标签 → 选年 → 选月，断言新标签与新金额出现、旧标签与旧金额消失）；红绿：拆 `onLabelClick` → 接线那例 `AssertionError at BudgetsScreenMonthPickerTest.kt:97`（13 例 1 失败），`setMonth` 不切月 → 3 例红（含既有 `moveMonth` 的两例）。**真机走查**（2026-10-18 17:27，release `a6be58f7…`，§29.4）：点标签 → 选 2026 年 → 选 9 月整页换月（已支出 ¥2,566.00 → ¥0.00），返回键关弹窗不换月，选回 10 月数据复原，上下月箭头不受影响 |
 
-> 批 E 状态（2026-10-17）：**E-1 ~ E-3、E-5、E-6 已完成**（E-1 见 `docs/测试报告.md` §21：92 套 792 例、行覆盖 70.4%、真机 9 项；E-2 / E-3 见 §22：93 套 800 例、行覆盖 70.6%、真机 10 项；E-5 / E-6 见 §24：95 套 813 例、行覆盖 70.7%、真机 10 项）；**E-4、E-7、E-8 未开始**。E-5 的执行要点：气泡避让不要动宿主的 `LazyColumn`，把「气泡 + 88dp 预留」当成一个矩形交给 `bringIntoView` 即可，宿主不需要知道 FAB 在哪；测试里用假 FAB（右下 16dp、150 × 56dp）断言「气泡底边 ≤ 假 FAB 顶边」，但红色证据只有环形图那例——`DayTooltip` 在真实布局里贴图表顶部、够不到 FAB，那例只能守「挂上修饰符不产生副作用 + 箭头在」，不能当几何回归。E-6 的执行要点：`Color.copy(alpha =)` 是 8 位量化（0.14f 存成 36/255 ≈ 0.1412），字面量断言必须放 0.002f 容差，只有「对象相等」的比法才稳。E-2 / E-3 的执行要点：先写组件级测试再改布局的思路同样适用，但要认出「组件级测试测不到接线」——`RecordSaveBar` 的 2 例在删掉 `Scaffold.bottomBar` 后仍绿，接线只能靠真机证据，已写进 §22.7；`heightIn + verticalScroll` 的限高在 Robolectric 能量到「正好 504px」，真机则要放大字体让内容真的溢出才能看出「硬裁 + 内滚且外层不动」。E-1 的执行要点：先补组件级测试（`TransactionsFilterBarUiTest` 7 例）再改布局——Robolectric 假字体让**宽度**断言失效，只能测高度与滚动，宽度靠真机截图核对；fontScale ≥1.5 的 chip 竖排仍归 F-2 处理（当前 1.5 倍下 chip 右端会被 `LazyRow` 从字形中间裁断）。
+> 批 E 状态（2026-10-18）：**E-1 ~ E-3、E-5、E-6、E-8 已完成**（E-1 见 `docs/测试报告.md` §21：92 套 792 例、行覆盖 70.4%、真机 9 项；E-2 / E-3 见 §22：93 套 800 例、行覆盖 70.6%、真机 10 项；E-5 / E-6 见 §24：95 套 813 例、行覆盖 70.7%、真机 10 项）；**E-4、E-7 未开始**。E-8 的执行要点：标签可点时不要再加「选择月份」按钮，标签本身就是入口；`setMonth` 必须先清 `loadError` 再切流，否则上个月的读取错误会留在新月份；直选与上下月共用一个 `setMonth`，否则两条路会分叉（红绿实验里把 `setMonth` 改成空操作，连既有 `moveMonth` 的两例一起红了）。E-5 的执行要点：气泡避让不要动宿主的 `LazyColumn`，把「气泡 + 88dp 预留」当成一个矩形交给 `bringIntoView` 即可，宿主不需要知道 FAB 在哪；测试里用假 FAB（右下 16dp、150 × 56dp）断言「气泡底边 ≤ 假 FAB 顶边」，但红色证据只有环形图那例——`DayTooltip` 在真实布局里贴图表顶部、够不到 FAB，那例只能守「挂上修饰符不产生副作用 + 箭头在」，不能当几何回归。E-6 的执行要点：`Color.copy(alpha =)` 是 8 位量化（0.14f 存成 36/255 ≈ 0.1412），字面量断言必须放 0.002f 容差，只有「对象相等」的比法才稳。E-2 / E-3 的执行要点：先写组件级测试再改布局的思路同样适用，但要认出「组件级测试测不到接线」——`RecordSaveBar` 的 2 例在删掉 `Scaffold.bottomBar` 后仍绿，接线只能靠真机证据，已写进 §22.7；`heightIn + verticalScroll` 的限高在 Robolectric 能量到「正好 504px」，真机则要放大字体让内容真的溢出才能看出「硬裁 + 内滚且外层不动」。E-1 的执行要点：先补组件级测试（`TransactionsFilterBarUiTest` 7 例）再改布局——Robolectric 假字体让**宽度**断言失效，只能测高度与滚动，宽度靠真机截图核对；fontScale ≥1.5 的 chip 竖排仍归 F-2 处理（当前 1.5 倍下 chip 右端会被 `LazyRow` 从字形中间裁断）。
 
 ### 批 F：图标与字体缩放收口
 
@@ -908,6 +908,6 @@ cd /d/git/ledger
 
 **UI 设计师**：DSH UI 设计师 Agent
 **设计系统日期**：2026-10-16
-**实施状态（2026-10-17）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24；批 F 的 F-2（fontScale ≥1.5 三处竖排）见 §25，F-4（接「减少动画」偏好）见 §26，F-3（分类图标宫格）见 §27，F-1（13 个功能图标）见 §28；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；批 E 的 E-4 / E-7 / E-8 待排期（F-1 余下的 10 个图标接线并入 E-7 / E-8）
+**实施状态（2026-10-18）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24，E-8（预算页点月份标签直选年月，2026-10-18）见 §29；批 F 的 F-2（fontScale ≥1.5 三处竖排）见 §25，F-4（接「减少动画」偏好）见 §26，F-3（分类图标宫格）见 §27，F-1（13 个功能图标）见 §28；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；批 E 的 E-4 / E-7 待排期（F-1 余下的 10 个图标接线并入 E-7）
 **QA 流程**：批 D/E/F 每批结束跑 testDebugUnitTest --rerun + lint + assembleDebug，并为新组件补截图断言
 
