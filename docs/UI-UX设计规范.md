@@ -346,7 +346,7 @@ fun LedgerSectionHeader(
 
 **注意**：不要把段头做成圆角卡片——通栏色条是它与卡片区分开的唯一特征。
 
-### 6.3 LedgerAmount（金额列规格）★ P1
+### 6.3 LedgerAmount（金额列规格）★ P1 · 已实现 2026-10-18（证据见 `docs/测试报告.md` §32）
 
 ```kotlin
 @Composable
@@ -571,7 +571,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | G-2 ✅ **已修 2026-10-17（D-2 落地）** | P0 | `SectionHeader` 与 `DayHeader` 是同款实现两份 | 抽 `LedgerSectionHeader`（§6.2），两处改为调用它 | ui/reports/ReportsScreen.kt、ui/transactions/TransactionsScreen.kt |
 | G-3 ✅ **已修 2026-10-17（D-4 落地）** | P0 | EmptyState 里插图与标题之间**没有间距**（Image 后直接 Text） | 加 `Spacer(16.dp)`；文案间距统一 8dp；新增 tone / actionLabel / onAction 可选参数 | app/src/main/java/com/nimo/ledger/ui/components/EmptyState.kt |
 | G-4 ✅ **已修 2026-10-17（D-3 落地）** | P0 | 预算进度条（8dp/4dp 圆角）与占比条（6dp/3dp）两份实现 | 抽 `LedgerProgressBar`（§6.4） | ui/budgets/BudgetsScreen.kt、ui/reports/ReportsScreen.kt |
-| G-5 ❌ **未做（2026-10-18 复核：`LedgerAmount` 组件尚不存在，金额列仍各自排版）** | P1 | 金额列宽随内容浮动，右边缘不成线 | 金额统一走 `LedgerAmount`，minWidth 96dp | ui/transactions/TransactionsScreen.kt、ui/accounts/AccountsScreen.kt、ui/reports/ReportsScreen.kt |
+| G-5 ✅ **已修 2026-10-18**（`LedgerAmount` 96dp 最小宽 + 右对齐，明细 / 账户 / 统计三处接线，见 `docs/测试报告.md` §32；预算页与月份汇总条未迁移） | P1 | 金额列宽随内容浮动，右边缘不成线 | 金额统一走 `LedgerAmount`，minWidth 96dp | ui/transactions/TransactionsScreen.kt、ui/accounts/AccountsScreen.kt、ui/reports/ReportsScreen.kt |
 | G-6 ✅ **已修 2026-10-17** | P1 | 字体缩放 ≥1.5 时只有 MonthSummaryBar（`STACK_FONT_SCALE = 1.5f`）做了竖排 | FilterBar / DayHeader / 预算进度条下行 三处补竖排分支（F-2：门槛收到 `FontScale.kt`，9 例测试 + 3 档真机走查，见 `docs/测试报告.md` §25） | ui/transactions/TransactionsScreen.kt、ui/budgets/BudgetsScreen.kt、ui/components/FontScale.kt |
 | G-7 ✅ **已修 2026-10-17** | P1 | LedgerIcons 缺 13 个功能图标（见 §5.1） | 按现有口径补 ImageVector（24dp viewport / stroke 2.0f / Round cap+join） | app/src/main/java/com/nimo/ledger/ui/LedgerIcons.kt —— F-1 已补齐 13 个并加 `strokeIcon()`，其中 4 个已接界面（箭头 16dp / 日历 20dp / 钱包·卡 24dp），其余 10 个待 E-7 / F13 接线。证据见 `docs/测试报告.md` §28 |
 | G-8 ✅ **已修 2026-10-17** | P1 | 环形图 3 色在浅色底低于图形阈值 3:1 | 扇形间加 2dp surface 缝 + 代码注释说明「颜色非唯一信息通道」 | ui/reports/CategoryDonut.kt |
@@ -908,6 +908,6 @@ cd /d/git/ledger
 
 **UI 设计师**：DSH UI 设计师 Agent
 **设计系统日期**：2026-10-16
-**实施状态（2026-10-18）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24，E-8（预算页点月份标签直选年月，2026-10-18）见 §29，E-7（设置页卡片分组 + 开发项折叠，2026-10-18）见 §30，E-4（统计页洞察卡片化 + 段头 sticky，2026-10-18）见 §31；批 F 的 F-2（fontScale ≥1.5 三处竖排）见 §25，F-4（接「减少动画」偏好）见 §26，F-3（分类图标宫格）见 §27，F-1（13 个功能图标）见 §28；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；批 E 全部收口（E-1 ~ E-8），F-1 余下的 10 个图标仍无宿主界面（E-7 只重排了设置页，没有给它们接界面）
+**实施状态（2026-10-18）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24，E-8（预算页点月份标签直选年月，2026-10-18）见 §29，E-7（设置页卡片分组 + 开发项折叠，2026-10-18）见 §30，E-4（统计页洞察卡片化 + 段头 sticky，2026-10-18）见 §31；批 F 的 F-2（fontScale ≥1.5 三处竖排）见 §25，F-4（接「减少动画」偏好）见 §26，F-3（分类图标宫格）见 §27，F-1（13 个功能图标）见 §28；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；问题 G-5（金额列统一 `LedgerAmount`，2026-10-18）见 §32；批 E 全部收口（E-1 ~ E-8），F-1 余下的 10 个图标仍无宿主界面（E-7 只重排了设置页，没有给它们接界面）
 **QA 流程**：批 D/E/F 每批结束跑 testDebugUnitTest --rerun + lint + assembleDebug，并为新组件补截图断言
 
