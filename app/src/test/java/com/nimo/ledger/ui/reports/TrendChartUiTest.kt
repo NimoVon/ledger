@@ -2,6 +2,7 @@ package com.nimo.ledger.ui.reports
 
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -33,6 +34,8 @@ import kotlinx.coroutines.runBlocking
 import com.nimo.ledger.awaitUntil
 import org.junit.After
 import org.junit.Before
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -277,5 +280,63 @@ class TrendChartUiTest {
         composeRule.onAllNodesWithText("2日").assertCountEquals(0)
         composeRule.onAllNodesWithText("31日").assertCountEquals(0)
         composeRule.onAllNodesWithText(DAY_LABEL_SCROLL_HINT).assertCountEquals(1)
+    }
+
+    /**
+     * AA-4：相邻柱子必须是各自独立的无障碍节点，TalkBack 不该把三天读成一句长话。
+     *
+     * 机制上靠两件事：格子内部 `mergeDescendants = true`（把两根柱合成一天的读法），
+     * 容器层不用 mergeDescendants（不把相邻天数合并）。这里直接断言结果：
+     * 每天一条描述、每条只含一个日期、父容器总述不吞子节点。
+     */
+    @Test
+    fun adjacentBars_readAsSeparateDays_notOneMergedSentence() {
+        val month = YearMonth.of(2026, 10)
+        val daily = (1..3).map { day ->
+            DailyTotal(
+                date = month.atDay(day),
+                incomeCents = 0L,
+                expenseCents = day * 10_000L,
+            )
+        }
+        composeRule.setContent {
+            MaterialTheme {
+                TrendSection(
+                    range = ReportRange.Month(month),
+                    points = listOf(MonthlyTotal(month, incomeCents = 0L, expenseCents = 60_000L)),
+                    daily = daily,
+                    isLoading = false,
+                    onDayClick = {},
+                )
+            }
+        }
+
+        val dayNodes = composeRule
+            .onAllNodes(hasContentDescription("日：支出", substring = true))
+            .fetchSemanticsNodes()
+        assertEquals("三天应各是一个独立节点", 3, dayNodes.size)
+
+        val descriptions = dayNodes.map { node ->
+            node.config[SemanticsProperties.ContentDescription].first()
+        }
+        val datePattern = Regex("""\d+月\d+日""")
+        descriptions.forEach { text ->
+            assertEquals("每条描述只该带自己那一天：「$text」", 1, datePattern.findAll(text).count())
+        }
+        assertEquals("三天的描述不应重复", 3, descriptions.toSet().size)
+
+        // 图表容器的总述仍在（"本月逐日收支，共 3 天…"），但里面没有某一天的明细——
+        // 说明容器没有把子节点合并成一句话。
+        val chartDescription = composeRule
+            .onNode(hasTestTag(DAILY_CHART_TEST_TAG))
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.ContentDescription]
+            .first()
+        assertTrue("整图描述应保留汇总：「$chartDescription」", chartDescription.contains("共 3 天"))
+        assertEquals(
+            "整图描述不该混入单日明细：「$chartDescription」",
+            0,
+            Regex("""\d+月\d+日：""").findAll(chartDescription).count(),
+        )
     }
 }
