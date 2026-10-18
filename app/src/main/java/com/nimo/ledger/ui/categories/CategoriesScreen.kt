@@ -1,7 +1,6 @@
 package com.nimo.ledger.ui.categories
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,6 +13,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -248,7 +249,7 @@ private sealed interface CategoryDialogTarget {
 }
 
 /**
- * 一行分类：二级分类缩进一级。右侧一对上下移按钮，已经是组内第一个 / 最后一个时对应按钮置灰。
+ * 一行分类：二级分类缩进一级。右侧一个「排序」菜单（上移 / 下移），组内已到边界时对应项置灰。
  */
 @Composable
 private fun CategoryRowItem(
@@ -256,20 +257,31 @@ private fun CategoryRowItem(
     onClick: () -> Unit,
     onMove: (MoveDirection) -> Unit,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     LedgerListItem(
         title = row.name,
         subtitle = if (row.isArchived) "已停用" else null,
         leadingEmoji = row.icon?.takeIf { it.isNotBlank() },
+        // C-3 收敛：两个上移/下移按钮太占行宽（2.0 字号下挤压分类名）→ 行尾一个「排序」+ 小菜单
         trailingContent = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { onMove(MoveDirection.UP) }, enabled = row.canMoveUp) {
-                    Icon(imageVector = LedgerIcons.ArrowUp, contentDescription = "上移 " + row.name)
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(
+                        imageVector = LedgerIcons.MoreVert,
+                        contentDescription = "排序 " + row.name,
+                    )
                 }
-                IconButton(onClick = { onMove(MoveDirection.DOWN) }, enabled = row.canMoveDown) {
-                    Icon(imageVector = LedgerIcons.ArrowDown, contentDescription = "下移 " + row.name)
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("上移") },
+                        enabled = row.canMoveUp,
+                        onClick = { menuOpen = false; onMove(MoveDirection.UP) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("下移") },
+                        enabled = row.canMoveDown,
+                        onClick = { menuOpen = false; onMove(MoveDirection.DOWN) },
+                    )
                 }
             }
         },

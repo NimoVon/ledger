@@ -179,6 +179,14 @@ object LedgerIcons {
         lineTo(9f, 18f)
     }
 
+    /** 更多：三个竖点（C-3 收敛后分类行的排序入口） */
+    val MoreVert: ImageVector = ledgerIcon("LedgerMoreVert") {
+        path(fill = SolidColor(Color.Black)) {
+            vBar(12f, 5f, 7.5f, 2.4f)
+            vBar(12f, 10.75f, 13.25f, 2.4f)
+            vBar(12f, 16.5f, 19f, 2.4f)
+        }
+    }
     /** 删除：垃圾桶（盖 + 提手 + 桶身 + 两道竖线） */
     val Delete: ImageVector = strokeIcon("LedgerDelete") {
         moveTo(4.5f, 7f)
