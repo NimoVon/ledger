@@ -14,6 +14,7 @@ import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.domain.stats.BudgetStatus
 import java.time.LocalDate
+import java.time.YearMonth
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -261,5 +262,24 @@ class BudgetsViewModelTest {
         // 分类行还在（分类是全月的，不随月份消失），只是没有预算
         assertEquals(1, november.rows.size)
         assertNull(november.rows.single().budgetId)
+    }
+
+    @Test
+    fun setMonth_jumpsStraightToThatYearMonth() = runTest {
+        seedBudget(null, 100_000L, month = "2026-10")
+        seedBudget(null, 500_000L, month = "2027-03")
+        val vm = viewModel()
+
+        val october = loaded(vm)
+        // 跨年跳 5 个月：上下月要按 5 次，直改一次到位
+        vm.setMonth(YearMonth.of(2027, 3))
+        val march = vm.uiState.first { !it.isLoading && it.month == YearMonth.of(2027, 3) }
+
+        assertEquals(YearMonth.of(2026, 10), october.month)
+        assertEquals(YearMonth.of(2027, 3), march.month)
+        assertTrue(march.monthLabel.contains("2027"))
+        // 5 个月之后的总预算确实换成了该月那一行，不是还挂着 2026-10 的
+        assertEquals(100_000L, october.totalBudgetCents)
+        assertEquals(500_000L, march.totalBudgetCents)
     }
 }

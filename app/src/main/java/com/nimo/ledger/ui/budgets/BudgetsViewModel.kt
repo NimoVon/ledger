@@ -31,7 +31,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** 预算页的一行：总预算行之外的每个支出分类一行 */
@@ -52,6 +51,8 @@ data class BudgetCategoryRow(
 
 data class BudgetsUiState(
     val isLoading: Boolean = true,
+    /** 当前查看的年月：月份标签可点直改（R1），年月弹窗要拿它定位年份页与高亮 */
+    val month: YearMonth = YearMonth.now(),
     val monthLabel: String = "",
     val totalBudgetCents: Long? = null,
     val totalSpentCents: Long = 0L,
@@ -138,10 +139,19 @@ class BudgetsViewModel(
 
     fun showNextMonth() = moveMonth(1)
 
-    private fun moveMonth(delta: Long) {
+    /**
+     * R1 日期直改：直接跳到指定年月（年月选择器两步选出来的结果）。
+     *
+     * 与上下月只差"跳多远"：同一个 [month] 流、同一套 [Dates.monthBounds] 区间查询，
+     * 所以该月的预算行与已花金额都不需要为它另算一份。
+     */
+    fun setMonth(month: YearMonth) {
+        // 上一个月份的读取错误不该带进新月份
         loadError.value = null
-        month.update { it.plusMonths(delta) }
+        this.month.value = month
     }
+
+    private fun moveMonth(delta: Long) = setMonth(month.value.plusMonths(delta))
 
     /** 设置（或更新）当月预算；categoryId 为 null 表示总预算 */
     suspend fun setBudget(categoryId: Long?, amountCents: Long): Result<Unit> =
@@ -158,10 +168,17 @@ class BudgetsViewModel(
         val label = TransactionTimeline.monthLabel(ym)
         val current = data?.takeIf { it.month == ym }
         if (error != null) {
-            return BudgetsUiState(isLoading = false, monthLabel = label, errorMessage = error)
+            return BudgetsUiState(
+                isLoading = false,
+                month = ym,
+                monthLabel = label,
+                errorMessage = error,
+            )
         }
         // 分类还没到就继续算加载中：否则会先发一屏"一个分类都没有"的假状态
-        if (current == null || cats == null) return BudgetsUiState(isLoading = true, monthLabel = label)
+        if (current == null || cats == null) {
+            return BudgetsUiState(isLoading = true, month = ym, monthLabel = label)
+        }
 
         val infoById = cats.associate { it.id to it.toInfo() }
         val summary = BudgetCalculator.summarize(
@@ -180,6 +197,7 @@ class BudgetsViewModel(
 
         return BudgetsUiState(
             isLoading = false,
+            month = ym,
             monthLabel = label,
             totalBudgetCents = summary.totalBudgetCents,
             totalSpentCents = summary.totalSpentCents,

@@ -46,6 +46,7 @@ import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.LedgerProgressBar
 import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.components.MonthSwitcher
+import com.nimo.ledger.ui.components.YearMonthPickerDialog
 import com.nimo.ledger.ui.components.stackAtLargeFont
 import com.nimo.ledger.util.Money
 import kotlinx.coroutines.flow.Flow
@@ -83,6 +84,8 @@ fun BudgetsScreen(
     var target by remember { mutableStateOf<BudgetDialogTarget?>(null) }
     var saving by remember { mutableStateOf(false) }
     var dialogError by remember { mutableStateOf<String?>(null) }
+    // R1 日期直改：点月份标签打开年月选择器（与明细页、统计页同一套交互）
+    var showMonthPicker by remember { mutableStateOf(false) }
 
     fun openTotal() {
         dialogError = null
@@ -127,6 +130,7 @@ fun BudgetsScreen(
                 label = state.monthLabel,
                 onPrevious = viewModel::showPreviousMonth,
                 onNext = viewModel::showNextMonth,
+                onLabelClick = { showMonthPicker = true },
             )
             HorizontalDivider()
             when {
@@ -173,6 +177,17 @@ fun BudgetsScreen(
                 }
             }
         }
+    }
+
+    if (showMonthPicker) {
+        YearMonthPickerDialog(
+            current = state.month,
+            onDismiss = { showMonthPicker = false },
+            onSelect = { picked ->
+                viewModel.setMonth(picked)
+                showMonthPicker = false
+            },
+        )
     }
 
     val dialogTarget = target

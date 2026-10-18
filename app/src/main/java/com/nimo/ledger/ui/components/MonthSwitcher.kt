@@ -26,7 +26,8 @@ import com.nimo.ledger.ui.LedgerIcons
  * R1 日期直改：标签本身可点，点开 [YearMonthPickerDialog] 两步选到目标年月；
  * 左右箭头原样保留——上下月仍是最常用的动作，不该被藏进弹窗里。
  *
- * @param onLabelClick 点月份标签的回调；null = 这一页还没接入年月直选（预算页），标签只显示不可点
+ * @param onLabelClick 点月份标签的回调；null = 标签只显示不可点（明细 / 统计 / 预算三页均已接入，
+ *   仅组件级测试与未来页面会用到 null）
  * @param previousLabel 左箭头的无障碍描述：统计页的范围是按"段"走的，念「上个月」会误导
  * @param nextLabel 右箭头的无障碍描述
  */
