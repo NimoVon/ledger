@@ -125,13 +125,13 @@ internal fun dailyDescription(daily: List<DailyTotal>, rangeLabel: String): Stri
     if (daily.isEmpty()) return "$head：暂无数据"
     val income = daily.sumOf { it.incomeCents }
     val expense = daily.sumOf { it.expenseCents }
-    return "$head，共 ${daily.size} 天：收入 ${Money.formatCurrency(income)}，支出 ${Money.formatCurrency(expense)}"
+    return "$head，共 ${daily.size} 天：收入 ${Money.spokenAmount(income)}，支出 ${Money.spokenAmount(expense)}"
 }
 
 /** 单根柱子（一天）的无障碍描述，同时也是它的点击目标说明 */
 internal fun dayDescription(total: DailyTotal): String {
     val label = "${total.date.monthValue}月${total.date.dayOfMonth}日"
-    return "$label：支出 ${Money.formatCurrency(total.expenseCents)}，收入 ${Money.formatCurrency(total.incomeCents)}"
+    return "$label：支出 ${Money.spokenAmount(total.expenseCents)}，收入 ${Money.spokenAmount(total.incomeCents)}"
 }
 
 /** 金额气泡的标题：「10月16日」（与柱子的无障碍描述同一套日期写法） */
@@ -173,10 +173,10 @@ internal fun trendDescription(points: List<MonthlyTotal>, range: ReportRange): S
     val income = points.sumOf { it.incomeCents }
     val expense = points.sumOf { it.expenseCents }
     val last = points.last()
-    return "$head，共 ${points.size} 个月：收入 ${Money.formatCurrency(income)}，" +
-        "支出 ${Money.formatCurrency(expense)}；最近一个月 " +
-        "${last.month.year}年${last.month.monthValue}月：收入 ${Money.formatCurrency(last.incomeCents)}，" +
-        "支出 ${Money.formatCurrency(last.expenseCents)}"
+    return "$head，共 ${points.size} 个月：收入 ${Money.spokenAmount(income)}，" +
+        "支出 ${Money.spokenAmount(expense)}；最近一个月 " +
+        "${last.month.year}年${last.month.monthValue}月：收入 ${Money.spokenAmount(last.incomeCents)}，" +
+        "支出 ${Money.spokenAmount(last.expenseCents)}"
 }
 
 /**

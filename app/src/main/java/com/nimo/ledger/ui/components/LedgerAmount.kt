@@ -5,6 +5,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -42,6 +44,9 @@ internal const val LEDGER_AMOUNT_TEST_TAG = "ledger-amount"
  * - [showSign]：明细行传 true（支出 "-¥x"、收入 "+¥x"）；列表汇总行传 false
  * - 金额为负数时（余额调整）[Money.formatCurrency] 自己带负号，不再叠加符号
  * - 最小宽 [LEDGER_AMOUNT_MIN_WIDTH]、单行、不换行（§6.3 约束）
+ * - [color] 传值可覆盖状态色（预算行按 OK/WARNING/OVER 上色）；
+ * - 字号 ≥ 2.0 且金额较长时降级 [MaterialTheme.typography.titleSmall]（§6.3 允许），
+ *   避免 96dp 列被撑开挤压旁边的分类名
  */
 @Composable
 fun LedgerAmount(
@@ -50,23 +55,30 @@ fun LedgerAmount(
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyLarge,
     showSign: Boolean = false,
+    color: Color? = null,
 ) {
-    val color = when (type) {
+    val resolved = color ?: when (type) {
         TransactionType.EXPENSE -> MaterialTheme.colorScheme.error
         TransactionType.INCOME -> MaterialTheme.colorScheme.primary
         TransactionType.TRANSFER, TransactionType.BALANCE_ADJUST ->
             MaterialTheme.colorScheme.onSurfaceVariant
         null -> MaterialTheme.colorScheme.onSurface
     }
+    val text = ledgerAmountText(cents, type, showSign)
+    val scaledStyle = if (LocalConfiguration.current.fontScale >= 2f && text.length > 9) {
+        MaterialTheme.typography.titleSmall
+    } else {
+        style
+    }
     Text(
-        text = ledgerAmountText(cents, type, showSign),
+        text = text,
         modifier = modifier
             .widthIn(min = LEDGER_AMOUNT_MIN_WIDTH)
             .testTag(LEDGER_AMOUNT_TEST_TAG)
             // AA-5：读屏念「支出 788 元」，不逐字念「减 ¥ 七 八 八 点 零 零」
             .semantics { contentDescription = ledgerAmountSpeech(cents, type) },
-        color = color,
-        style = style,
+        color = resolved,
+        style = scaledStyle,
         fontWeight = FontWeight.Medium,
         maxLines = 1,
         softWrap = false,

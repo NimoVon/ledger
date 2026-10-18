@@ -43,6 +43,7 @@ import com.nimo.ledger.domain.stats.BudgetStatus
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.EmptyTone
+import com.nimo.ledger.ui.components.LedgerAmount
 import com.nimo.ledger.ui.components.LedgerProgressBar
 import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.components.MonthSwitcher
@@ -247,12 +248,22 @@ private fun TotalBudgetCard(state: BudgetsUiState, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("本月总预算", style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = budget?.let { Money.formatCurrency(it) } ?: "未设置",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = if (budget == null) MaterialTheme.colorScheme.onSurfaceVariant else statusColor(state.totalStatus),
-            )
+            if (budget == null) {
+                Text(
+                    text = "未设置",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                // 金额列统一 LedgerAmount（规范 §6.3）；状态色仍由预算状态决定
+                LedgerAmount(
+                    cents = budget,
+                    type = null,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = statusColor(state.totalStatus),
+                )
+            }
         }
         if (budget == null) {
             Text(
@@ -312,15 +323,21 @@ private fun CategoryBudgetRowItem(row: BudgetCategoryRow, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }
-            Text(
-                text = row.budgetCents?.let { Money.formatCurrency(it) } ?: "未设置",
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (row.budgetCents == null) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    statusColor(row.status)
-                },
-            )
+            val categoryBudget = row.budgetCents
+            if (categoryBudget == null) {
+                Text(
+                    text = "未设置",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                // 金额列统一 LedgerAmount（规范 §6.3）；OK / WARNING / OVER 三色照旧
+                LedgerAmount(
+                    cents = categoryBudget,
+                    type = null,
+                    color = statusColor(row.status),
+                )
+            }
         }
         val budget = row.budgetCents
         if (budget == null) {

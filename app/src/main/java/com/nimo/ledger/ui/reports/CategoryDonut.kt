@@ -90,10 +90,10 @@ internal fun donutDescription(
     val head = label + "支出分类占比"
     if (rows.isEmpty() || totalCents <= 0L) return head
     val top = rows.take(3).joinToString("，") {
-        "${it.name} ${Money.formatCurrency(it.amountCents)}（${ReportFormatting.percent(it.percent)}）"
+        "${it.name} ${Money.spokenAmount(it.amountCents)}（${ReportFormatting.percent(it.percent)}）"
     }
     val rest = if (rows.size > 3) "，其余 ${rows.size - 3} 个分类" else ""
-    return "$head，合计 ${Money.formatCurrency(totalCents)}：$top$rest"
+    return "$head，合计 ${Money.spokenAmount(totalCents)}：$top$rest"
 }
 
 /**
