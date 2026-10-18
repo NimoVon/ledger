@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
@@ -49,6 +50,7 @@ import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.ui.components.LedgerAmount
 import com.nimo.ledger.ui.components.LedgerProgressBar
 import com.nimo.ledger.ui.components.LedgerSectionHeader
+import com.nimo.ledger.ui.components.stackAtLargeFont
 import com.nimo.ledger.ui.components.MonthSummaryBar
 import com.nimo.ledger.ui.components.MonthSwitcher
 import com.nimo.ledger.util.Money
@@ -84,6 +86,8 @@ fun ReportsScreen(
     val viewModel: ReportsViewModel =
         viewModel(factory = ReportsViewModel.factory(repository, pendingDeletionIds))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // §10.5 / AA-8：2.0 字号下段头 hint 折到第二行，别再挤在标题右侧
+    val stackHeaders = stackAtLargeFont(LocalDensity.current.fontScale)
     // 点范围标签打开范围弹层：快捷项（本月/近 N 个月/今年/去年）、指定月份、自定义起止日期
     var showRangeDialog by remember { mutableStateOf(false) }
 
@@ -148,7 +152,7 @@ fun ReportsScreen(
                         append("日均 / 环比")
                         if (state.hasTotalBudget) append(" / 预算")
                     }
-                    LedgerSectionHeader(state.insightTitle, hint = hint)
+                    LedgerSectionHeader(state.insightTitle, hint = hint, stack = stackHeaders)
                 }
                 item(key = "insight") { InsightCard(state) }
                 stickyHeader(key = "trend-header") { LedgerSectionHeader("收支趋势") }
@@ -156,7 +160,7 @@ fun ReportsScreen(
                 // 先给个总览：谁占了大头；具体数字看下面的排行（占比条用同一套颜色对号）
                 if (state.breakdown.isNotEmpty()) {
                     stickyHeader(key = "donut-header") {
-                        LedgerSectionHeader("分类占比", hint = "点一块看明细")
+                        LedgerSectionHeader("分类占比", hint = "点一块看明细", stack = stackHeaders)
                     }
                     item(key = "donut") {
                         CategoryDonutSection(
@@ -170,7 +174,7 @@ fun ReportsScreen(
                     }
                 }
                 stickyHeader(key = "breakdown-header") {
-                    LedgerSectionHeader("支出排行", hint = "点一行看明细")
+                    LedgerSectionHeader("支出排行", hint = "点一行看明细", stack = stackHeaders)
                 }
                 if (state.breakdown.isEmpty()) {
                     item(key = "breakdown-empty") {
@@ -193,7 +197,7 @@ fun ReportsScreen(
                     }
                 }
                 stickyHeader(key = "accounts-header") {
-                    LedgerSectionHeader("账户支出分布", hint = "点一行看明细")
+                    LedgerSectionHeader("账户支出分布", hint = "点一行看明细", stack = stackHeaders)
                 }
                 if (state.accountBreakdown.isEmpty()) {
                     item(key = "accounts-empty") {

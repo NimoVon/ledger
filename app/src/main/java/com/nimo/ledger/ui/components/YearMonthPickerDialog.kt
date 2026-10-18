@@ -23,7 +23,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.ui.LedgerIcons
 import java.time.YearMonth
@@ -64,6 +66,8 @@ internal fun YearMonthPickerBody(current: YearMonth, onSelect: (YearMonth) -> Un
     var pickingMonths by remember { mutableStateOf(false) }
     var year by remember { mutableIntStateOf(current.year) }
     var pageOffset by remember { mutableIntStateOf(0) }
+    // 200% 字号下 4 列会把「2028」挤成「202」：与段头同一门槛（§3.3 / AA-8），降到 3 列
+    val gridColumns = if (stackAtLargeFont(LocalDensity.current.fontScale)) 3 else GridColumns
 
     Column {
         Row(
@@ -94,7 +98,7 @@ internal fun YearMonthPickerBody(current: YearMonth, onSelect: (YearMonth) -> Un
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (pickingMonths) {
-                YearMonthPicker.months().chunked(GridColumns).forEach { row ->
+                YearMonthPicker.months().chunked(gridColumns).forEach { row ->
                     PickerRow {
                         row.forEach { month ->
                             PickerCell(
@@ -107,7 +111,7 @@ internal fun YearMonthPickerBody(current: YearMonth, onSelect: (YearMonth) -> Un
                     }
                 }
             } else {
-                YearMonthPicker.years(year, pageOffset).chunked(GridColumns).forEach { row ->
+                YearMonthPicker.years(year, pageOffset).chunked(gridColumns).forEach { row ->
                     PickerRow {
                         row.forEach { candidate ->
                             PickerCell(
@@ -175,6 +179,8 @@ private fun PickerCell(
                 color = contentColor,
                 fontWeight = if (selected) FontWeight.Medium else null,
                 maxLines = 1,
+                // 真的还是放不下时给省略号，别把「2028」静默截成「202」（AA-8 真机发现的截字）
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
