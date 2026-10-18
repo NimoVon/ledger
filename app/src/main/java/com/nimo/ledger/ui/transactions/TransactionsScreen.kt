@@ -31,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -292,20 +294,21 @@ internal fun DayHeader(group: TransactionDayGroup) {
     val stack = stackAtLargeFont(LocalDensity.current.fontScale)
     @Composable
     fun Totals(vertical: Boolean) {
-        val texts = buildList {
-            if (group.expenseCents > 0L) add("支出 " + Money.formatCurrency(group.expenseCents))
-            if (group.incomeCents > 0L) add("收入 " + Money.formatCurrency(group.incomeCents))
+        // AA-5：给读屏的 spoken 与屏幕文本分开备一份，念「支出 972 元」而不是「支出 ¥ 九 七 二 点 零 零」
+        val totals = buildList {
+            if (group.expenseCents > 0L) add("支出" to group.expenseCents)
+            if (group.incomeCents > 0L) add("收入" to group.incomeCents)
         }
         if (vertical) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                texts.forEach { DayTotalText(it) }
+                totals.forEach { (label, cents) -> DayTotalText(label, cents) }
             }
         } else {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                texts.forEach { DayTotalText(it) }
+                totals.forEach { (label, cents) -> DayTotalText(label, cents) }
             }
         }
     }
@@ -318,11 +321,13 @@ internal fun DayHeader(group: TransactionDayGroup) {
 }
 
 @Composable
-private fun DayTotalText(text: String) {
+private fun DayTotalText(label: String, cents: Long) {
     Text(
-        text = text,
+        text = "$label " + Money.formatCurrency(cents),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // AA-5：读屏念「支出 972 元」，不逐字念货币符号与小数点
+        modifier = Modifier.semantics { contentDescription = "$label " + Money.spokenAmount(cents) },
     )
 }
 

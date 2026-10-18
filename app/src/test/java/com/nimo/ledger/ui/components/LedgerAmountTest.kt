@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.model.TransactionType
@@ -61,6 +62,27 @@ class LedgerAmountTest {
         assertEquals("-¥2,566.00", ledgerAmountText(-256_600L, null, showSign = true))
     }
 
+    // ---- AA-5 读屏口语（纯函数）----
+
+    @Test
+    fun speech_carriesDirectionWordAndPlainChineseAmount() {
+        assertEquals("支出 788 元", ledgerAmountSpeech(78_800L, TransactionType.EXPENSE))
+        assertEquals("收入 3000 元", ledgerAmountSpeech(300_000L, TransactionType.INCOME))
+        assertEquals("转账 500 元", ledgerAmountSpeech(50_000L, TransactionType.TRANSFER))
+        assertEquals("余额调整 减少 73 元", ledgerAmountSpeech(-7_300L, TransactionType.BALANCE_ADJUST))
+        assertEquals("余额调整 增加 73 元", ledgerAmountSpeech(7_300L, TransactionType.BALANCE_ADJUST))
+        assertEquals("负 2566 元", ledgerAmountSpeech(-256_600L, null))
+    }
+
+    @Test
+    fun amountNodeExposesSpokenDescriptionToTalkBack() {
+        composeRule.setContent {
+            MaterialTheme {
+                LedgerAmount(cents = 78_800L, type = TransactionType.EXPENSE, showSign = true)
+            }
+        }
+        composeRule.onNodeWithContentDescription("支出 788 元").assertExists()
+    }
     // ---- 布局约束（规范 §6.3：minWidth 96dp、单行）----
 
     @Test

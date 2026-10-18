@@ -150,6 +150,31 @@ object Money {
         return sign + "¥" + groupThousands(a / 100L) + "." + (a % 100L).toString().padStart(2, '0')
     }
 
+    /**
+     * 分 → 中文口语（无障碍 AA-5）：给 `contentDescription` 用，读屏器不读「¥」、不读小数点。
+     *
+     * 规则（省略为零的档位，全零兜底「0 元」）：
+     * 12345 -> "123 元 4 角 5 分"、12000 -> "120 元"、1230 -> "12 元 3 角"、
+     * 1204 -> "12 元 4 分"、34 -> "3 角 4 分"、4 -> "4 分"、0 -> "0 元"、-105 -> "负 1 元 5 分"。
+     *
+     * 与 [formatCurrency] 的差别：不带货币符号与千分位（TalkBack 会把「2,566」念成「二 逗号 五六六」），
+     * 也不补「.00」；方向词（支出 / 收入 / 余额调整）由调用方在语义前缀里给。
+     * 只做展示朗读，不能拿它回解析金额（解析入口是 [parseCents]）。
+     */
+    fun spokenAmount(cents: Long): String {
+        val a = abs(cents)
+        val yuan = a / 100
+        val jiao = (a % 100) / 10
+        val fen = a % 10
+        val parts = buildList {
+            if (yuan > 0) add("$yuan 元")
+            if (jiao > 0) add("$jiao 角")
+            if (fen > 0) add("$fen 分")
+            if (isEmpty()) add("0 元")
+        }
+        return (if (cents < 0) "负 " else "") + parts.joinToString(" ")
+    }
+
     /** 整数部分每三位插一个逗号：1234567 -> "1,234,567"（<=3 位原样返回） */
     private fun groupThousands(value: Long): String {
         val digits = value.toString()

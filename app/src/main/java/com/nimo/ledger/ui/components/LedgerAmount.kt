@@ -6,6 +6,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -13,6 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.model.TransactionType
 import com.nimo.ledger.util.Money
+import kotlin.math.abs
 
 /**
  * 金额列最小宽度（UI-UX 规范 §6.3）：短金额也占满这一列，右边缘才能成一条竖线。
@@ -59,7 +62,9 @@ fun LedgerAmount(
         text = ledgerAmountText(cents, type, showSign),
         modifier = modifier
             .widthIn(min = LEDGER_AMOUNT_MIN_WIDTH)
-            .testTag(LEDGER_AMOUNT_TEST_TAG),
+            .testTag(LEDGER_AMOUNT_TEST_TAG)
+            // AA-5：读屏念「支出 788 元」，不逐字念「减 ¥ 七 八 八 点 零 零」
+            .semantics { contentDescription = ledgerAmountSpeech(cents, type) },
         color = color,
         style = style,
         fontWeight = FontWeight.Medium,
@@ -81,4 +86,20 @@ internal fun ledgerAmountText(cents: Long, type: TransactionType?, showSign: Boo
     type == TransactionType.EXPENSE -> "-" + Money.formatCurrency(cents)
     type == TransactionType.INCOME -> "+" + Money.formatCurrency(cents)
     else -> Money.formatCurrency(cents)
+}
+
+/**
+ * 金额的口语文本（无障碍 AA-5）：方向词 + [Money.spokenAmount]，不出现「¥」与小数点。
+ *
+ * 支出 / 收入 / 转账按类型给方向词（金额取绝对值，方向已由词表达）；
+ * 余额调整要区分增减（计划口径里它不参与收支统计，只改账户余额）；
+ * 汇总 / 净资产（`type = null`）不加速度词，负数由 `spokenAmount` 自带「负」。
+ */
+internal fun ledgerAmountSpeech(cents: Long, type: TransactionType?): String = when (type) {
+    TransactionType.EXPENSE -> "支出 " + Money.spokenAmount(abs(cents))
+    TransactionType.INCOME -> "收入 " + Money.spokenAmount(abs(cents))
+    TransactionType.TRANSFER -> "转账 " + Money.spokenAmount(abs(cents))
+    TransactionType.BALANCE_ADJUST ->
+        "余额调整 " + (if (cents < 0) "减少 " else "增加 ") + Money.spokenAmount(abs(cents))
+    null -> Money.spokenAmount(cents)
 }

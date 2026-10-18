@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.stats.PeriodSummary
@@ -31,10 +33,13 @@ internal fun stackSummaryCells(fontScale: Float): Boolean = stackAtLargeFont(fon
 fun MonthSummaryBar(summary: PeriodSummary, loading: Boolean) {
     fun text(cents: Long): String = if (loading) "—" else Money.formatCurrency(cents)
 
+    // AA-5：读屏念「支出 2566 元」，不念「¥ 二 逗号 五六六 点 零 零」；加载中也要有话说
+    fun speech(cents: Long): String = if (loading) "加载中" else Money.spokenAmount(cents)
+
     val cells = listOf(
-        SummaryCellData("支出", text(summary.expenseCents), MaterialTheme.colorScheme.error),
-        SummaryCellData("收入", text(summary.incomeCents), MaterialTheme.colorScheme.primary),
-        SummaryCellData("结余", text(summary.netCents), MaterialTheme.colorScheme.onSurface),
+        SummaryCellData("支出", text(summary.expenseCents), speech(summary.expenseCents), MaterialTheme.colorScheme.error),
+        SummaryCellData("收入", text(summary.incomeCents), speech(summary.incomeCents), MaterialTheme.colorScheme.primary),
+        SummaryCellData("结余", text(summary.netCents), speech(summary.netCents), MaterialTheme.colorScheme.onSurface),
     )
     val barModifier = Modifier
         .fillMaxWidth()
@@ -51,12 +56,21 @@ fun MonthSummaryBar(summary: PeriodSummary, loading: Boolean) {
     }
 }
 
-/** 一格的数据：标签、给人看的金额、颜色 */
-private data class SummaryCellData(val label: String, val amountText: String, val color: Color)
+/** 一格的数据：标签、给人看的金额、读屏口语、颜色 */
+private data class SummaryCellData(
+    val label: String,
+    val amountText: String,
+    val speech: String,
+    val color: Color,
+)
 
 @Composable
 private fun SummaryCell(cell: SummaryCellData, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
+    Column(
+        modifier = modifier.semantics(mergeDescendants = true) {
+            contentDescription = "${cell.label} ${cell.speech}"
+        },
+    ) {
         Text(
             text = cell.label,
             style = MaterialTheme.typography.labelMedium,

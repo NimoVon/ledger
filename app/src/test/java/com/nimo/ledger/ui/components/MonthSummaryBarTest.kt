@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import com.nimo.ledger.domain.stats.PeriodSummary
@@ -54,6 +55,15 @@ class MonthSummaryBarTest {
     }
 
     @Test
+    fun eachCellExposesSpokenChineseToTalkBack() {
+        showAt(1.0f)
+
+        // AA-5：三格各自读「支出 600 元」「收入 0 元」「结余 负 600 元」，
+        // 而不是把 "¥600.00" 逐字念成「¥ 六 零 零 点 零 零」
+        composeRule.onNodeWithContentDescription("支出 600 元").assertExists()
+        composeRule.onNodeWithContentDescription("收入 0 元").assertExists()
+        composeRule.onNodeWithContentDescription("结余 负 600 元").assertExists()
+    }    @Test
     fun atNormalFontScale_theThreeCellsShareOneRow() {
         showAt(1.0f)
 

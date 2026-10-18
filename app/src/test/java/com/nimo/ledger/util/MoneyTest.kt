@@ -214,6 +214,21 @@ class MoneyTest {
     }
 
     @Test
+    fun spokenAmount_readsYuanJiaoFenWithoutCurrencySymbol() {
+        assertEquals("123 元 4 角 5 分", Money.spokenAmount(12_345L))
+        assertEquals("120 元", Money.spokenAmount(12_000L))
+        assertEquals("12 元 3 角", Money.spokenAmount(1_230L))
+        assertEquals("12 元 4 分", Money.spokenAmount(1_204L))
+        assertEquals("3 角 4 分", Money.spokenAmount(34L))
+        assertEquals("4 分", Money.spokenAmount(4L))
+        assertEquals("0 元", Money.spokenAmount(0L))
+        assertEquals("负 1 元 5 分", Money.spokenAmount(-105L))
+        // 口语里不带千分位与货币符号：TalkBack 会把「¥2,566.00」逐字念成「¥ 二 逗号 五六六 点 零 零」
+        val spoken = Money.spokenAmount(256_600L)
+        assertEquals("2566 元", spoken)
+        assertFalse(spoken.contains("¥") || spoken.contains(",") || spoken.contains("."))
+    }
+    @Test
     fun normalizeAmountInput_leavesHalfWidthTextAndUnknownCharactersAlone() {
         for (text in listOf("", "12.34", "-1.05", "1,234.56", "abc", "12 34")) {
             assertEquals(text, Money.normalizeAmountInput(text))
