@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -87,6 +88,16 @@ internal const val AMOUNT_REVIEW_TEST_TAG: String = "record-amount-review"
 
 /** 分类 chip 区（R-2）：限高 + 内部纵向滚 */
 internal const val CATEGORY_CHIPS_TEST_TAG: String = "record-category-chips"
+
+/**
+ * AA-6 焦点链的六个锚点：金额 → 分类首项 → 账户首项 → 日期 → 备注 → 保存。
+ * 顺序由 [focusProperties] 显式固定，不再赌声明顺序；测试按这些 tag 逐个断言「焦点落在谁身上」。
+ */
+internal const val RECORD_AMOUNT_TEST_TAG: String = "record-amount"
+internal const val RECORD_CATEGORY_FIRST_TEST_TAG: String = "record-category-first"
+internal const val RECORD_ACCOUNT_FIRST_TEST_TAG: String = "record-account-first"
+internal const val RECORD_DATE_TEST_TAG: String = "record-date"
+internal const val RECORD_NOTE_TEST_TAG: String = "record-note"
 
 /**
  * 分类 chip 区的最大高度（R-2）：约 3 行 chip（每行 40dp + 4dp 间距）。
@@ -137,6 +148,14 @@ fun RecordScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     // 内联新建分类（附.1 R3）：对话框开着时不让重入，保存成功由 createdCategoryId 信号收掉
     var showCreateCategory by remember { mutableStateOf(false) }
+
+    // AA-6：表单焦点顺序 金额 → 分类 → 账户 → 日期 → 备注 → 保存。
+    // 六个 requester 在页面级创建，底部「保存」与表单主体分属 Scaffold 的两块，才能被同一条链串起来。
+    val categoryFocus = remember { FocusRequester() }
+    val accountFocus = remember { FocusRequester() }
+    val dateFocus = remember { FocusRequester() }
+    val noteFocus = remember { FocusRequester() }
+    val saveFocus = remember { FocusRequester() }
 
     // 「转账」是记一笔页里的第三个分段（用户要求：转账入口放进记一笔，不再占一个悬浮按钮）：
     // 切过去就地渲染转账表单。转账有自己的 ViewModel 与校验（两个账户、没有分类）。
@@ -226,7 +245,12 @@ fun RecordScreen(
         // 不新增步骤——「3 次点击记账」仍是 点按钮 → 输金额 → 点保存。
         bottomBar = {
             if (showSave) {
-                RecordSaveBar(isSaving = isSaving, onSave = onSave)
+                RecordSaveBar(
+                    isSaving = isSaving,
+                    onSave = onSave,
+                    saveFocus = saveFocus,
+                    previousFieldFocus = noteFocus,
+                )
             }
         },
     ) { innerPadding ->
@@ -314,6 +338,11 @@ fun RecordScreen(
                         viewModel = viewModel,
                         onPickDate = { showDatePicker = true },
                         onCreateCategory = { showCreateCategory = true },
+                        categoryFocus = categoryFocus,
+                        accountFocus = accountFocus,
+                        dateFocus = dateFocus,
+                        noteFocus = noteFocus,
+                        saveFocus = saveFocus,
                         modifier = bodyModifier,
                     )
                 }
@@ -373,9 +402,18 @@ private fun RecordFormBody(
     viewModel: RecordViewModel,
     onPickDate: () -> Unit,
     onCreateCategory: () -> Unit,
+    categoryFocus: FocusRequester,
+    accountFocus: FocusRequester,
+    dateFocus: FocusRequester,
+    noteFocus: FocusRequester,
+    saveFocus: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     val amountFocus = remember { FocusRequester() }
+    // AA-6：分类 / 账户为空（全停用、只剩已归档账户）时，焦点链跳到下一个真实存在的锚点，
+    // 不在一个没挂上的 FocusRequester 上空转。
+    val categoryAnchor = if (state.categories.isEmpty()) accountFocus else categoryFocus
+    val accountAnchor = if (state.accounts.isEmpty()) dateFocus else accountFocus
     // 新建时进页面就聚焦金额："记一笔"的主体就是输金额，省一次点击。
     // 编辑时金额已经填好，弹键盘反而挡住要改的其它字段，不抢焦点。
     LaunchedEffect(Unit) { if (!state.isEditing) amountFocus.requestFocus() }
@@ -458,7 +496,9 @@ private fun RecordFormBody(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(amountFocus),
+                    .focusRequester(amountFocus)
+                    .focusProperties { next = categoryAnchor }
+                    .testTag(RECORD_AMOUNT_TEST_TAG),
             )
             // 能解析成合法金额才显示；空/非法输入不在这里猜，交给下面的错误提示
             AmountReviewLine(cents = Money.parseCents(state.form.amountText)?.takeIf { it > 0 })
@@ -476,6 +516,14 @@ private fun RecordFormBody(
                 selectedCategoryId = state.form.categoryId,
                 onSelectCategory = viewModel::setCategory,
                 onCreateCategory = onCreateCategory,
+                firstChipModifier = Modifier
+                    .focusRequester(categoryAnchor)
+                    .focusProperties {
+                        previous = amountFocus
+                        // 分类区之后是账户；账户为空时直接落到日期
+                        next = accountAnchor
+                    }
+                    .testTag(RECORD_CATEGORY_FIRST_TEST_TAG),
             )
         }
 
@@ -488,11 +536,22 @@ private fun RecordFormBody(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    state.accounts.forEach { account ->
+                    state.accounts.forEachIndexed { index, account ->
                         FilterChip(
                             selected = state.effectiveAccountId == account.id,
                             onClick = { viewModel.setAccount(account.id) },
                             label = { Text(account.name) },
+                            modifier = if (index == 0) {
+                                Modifier
+                                    .focusRequester(accountFocus)
+                                    .focusProperties {
+                                        previous = categoryAnchor
+                                        next = dateFocus
+                                    }
+                                    .testTag(RECORD_ACCOUNT_FIRST_TEST_TAG)
+                            } else {
+                                Modifier
+                            },
                         )
                     }
                 }
@@ -505,7 +564,16 @@ private fun RecordFormBody(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // 日期图标 20dp：可点的日期字段要一眼看出「这里能点」（§5.1 Calendar）
-                TextButton(onClick = onPickDate) {
+                TextButton(
+                    onClick = onPickDate,
+                    modifier = Modifier
+                        .focusRequester(dateFocus)
+                        .focusProperties {
+                            previous = accountAnchor
+                            next = noteFocus
+                        }
+                        .testTag(RECORD_DATE_TEST_TAG),
+                ) {
                     Icon(
                         imageVector = LedgerIcons.Calendar,
                         contentDescription = null,
@@ -532,7 +600,14 @@ private fun RecordFormBody(
             supportingText = {
                 Text("${state.form.note.length}/${TransactionValidator.MAX_NOTE_LENGTH}")
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(noteFocus)
+                .focusProperties {
+                    previous = dateFocus
+                    next = saveFocus
+                }
+                .testTag(RECORD_NOTE_TEST_TAG),
         )
 
         // 删除入口（仅编辑模式）。这里不做二次确认：延迟物理删除 + Snackbar 撤销
@@ -564,7 +639,12 @@ private fun RecordFormBody(
  * 为什么两处都留：大屏单手够不到顶栏右上角，但习惯顶栏的人也不该被改掉肌肉记忆。
  */
 @Composable
-internal fun RecordSaveBar(isSaving: Boolean, onSave: () -> Unit) {
+internal fun RecordSaveBar(
+    isSaving: Boolean,
+    onSave: () -> Unit,
+    saveFocus: FocusRequester? = null,
+    previousFieldFocus: FocusRequester? = null,
+) {
     Surface(tonalElevation = 3.dp) {
         Button(
             onClick = onSave,
@@ -573,6 +653,19 @@ internal fun RecordSaveBar(isSaving: Boolean, onSave: () -> Unit) {
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
                 .height(52.dp)
+                .then(
+                    if (saveFocus == null) {
+                        Modifier
+                    } else {
+                        Modifier
+                            .focusRequester(saveFocus)
+                            .focusProperties {
+                                previous = previousFieldFocus ?: FocusRequester.Default
+                                // 保存是本页的终点，不再往后接
+                                next = FocusRequester.Cancel
+                            }
+                    },
+                )
                 .testTag(RECORD_SAVE_BOTTOM_TEST_TAG),
         ) {
             Text(if (isSaving) "保存中…" else "保存")
@@ -612,6 +705,8 @@ internal fun CategoryChips(
     onSelectCategory: (Long) -> Unit,
     onCreateCategory: () -> Unit,
     modifier: Modifier = Modifier,
+    /** AA-6 焦点链：只挂在第一颗分类 chip 上（组内其余 chip 走默认顺序） */
+    firstChipModifier: Modifier = Modifier,
 ) {
     val chipsScrollState = rememberScrollState()
     val selectedChipRequester = remember { BringIntoViewRequester() }
@@ -630,7 +725,7 @@ internal fun CategoryChips(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            categories.forEach { category ->
+            categories.forEachIndexed { index, category ->
                 val selected = selectedCategoryId == category.id
                 FilterChip(
                     selected = selected,
@@ -640,10 +735,13 @@ internal fun CategoryChips(
                             listOfNotNull(category.icon, category.name).joinToString(" "),
                         )
                     },
-                    modifier = if (selected) {
-                        Modifier.bringIntoViewRequester(selectedChipRequester)
-                    } else {
-                        Modifier
+                    modifier = when {
+                        index == 0 && selected -> firstChipModifier
+                            .bringIntoViewRequester(selectedChipRequester)
+
+                        index == 0 -> firstChipModifier
+                        selected -> Modifier.bringIntoViewRequester(selectedChipRequester)
+                        else -> Modifier
                     },
                 )
             }
