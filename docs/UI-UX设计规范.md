@@ -684,7 +684,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | AA-3 ✅ **已修 2026-10-18** | P1 | 装饰性图标未统一 contentDescription = null | 底栏图标与环比箭头已置 null；箭头携带的方向折进 `ReportFormatting.changeSpeech`（「上升 较上月 12.5%」），见 `docs/测试报告.md` §34 |
 | AA-4 | P1 | 图表语义已做（`DONUT_DESCRIPTION` / `dailyDescription` / `dayDescription` / `trendDescription`），柱状图每格是独立可点 Box | 保留；确认相邻格子朗读不会被合并成长句（mergeDescendants 只在格子内部用，**待真机确认**） |
 | AA-5 ✅ **已修 2026-10-18** | P1 | 金额朗读：TalkBack 会逐字读「¥」与小数点 | `Money.spokenAmount()`（元 / 角 / 分中文口语，无 ¥、无千分位、无小数点）+ `LedgerAmount` / `MonthSummaryBar` / 明细日汇总挂 `contentDescription`；证据见 `docs/测试报告.md` §33 |
-| AA-6 | P1 | 表单焦点顺序应为 金额 → 分类 → 账户 → 日期 → 备注 → 保存 | 现状按声明顺序，基本正确；用 focusProperties 显式固定，**真机 TalkBack 验证待做** |
+| AA-6 ✅ **已修 2026-10-18** | P1 | 表单焦点顺序应为 金额 → 分类 → 账户 → 日期 → 备注 → 保存 | `focusProperties` 已显式固定 5 个锚点（金额 → 分类首 chip → 账户首 chip → 日期 → 备注 → 保存，保存之后 `FocusRequester.Cancel` 不再走）；顺序由 `RecordFocusOrderTest` 2 例锁住，设备用键盘 TAB 走查，**真机 TalkBack 实听待做**（见 `docs/测试报告.md` §35） |
 | AA-7 ✅ **已修 2026-10-17** | P1 | 未处理「减少动画」偏好 | 页面过渡/骨架淡入包 LocalMotionDurationScale，或读 Settings.Global.ANIMATOR_DURATION_SCALE；**最低要求：减少动画时不播骨架淡入** —— 已读 `animator_duration_scale`（`rememberAnimationsEnabled()`）+ 四个转场 0 时返回 `None`（F-4）；骨架淡入归 G-9，届时复用同一接点。证据见 `docs/测试报告.md` §26 |
 | AA-8 | P1 | 200% 文本缩放 | 见 §10.5 逐屏清单（当前只有 MonthSummaryBar 有断言） |
 
@@ -908,6 +908,6 @@ cd /d/git/ledger
 
 **UI 设计师**：DSH UI 设计师 Agent
 **设计系统日期**：2026-10-16
-**实施状态（2026-10-18）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24，E-8（预算页点月份标签直选年月，2026-10-18）见 §29，E-7（设置页卡片分组 + 开发项折叠，2026-10-18）见 §30，E-4（统计页洞察卡片化 + 段头 sticky，2026-10-18）见 §31；批 F 的 F-2（fontScale ≥1.5 三处竖排）见 §25，F-4（接「减少动画」偏好）见 §26，F-3（分类图标宫格）见 §27，F-1（13 个功能图标）见 §28；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；问题 G-5（金额列统一 `LedgerAmount`，2026-10-18）见 §32；问题 AA-3（装饰性图标不重复朗读 + 环比方向入口语，2026-10-18）见 §34；批 E 全部收口（E-1 ~ E-8），F-1 余下的 10 个图标仍无宿主界面（E-7 只重排了设置页，没有给它们接界面）
+**实施状态（2026-10-18）**：另有一项不在 §11 批次里的导航收口已完成——统计下钻不再弹掉返回栈、转场按 Tab / 二级页 / 表单分档（§7.4，证据见 `docs/测试报告.md` §19）。§11 的批 D 已全部完成——D-1（`LedgerListItem`）/ D-2（`LedgerSectionHeader`）证据见 [`docs/测试报告.md`](测试报告.md) §17，D-3（`LedgerProgressBar`）/ D-4（`EmptyState` 三色调）/ D-5（`PickerCell` 44dp）/ D-6（FAB 与对话框标题文案分离）见 §18；批 E 的 E-1 ~ E-3 见 §21 / §22，E-5（气泡避开 FAB）/ E-6（选中格底色 0.14f）见 §24，E-8（预算页点月份标签直选年月，2026-10-18）见 §29，E-7（设置页卡片分组 + 开发项折叠，2026-10-18）见 §30，E-4（统计页洞察卡片化 + 段头 sticky，2026-10-18）见 §31；批 F 的 F-2（fontScale ≥1.5 三处竖排）见 §25，F-4（接「减少动画」偏好）见 §26，F-3（分类图标宫格）见 §27，F-1（13 个功能图标）见 §28；金额输入全角归一化（§11 之外、由 §22 真机走查引出的 F-5）见 §23；问题 G-5（金额列统一 `LedgerAmount`，2026-10-18）见 §32；问题 AA-3（装饰性图标不重复朗读 + 环比方向入口语，2026-10-18）见 §34；问题 AA-6（表单焦点顺序显式固定，2026-10-18）见 §35；批 E 全部收口（E-1 ~ E-8），F-1 余下的 10 个图标仍无宿主界面（E-7 只重排了设置页，没有给它们接界面）
 **QA 流程**：批 D/E/F 每批结束跑 testDebugUnitTest --rerun + lint + assembleDebug，并为新组件补截图断言
 
