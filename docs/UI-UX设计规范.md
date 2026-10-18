@@ -686,7 +686,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | AA-5 ✅ **已修 2026-10-18** | P1 | 金额朗读：TalkBack 会逐字读「¥」与小数点 | `Money.spokenAmount()`（元 / 角 / 分中文口语，无 ¥、无千分位、无小数点）+ `LedgerAmount` / `MonthSummaryBar` / 明细日汇总挂 `contentDescription`；证据见 `docs/测试报告.md` §33 |
 | AA-6 ✅ **已修 2026-10-18** | P1 | 表单焦点顺序应为 金额 → 分类 → 账户 → 日期 → 备注 → 保存 | `focusProperties` 已显式固定 5 个锚点（金额 → 分类首 chip → 账户首 chip → 日期 → 备注 → 保存，保存之后 `FocusRequester.Cancel` 不再走）；顺序由 `RecordFocusOrderTest` 2 例锁住，设备用键盘 TAB 走查，**真机 TalkBack 实听待做**（见 `docs/测试报告.md` §35） |
 | AA-7 ✅ **已修 2026-10-17** | P1 | 未处理「减少动画」偏好 | 页面过渡/骨架淡入包 LocalMotionDurationScale，或读 Settings.Global.ANIMATOR_DURATION_SCALE；**最低要求：减少动画时不播骨架淡入** —— 已读 `animator_duration_scale`（`rememberAnimationsEnabled()`）+ 四个转场 0 时返回 `None`（F-4）；骨架淡入归 G-9，届时复用同一接点。证据见 `docs/测试报告.md` §26 |
-| AA-8 | P1 | 200% 文本缩放 | 见 §10.5 逐屏清单（当前只有 MonthSummaryBar 有断言） |
+| AA-8 ✅ **已修 2026-10-18** | P1 | 200% 文本缩放 | 逐屏断言见 §10.5 与 [`docs/测试报告.md`](docs/测试报告.md) §36：`PerScreenLargeFontUiTest` 3 例 + `YearMonthPickerGridTest` 2 例；真机 2.0 走查 8 屏（分类页标题折行属 C-3，未收敛） |
 
 ---
 
@@ -789,10 +789,10 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | 预算 | 进度条下行两段文字 | B-3 竖排 |
 | 账户 | 账户名 + 类型 + 校准图标 + 余额四段同行 | 校准图标下移或余额换行 |
 | 分类 | 分类名 + 上移 + 下移 三个 IconButton | C-3 收敛为单图标菜单 |
-| 对话框 | 年月格 44dp 下 4 列是否溢出 | 屏宽 < 340dp 降到 3 列（BoxWithConstraints） |
+| 对话框 | 年月格 44dp 下 4 列是否溢出 | **已修 2026-10-18**：字号 ≥1.5 降到 3 列（`stackAtLargeFont`），格内文本放不下给省略号；见测试报告 §36 |
 | 设置 | 主题行 RadioButton + 长文案 | 文案换行，不缩字号 |
 
-### 10.6 其他合规点
+### 10.5.1 逐屏走查结论（2026-10-18，AA-8）
 
 - **危险操作二次确认**：删除一律二次确认（现有）；**恢复默认分类目前没有确认 → C-2 必须补**。
 - **颜色不作唯一通道**：已在 §1.2 / §2.2 建立（符号 + 文字 + 位置）。
