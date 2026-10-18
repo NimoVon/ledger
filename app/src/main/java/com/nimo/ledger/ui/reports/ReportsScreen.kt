@@ -1,5 +1,6 @@
 package com.nimo.ledger.ui.reports
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,6 +67,10 @@ import kotlinx.coroutines.flow.flowOf
  * @param pendingDeletionIds 正被暂存待删除的那几笔 id：倒计时内它们不进报表
  * @param onDrillDown 点某一行时要看的筛选条件，由 [ReportDrillDown] 翻译，宿主负责跳转
  */
+/** 「本月洞察」卡片（S-5）的测试标记：日均 / 环比 / 预算三块被一张卡片包住，行间只有细分隔线 */
+const val INSIGHT_CARD_TEST_TAG = "reports-insight-card"
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ReportsScreen(
     repository: LedgerRepository,
@@ -130,20 +137,21 @@ fun ReportsScreen(
                 modifier = contentModifier,
                 contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
             ) {
-                // 提示写清这块到底给了什么：预算达成率只在单月范围出现，写死了会让人找不存在的行
-                item(key = "insight-header") {
+                // 段头改 stickyHeader（S-2）：五个段头钉在内容区顶沿，滑到「支出排行」不用再猜自己在看哪一段。
+                // 段头本身是 surfaceVariant 实条（LedgerSectionHeader），钉住时挡住下面滚动的内容不会被看穿。
+                stickyHeader(key = "insight-header") {
                     val hint = buildString {
                         append("日均 / 环比")
                         if (state.hasTotalBudget) append(" / 预算")
                     }
                     LedgerSectionHeader(state.insightTitle, hint = hint)
                 }
-                item(key = "insight") { InsightSection(state) }
-                item(key = "trend-header") { LedgerSectionHeader("收支趋势") }
+                item(key = "insight") { InsightCard(state) }
+                stickyHeader(key = "trend-header") { LedgerSectionHeader("收支趋势") }
                 item(key = "trend") { TrendBlock(state = state, viewModel = viewModel) }
                 // 先给个总览：谁占了大头；具体数字看下面的排行（占比条用同一套颜色对号）
                 if (state.breakdown.isNotEmpty()) {
-                    item(key = "donut-header") {
+                    stickyHeader(key = "donut-header") {
                         LedgerSectionHeader("分类占比", hint = "点一块看明细")
                     }
                     item(key = "donut") {
@@ -157,7 +165,9 @@ fun ReportsScreen(
                         )
                     }
                 }
-                item(key = "breakdown-header") { LedgerSectionHeader("支出排行", hint = "点一行看明细") }
+                stickyHeader(key = "breakdown-header") {
+                    LedgerSectionHeader("支出排行", hint = "点一行看明细")
+                }
                 if (state.breakdown.isEmpty()) {
                     item(key = "breakdown-empty") {
                         HintRow(state.noExpenseHint)
@@ -178,7 +188,9 @@ fun ReportsScreen(
                         )
                     }
                 }
-                item(key = "accounts-header") { LedgerSectionHeader("账户支出分布", hint = "点一行看明细") }
+                stickyHeader(key = "accounts-header") {
+                    LedgerSectionHeader("账户支出分布", hint = "点一行看明细")
+                }
                 if (state.accountBreakdown.isEmpty()) {
                     item(key = "accounts-empty") {
                         HintRow(state.noAccountExpenseHint)
@@ -231,18 +243,45 @@ private fun TrendBlock(state: ReportsUiState, viewModel: ReportsViewModel) {
 }
 
 /**
- * 本月洞察（R2）：日均支出 + 支出/收入环比 + 预算达成率。
+ * 本月洞察卡片（R2 / S-5）：日均支出 + 支出/收入环比 + 预算达成率，包进一张 surfaceContainerLow 卡片，
+ * 行间只留「4dp 呼吸 + 1dp 细线」，细线从卡片左内缘 16dp 起画、和行里的文字左缘对齐。
+ *
  * 预算达成率只在设了总预算时出现——没设总预算时它没有分母，显示 0% 会误导。
  */
 @Composable
-private fun InsightSection(state: ReportsUiState) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        DailyAverageRow(state.dailyAverageExpenseCents)
-        ChangeSection(state)
-        if (state.hasTotalBudget) {
-            BudgetRateRow(state)
+private fun InsightCard(state: ReportsUiState) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .testTag(INSIGHT_CARD_TEST_TAG),
+    ) {
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            DailyAverageRow(state.dailyAverageExpenseCents)
+            InsightDivider()
+            ChangeSection(state)
+            if (state.hasTotalBudget) {
+                InsightDivider()
+                BudgetRateRow(state)
+            }
         }
     }
+}
+
+/**
+ * 卡片内的行间分隔：上下各 4dp 呼吸 + 1dp 细线，线只从 16dp 起画——
+ * 和行里的文字左缘对齐，不切到卡片 16dp 圆角上（S-5 的「行间 4dp 细分隔线（start = 16dp）」）。
+ */
+@Composable
+private fun InsightDivider() {
+    Spacer(modifier = Modifier.height(4.dp))
+    HorizontalDivider(
+        thickness = 1.dp,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp),
+    )
+    Spacer(modifier = Modifier.height(4.dp))
 }
 
 /** 日均支出：一行。除法在 StatsCalculator，页面只负责显示 */
@@ -251,7 +290,7 @@ private fun DailyAverageRow(amountCents: Long) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -278,7 +317,7 @@ private fun BudgetRateRow(state: ReportsUiState) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -316,7 +355,7 @@ private fun ChangeSection(state: ReportsUiState) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         ChangeCell(
             label = "支出环比",
