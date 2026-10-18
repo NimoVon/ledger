@@ -683,7 +683,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | AA-2 | P0 | PickerCell 40dp | 同 D-1 |
 | AA-3 | P1 | 装饰性图标未统一 contentDescription = null | 全部装饰 Icon（段头、chip 内、图例圆点、箭头）显式 null；仅操作类图标带描述 |
 | AA-4 | P1 | 图表语义已做（`DONUT_DESCRIPTION` / `dailyDescription` / `dayDescription` / `trendDescription`），柱状图每格是独立可点 Box | 保留；确认相邻格子朗读不会被合并成长句（mergeDescendants 只在格子内部用，**待真机确认**） |
-| AA-5 | P1 | 金额朗读：TalkBack 会逐字读「¥」与小数点 | 在 LedgerAmount 上加 semantics contentDescription，用「支出 12 元 3 角 4 分」式中文口语；**该文案应由 Money 层提供（新增函数），触及金额核心模块，标 P1 待确认** |
+| AA-5 ✅ **已修 2026-10-18** | P1 | 金额朗读：TalkBack 会逐字读「¥」与小数点 | `Money.spokenAmount()`（元 / 角 / 分中文口语，无 ¥、无千分位、无小数点）+ `LedgerAmount` / `MonthSummaryBar` / 明细日汇总挂 `contentDescription`；证据见 `docs/测试报告.md` §33 |
 | AA-6 | P1 | 表单焦点顺序应为 金额 → 分类 → 账户 → 日期 → 备注 → 保存 | 现状按声明顺序，基本正确；用 focusProperties 显式固定，**真机 TalkBack 验证待做** |
 | AA-7 ✅ **已修 2026-10-17** | P1 | 未处理「减少动画」偏好 | 页面过渡/骨架淡入包 LocalMotionDurationScale，或读 Settings.Global.ANIMATOR_DURATION_SCALE；**最低要求：减少动画时不播骨架淡入** —— 已读 `animator_duration_scale`（`rememberAnimationsEnabled()`）+ 四个转场 0 时返回 `None`（F-4）；骨架淡入归 G-9，届时复用同一接点。证据见 `docs/测试报告.md` §26 |
 | AA-8 | P1 | 200% 文本缩放 | 见 §10.5 逐屏清单（当前只有 MonthSummaryBar 有断言） |
