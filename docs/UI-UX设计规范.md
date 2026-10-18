@@ -366,7 +366,7 @@ fun LedgerAmount(
 | TRANSFER / BALANCE_ADJUST | onSurfaceVariant | 无 | 中性，不抢眼（现有口径，保留） |
 | null（汇总/余额） | onSurface | 无 | 净资产、预算额 |
 
-**约束**：金额列 minWidth = 96.dp（保证右边缘成线）；maxLines = 1；**不换行**（超长金额在 200% 缩放下允许 titleSmall 降级）。
+**约束**：金额列 minWidth = 96.dp（保证右边缘成线）；maxLines = 1；**不换行**（超长金额在 200% 缩放下允许 titleSmall 降级，实现为「fontScale ≥ 2.0 且文本 > 9 字符 → titleSmall」）。`color` 参数可覆盖状态色——预算页的 OK / WARNING / OVER 三色仍由预算状态决定；预算页金额行也已接入（2026-10-18，见 `docs/测试报告.md` §38）。
 
 ### 6.4 LedgerProgressBar（统一细条）★ P0
 
@@ -683,7 +683,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | AA-2 | P0 | PickerCell 40dp | 同 D-1 |
 | AA-3 ✅ **已修 2026-10-18** | P1 | 装饰性图标未统一 contentDescription = null | 底栏图标与环比箭头已置 null；箭头携带的方向折进 `ReportFormatting.changeSpeech`（「上升 较上月 12.5%」），见 `docs/测试报告.md` §34 |
 | AA-4 ✅ **已修 2026-10-18** | P1 | 图表语义已做（`DONUT_DESCRIPTION` / `dailyDescription` / `dayDescription` / `trendDescription`），柱状图每格是独立可点 Box | 保留；相邻格子朗读**不会**被合并成长句：格子靠自身 `clickable` 形成合并边界、容器不 `mergeDescendants`，合并语义树里逐日各一个节点；`TrendChartUiTest` 已锁住，证据见 `docs/测试报告.md` §37 |
-| AA-5 ✅ **已修 2026-10-18** | P1 | 金额朗读：TalkBack 会逐字读「¥」与小数点 | `Money.spokenAmount()`（元 / 角 / 分中文口语，无 ¥、无千分位、无小数点）+ `LedgerAmount` / `MonthSummaryBar` / 明细日汇总挂 `contentDescription`；证据见 `docs/测试报告.md` §33 |
+| AA-5 ✅ **已修 2026-10-18**（图表 / 环形图描述已于同日收口，见 §38） | P1 | 金额朗读：TalkBack 会逐字读「¥」与小数点 | `Money.spokenAmount()`（元 / 角 / 分中文口语，无 ¥、无千分位、无小数点）+ `LedgerAmount` / `MonthSummaryBar` / 明细日汇总挂 `contentDescription`；证据见 `docs/测试报告.md` §33 |
 | AA-6 ✅ **已修 2026-10-18** | P1 | 表单焦点顺序应为 金额 → 分类 → 账户 → 日期 → 备注 → 保存 | `focusProperties` 已显式固定 5 个锚点（金额 → 分类首 chip → 账户首 chip → 日期 → 备注 → 保存，保存之后 `FocusRequester.Cancel` 不再走）；顺序由 `RecordFocusOrderTest` 2 例锁住，设备用键盘 TAB 走查，**真机 TalkBack 实听待做**（见 `docs/测试报告.md` §35） |
 | AA-7 ✅ **已修 2026-10-17** | P1 | 未处理「减少动画」偏好 | 页面过渡/骨架淡入包 LocalMotionDurationScale，或读 Settings.Global.ANIMATOR_DURATION_SCALE；**最低要求：减少动画时不播骨架淡入** —— 已读 `animator_duration_scale`（`rememberAnimationsEnabled()`）+ 四个转场 0 时返回 `None`（F-4）；骨架淡入归 G-9，届时复用同一接点。证据见 `docs/测试报告.md` §26 |
 | AA-8 ✅ **已修 2026-10-18** | P1 | 200% 文本缩放 | 逐屏断言见 §10.5 与 [`docs/测试报告.md`](docs/测试报告.md) §36：`PerScreenLargeFontUiTest` 3 例 + `YearMonthPickerGridTest` 2 例；真机 2.0 走查 8 屏（分类页标题折行属 C-3，未收敛） |
@@ -896,7 +896,7 @@ cd /d/git/ledger
 1. ~~所有布局改动**没有**经过编译、真机或截图验证——本文是设计规范，不是已落地的实现。~~（2026-10-18 复核：批 D / E / F 与无障碍 AA-3 ~ AA-8 均已落地并逐项验证，见各节指针与 `docs/测试报告.md` §17 ~ §37）
 2. 屏幕层测试覆盖率低（docs/测试报告.md §10 第 (4) 条：ui.settings 当时 10.7%），批 D/E 的组件替换**缺少测试网**，重构前应先补组件级测试。（2026-10-18 复核：ui.settings 23.6%、ui.accounts 16.8%，仍低于核心分层，见 `docs/测试报告.md` §3 包级覆盖率）**批 D 的 D-1 ~ D-6 已按此执行**（D-1 / D-2 先写 13 例组件级测试再替换，见 docs/测试报告.md §17.1；D-3 ~ D-6 又补 16 例，见 §18.1）。
 3. ~~31 天逐日图真机密度未构造（§10 第 (8) 条）~~——2026-10-18 已用造数走查（2026-01 共 31 天）：31 根柱、初始停在月末、左滑回到月初，证据见 `docs/测试报告.md` §31.10。
-4. TalkBack 动线脚本（§10.3）仍未开语音实听；AA-3 / AA-4 / AA-5 / AA-6 改以语义树 dump + 单测取证，实听缺口分别记在 `docs/测试报告.md` §33.5 / §34.5 / §35.5 / §37.5。
+4. TalkBack 动线脚本（§10.3）仍未开语音实听；AA-3 / AA-4 / AA-5 / AA-6 改以语义树 dump + 单测取证（AA-5 的金额朗读口径已于 2026-10-18 收口到全部图表与环形图描述，见 §38），实听缺口分别记在 `docs/测试报告.md` §33.5 / §34.5 / §35.5 / §37.5。
 5. 分类 emoji 预设（C-6）已完成（§27），默认沿用上次分类（R-3）已完成（`docs/测试报告.md` §15）；**只剩**设置页计数副标题（§7.3 第 3 条）待拍板。
 6. ~~200% 文本缩放逐屏清单（§10.5）是待执行计划，未执行。~~ 已执行：`PerScreenLargeFontUiTest` + `YearMonthPickerGridTest`，逐屏结论见 §10.5.1 与 `docs/测试报告.md` §36。
 
