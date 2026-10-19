@@ -42,6 +42,10 @@ data class AccountsUiState(
      * 列表展示用。拿不到推导值（理论不可能：账户只归档不删除）时回落到初始余额，
      * 宁可显示一个保守数字，也不让金额位置空着。
      */
+    // A-3：已归档的账户单独放，界面上折叠成一行，不和在用的混排
+    val activeAccounts: List<AccountEntity> get() = accounts.filterNot { it.isArchived }
+    val archivedAccounts: List<AccountEntity> get() = accounts.filter { it.isArchived }
+
     fun balanceOf(account: AccountEntity): Long = balances[account.id] ?: account.initialBalance
 }
 

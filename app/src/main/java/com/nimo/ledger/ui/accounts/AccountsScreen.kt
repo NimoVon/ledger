@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SmallFloatingActionButton
@@ -20,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -85,6 +87,8 @@ fun AccountsScreen(
     var adjustAccount by remember { mutableStateOf<AccountEntity?>(null) }
     var adjusting by remember { mutableStateOf(false) }
     var adjustError by remember { mutableStateOf<String?>(null) }
+    // A-3：已归档区是否展开
+    var archivedExpanded by remember { mutableStateOf(false) }
 
     fun openDialog(account: AccountEntity?) {
         dialogAccount = account
@@ -130,6 +134,9 @@ fun AccountsScreen(
                 title = "还没有账户",
                 message = "先建一个账户（现金 / 储蓄卡 / 信用卡 / 微信 / 支付宝 / 其他），\n才能开始记账。",
                 modifier = contentModifier,
+                // A-6：空态给一个直达动作，不用再去找右下角的小按钮
+                actionLabel = NEW_ACCOUNT_LABEL,
+                onAction = { openDialog(null) },
             )
 
             else -> LazyColumn(
@@ -137,24 +144,47 @@ fun AccountsScreen(
                 contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
             ) {
                 item(key = "netWorth") {
-                    NetWorthRow(netWorthCents = state.netWorthCents)
-                    HorizontalDivider()
+                    // A-4：净资产是这一页的结论，用卡片抬起来（surfaceContainerLow + 16dp 圆角）
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            NetWorthRow(netWorthCents = state.netWorthCents)
+                        }
+                    }
                 }
-                itemsIndexed(state.accounts, key = { _, account -> account.id }) { index, account ->
+                itemsIndexed(state.activeAccounts, key = { _, account -> account.id }) { index, account ->
                     AccountRow(
                         account = account,
                         balanceCents = state.balanceOf(account),
                         onClick = { openDialog(account) },
-                        // 归档账户不能再写新交易（校验器会拒），所以不给校准入口
-                        onAdjust = if (account.isArchived) {
-                            null
-                        } else {
-                            { adjustAccount = account; adjustError = null }
-                        },
+                        onAdjust = { adjustAccount = account; adjustError = null },
                     )
-                    // 末行不画分隔线：列表底部再多一条线会看着像"还有一行"
-                    if (index != state.accounts.lastIndex) {
+                    if (index != state.activeAccounts.lastIndex) {
                         LedgerListItemDivider(hasLeading = false)
+                    }
+                }
+                // A-3：已归档账户不再和在用账户混排，折叠成一行「已归档（N）」
+                if (state.archivedAccounts.isNotEmpty()) {
+                    val expanded = archivedExpanded
+                    item(key = "archivedToggle") {
+                        LedgerListItem(
+                            title = "已归档（${state.archivedAccounts.size}）",
+                            subtitle = if (expanded) "收起" else "展开",
+                            onClick = { archivedExpanded = !expanded },
+                        )
+                    }
+                    if (expanded) {
+                        itemsIndexed(state.archivedAccounts, key = { _, account -> "archived-" + account.id }) { _, account ->
+                            AccountRow(
+                                account = account,
+                                balanceCents = state.balanceOf(account),
+                                onClick = { openDialog(account) },
+                                onAdjust = null,
+                            )
+                        }
                     }
                 }
             }
@@ -263,7 +293,8 @@ private fun AccountRow(
                     IconButton(onClick = adjust) {
                         Icon(
                             imageVector = LedgerIcons.Scale,
-                            contentDescription = "校准 " + account.name + " 的余额",
+                            // A-2：图标保留（天平=校准），读屏名说清「账面 → 实际」
+                            contentDescription = "校准「" + account.name + "」余额：把账面调到实际",
                         )
                     }
                 }
