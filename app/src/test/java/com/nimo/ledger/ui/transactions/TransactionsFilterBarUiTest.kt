@@ -65,6 +65,7 @@ class TransactionsFilterBarUiTest {
                     FilterBar(
                         chips = chipsState.value.orEmpty(),
                         onOpen = { openCalls++ },
+                        onSearch = {},
                         onClear = { clearCalls++ },
                     )
                 }
@@ -149,7 +150,7 @@ class TransactionsFilterBarUiTest {
             val base = LocalDensity.current
             MaterialTheme {
                 CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
-                    FilterBar(chips = chips, onOpen = {}, onClear = {})
+                    FilterBar(chips = chips, onOpen = {}, onSearch = {}, onClear = {})
                 }
             }
         }

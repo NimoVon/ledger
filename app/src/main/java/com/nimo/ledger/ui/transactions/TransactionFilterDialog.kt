@@ -23,6 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +57,7 @@ fun TransactionFilterDialog(
     onDismiss: () -> Unit,
     onApply: (TransactionFilter) -> Unit,
     onReset: () -> Unit,
+    focusKeyword: Boolean = false,
 ) {
     // 每次打开面板都从当前生效的条件出发（remember(initial)：条件变了要重建草稿）
     var accountIds by remember(initial) { mutableStateOf(initial.accountIds) }
@@ -69,6 +73,9 @@ fun TransactionFilterDialog(
     var toText by remember(initial) { mutableStateOf(initial.to?.toString().orEmpty()) }
     var picking by remember { mutableStateOf<DateField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val keywordFocus = remember { FocusRequester() }
+    // 从明细页的搜索图标进来时，关键词框直接拿焦点，省一次点击（T-5）。
+    LaunchedEffect(focusKeyword) { if (focusKeyword) keywordFocus.requestFocus() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -163,7 +170,9 @@ fun TransactionFilterDialog(
                     onValueChange = { keyword = it; error = null },
                     label = { Text("包含文字") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(keywordFocus),
                 )
 
                 error?.let {

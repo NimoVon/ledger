@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -83,6 +84,8 @@ fun TransactionsScreen(
         viewModel(factory = TransactionsViewModel.factory(repository, pendingDeletionIds, drillDown))
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showFilterDialog by remember { mutableStateOf(false) }
+    // 从搜索图标进来时让关键词框直接拿焦点（T-5）；点「筛选」按钮则为 false。
+    var focusFilterKeyword by remember { mutableStateOf(false) }
     // R1 日期直改：点月份标签打开年月选择器
     var showMonthPicker by remember { mutableStateOf(false) }
 
@@ -98,7 +101,14 @@ fun TransactionsScreen(
         MonthSummaryBar(summary = state.summary, loading = state.isLoading)
         FilterBar(
             chips = state.filterChips,
-            onOpen = { showFilterDialog = true },
+            onOpen = {
+                focusFilterKeyword = false
+                showFilterDialog = true
+            },
+            onSearch = {
+                focusFilterKeyword = true
+                showFilterDialog = true
+            },
             onClear = viewModel::clearFilter,
         )
         HorizontalDivider()
@@ -169,14 +179,20 @@ fun TransactionsScreen(
         TransactionFilterDialog(
             initial = state.filter,
             options = state.filterOptions,
-            onDismiss = { showFilterDialog = false },
+            focusKeyword = focusFilterKeyword,
+            onDismiss = {
+                showFilterDialog = false
+                focusFilterKeyword = false
+            },
             onApply = { filter ->
                 viewModel.applyFilter(filter)
                 showFilterDialog = false
+                focusFilterKeyword = false
             },
             onReset = {
                 viewModel.clearFilter()
                 showFilterDialog = false
+                focusFilterKeyword = false
             },
         )
     }
@@ -201,7 +217,12 @@ internal const val FILTER_BAR_MAX_HEIGHT_DP = 52
  * 现在高度只取决于「一行」而不是条件数量（[FILTER_BAR_MAX_HEIGHT_DP] 守住这条线）。
  */
 @Composable
-internal fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> Unit) {
+internal fun FilterBar(
+    chips: List<String>,
+    onOpen: () -> Unit,
+    onSearch: () -> Unit,
+    onClear: () -> Unit,
+) {
     // 字体 ≥1.5：按钮 + 清空占一行、条件 chips 独占下一行。横排时 chips 只剩「按钮和清空之间」那点宽度，
     // 1.5 倍下 chip 会被 LazyRow 边界从字形中间裁断（E-1 真机截图里「支付宝」只剩「支付」+半个字）。
     val stack = stackAtLargeFont(LocalDensity.current.fontScale)
@@ -212,6 +233,7 @@ internal fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> U
     if (stack) {
         Column(modifier = barModifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                FilterSearchButton(onSearch = onSearch)
                 FilterOpenButton(onOpen = onOpen)
                 if (chips.isNotEmpty()) {
                     Spacer(modifier = Modifier.weight(1f))
@@ -222,6 +244,7 @@ internal fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> U
         }
     } else {
         Row(modifier = barModifier, verticalAlignment = Alignment.CenterVertically) {
+            FilterSearchButton(onSearch = onSearch)
             FilterOpenButton(onOpen = onOpen)
             if (chips.isNotEmpty()) {
                 Spacer(modifier = Modifier.width(8.dp))
@@ -230,6 +253,17 @@ internal fun FilterBar(chips: List<String>, onOpen: () -> Unit, onClear: () -> U
                 TextButton(onClick = onClear) { Text("清空") }
             }
         }
+    }
+}
+
+@Composable
+private fun FilterSearchButton(onSearch: () -> Unit) {
+    IconButton(onClick = onSearch) {
+        Icon(
+            imageVector = LedgerIcons.Search,
+            contentDescription = "搜索",
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
