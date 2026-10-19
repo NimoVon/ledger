@@ -267,7 +267,7 @@ private fun InsightCard(state: ReportsUiState) {
             .testTag(INSIGHT_CARD_TEST_TAG),
     ) {
         Column(modifier = Modifier.padding(vertical = 4.dp)) {
-            DailyAverageRow(state.dailyAverageExpenseCents)
+            DailyAverageRow(state.dailyAverageExpenseCents, state.elapsedDays)
             InsightDivider()
             ChangeSection(state)
             if (state.hasTotalBudget) {
@@ -294,19 +294,28 @@ private fun InsightDivider() {
 
 /** 日均支出：一行。除法在 StatsCalculator，页面只负责显示 */
 @Composable
-private fun DailyAverageRow(amountCents: Long) {
+private fun DailyAverageRow(amountCents: Long, elapsedDays: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = "日均支出",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "日均支出",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // S-7：把分母说出来，避免「日均怎么算的」要用户猜；N 来自 StatsCalculator.elapsedDays
+            if (elapsedDays > 0) {
+                Text(
+                    text = "按已过 $elapsedDays 天算",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         // 日均支出：金额列统一 LedgerAmount（规范 §6.3 / G-5），保持原来的中性色
         LedgerAmount(
             cents = amountCents,
