@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,8 +34,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,6 +58,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+/** B-6：分类预算列表的浏览筛选（全部 / 已设 / 未设）；不持久化 */
+private enum class BudgetFilter { ALL, SET, UNSET }
 
 /** 对话框要编辑的目标：总预算（categoryId = null）或某个分类的预算 */
 private data class BudgetDialogTarget(
@@ -87,6 +94,8 @@ fun BudgetsScreen(
     var dialogError by remember { mutableStateOf<String?>(null) }
     // R1 日期直改：点月份标签打开年月选择器（与明细页、统计页同一套交互）
     var showMonthPicker by remember { mutableStateOf(false) }
+    // B-6：分类预算的浏览筛选（全部 / 已设 / 未设）。不持久化，离开页面即复位——它是浏览辅助，不是设置
+    var budgetFilter by remember { mutableStateOf(BudgetFilter.ALL) }
 
     fun openTotal() {
         dialogError = null
@@ -155,25 +164,76 @@ fun BudgetsScreen(
                     modifier = Modifier.weight(1f),
                 )
 
-                else -> LazyColumn(modifier = Modifier.weight(1f)) {
-                    item(key = "total") {
-                        TotalBudgetCard(state = state, onClick = { openTotal() })
+                else -> {
+                    val filteredRows = when (budgetFilter) {
+                        BudgetFilter.ALL -> state.rows
+                        BudgetFilter.SET -> state.rows.filter { it.budgetCents != null }
+                        BudgetFilter.UNSET -> state.rows.filter { it.budgetCents == null }
                     }
-                    item(key = "alert") { BudgetAlertLine(state = state) }
-                    item(key = "section") {
-                        LedgerSectionHeader(title = "分类预算")
-                    }
-                    items(state.rows, key = { it.categoryId }) { row ->
-                        CategoryBudgetRowItem(row = row, onClick = { openCategory(row) })
-                        HorizontalDivider()
-                    }
-                    item(key = "footer") {
-                        Text(
-                            text = "预算只看支出：转账与余额调整不算支出（与统计页同一口径）。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp),
-                        )
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        item(key = "total") {
+                            TotalBudgetCard(state = state, onClick = { openTotal() })
+                        }
+                        item(key = "alert") { BudgetAlertLine(state = state) }
+                        item(key = "filter") {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                FilterChip(
+                                    selected = budgetFilter == BudgetFilter.ALL,
+                                    onClick = { budgetFilter = BudgetFilter.ALL },
+                                    label = { Text("全部") },
+                                )
+                                FilterChip(
+                                    selected = budgetFilter == BudgetFilter.SET,
+                                    onClick = { budgetFilter = BudgetFilter.SET },
+                                    label = { Text("已设") },
+                                )
+                                FilterChip(
+                                    selected = budgetFilter == BudgetFilter.UNSET,
+                                    onClick = { budgetFilter = BudgetFilter.UNSET },
+                                    label = { Text("未设") },
+                                )
+                            }
+                        }
+                        item(key = "section") {
+                            LedgerSectionHeader(title = "分类预算")
+                        }
+                        items(filteredRows, key = { it.categoryId }) { row ->
+                            CategoryBudgetRowItem(row = row, onClick = { openCategory(row) })
+                            HorizontalDivider()
+                        }
+                        if (filteredRows.isEmpty()) {
+                            item(key = "emptyFilter") {
+                                Text(
+                                    text = "这个筛选下没有分类。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(16.dp),
+                                )
+                            }
+                        }
+                        item(key = "footer") {
+                            // B-7：口径说明前加 Info 图标（14dp），让这句话看起来像「说明」而不是「页脚正文」
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                Icon(
+                                    imageVector = LedgerIcons.Info,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    text = "预算只看支出：转账与余额调整不算支出（与统计页同一口径）。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -233,13 +293,24 @@ fun BudgetsScreen(
 }
 
 @Composable
-private fun TotalBudgetCard(state: BudgetsUiState, onClick: () -> Unit) {
-    val budget = state.totalBudgetCents
+private fun BudgetLine(
+    title: String,
+    titleStyle: TextStyle,
+    amountCents: Long?,
+    amountStyle: TextStyle,
+    amountColor: Color?,
+    spentCents: Long,
+    status: BudgetStatus,
+    unsetHint: String,
+    onClick: () -> Unit,
+    startPadding: Dp = 16.dp,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(start = startPadding, end = 16.dp, top = 12.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
@@ -247,38 +318,56 @@ private fun TotalBudgetCard(state: BudgetsUiState, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("本月总预算", style = MaterialTheme.typography.titleMedium)
-            if (budget == null) {
-                Text(
-                    text = "未设置",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                // 金额列统一 LedgerAmount（规范 §6.3）；状态色仍由预算状态决定
-                LedgerAmount(
-                    cents = budget,
-                    type = null,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = statusColor(state.totalStatus),
-                )
+            Text(text = title, style = titleStyle)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (amountCents == null) {
+                    Text(
+                        text = "未设置",
+                        style = amountStyle,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    // 金额列统一 LedgerAmount（规范 §6.3）；状态色仍由预算状态决定
+                    LedgerAmount(
+                        cents = amountCents,
+                        type = null,
+                        style = amountStyle,
+                        color = amountColor ?: MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                trailing?.invoke()
             }
         }
-        if (budget == null) {
+        if (amountCents == null) {
             Text(
-                text = "本月已支出 " + Money.formatCurrency(state.totalSpentCents) + " · 点这里设置本月总预算",
+                text = unsetHint,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            BudgetProgressBar(
-                spentCents = state.totalSpentCents,
-                budgetCents = budget,
-                status = state.totalStatus,
-            )
+            BudgetProgressBar(spentCents = spentCents, budgetCents = amountCents, status = status)
         }
     }
+}
+
+@Composable
+private fun TotalBudgetCard(state: BudgetsUiState, onClick: () -> Unit) {
+    // B-1：总预算卡与分类行共用 BudgetLine（原来是两份几乎一样的排版）
+    BudgetLine(
+        title = "本月总预算",
+        titleStyle = MaterialTheme.typography.titleMedium,
+        amountCents = state.totalBudgetCents,
+        amountStyle = MaterialTheme.typography.titleMedium,
+        amountColor = if (state.totalBudgetCents == null) null else statusColor(state.totalStatus),
+        spentCents = state.totalSpentCents,
+        status = state.totalStatus,
+        unsetHint = "本月已支出 " + Money.formatCurrency(state.totalSpentCents) + " · 点这里设置本月总预算",
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -299,57 +388,30 @@ private fun BudgetAlertLine(state: BudgetsUiState) {
 
 @Composable
 private fun CategoryBudgetRowItem(row: BudgetCategoryRow, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (row.depth > 0) Spacer(modifier = Modifier.width(16.dp))
-                Text(
-                    text = row.name +
-                        (if (row.isArchived) "（已停用）" else "") +
-                        (if (row.isNonExpense) "（非支出）" else ""),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
-            val categoryBudget = row.budgetCents
-            if (categoryBudget == null) {
-                Text(
-                    text = "未设置",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                // 金额列统一 LedgerAmount（规范 §6.3）；OK / WARNING / OVER 三色照旧
-                LedgerAmount(
-                    cents = categoryBudget,
-                    type = null,
-                    color = statusColor(row.status),
-                )
-            }
-        }
-        val budget = row.budgetCents
-        if (budget == null) {
-            Text(
-                text = "本月已支出 " + Money.formatCurrency(row.spentCents) + " · 点这里设预算",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+    // B-1：与总预算卡共用同一个 BudgetLine（原来是两份几乎一样的排版）
+    BudgetLine(
+        title = row.name +
+            (if (row.isArchived) "（已停用）" else "") +
+            (if (row.isNonExpense) "（非支出）" else ""),
+        titleStyle = MaterialTheme.typography.bodyLarge,
+        amountCents = row.budgetCents,
+        amountStyle = MaterialTheme.typography.bodyLarge,
+        amountColor = if (row.budgetCents == null) null else statusColor(row.status),
+        spentCents = row.spentCents,
+        status = row.status,
+        unsetHint = "本月已支出 " + Money.formatCurrency(row.spentCents) + " · 点这里设预算",
+        onClick = onClick,
+        startPadding = if (row.depth > 0) 32.dp else 16.dp,
+        // B-5：行尾箭头提示「这行可以点进去编辑」；不做行内删除（误触风险，删除留在编辑对话框里）
+        trailing = {
+            Icon(
+                imageVector = LedgerIcons.ChevronRight,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        } else {
-            BudgetProgressBar(spentCents = row.spentCents, budgetCents = budget, status = row.status)
-        }
-    }
+        },
+    )
 }
 
 /**
