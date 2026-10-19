@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -47,6 +46,7 @@ import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.ledger.ui.components.LedgerAmount
 import com.nimo.ledger.ui.components.LedgerListItem
 import com.nimo.ledger.ui.components.LedgerListItemDivider
+import com.nimo.ledger.ui.components.SkeletonList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -121,7 +121,7 @@ fun AccountsScreen(
             .fillMaxSize()
             .padding(innerPadding)
         when {
-            state.isLoading -> Box(contentModifier, Alignment.Center) { CircularProgressIndicator() }
+            state.isLoading -> SkeletonList(modifier = contentModifier)
 
             state.errorMessage != null -> EmptyState(
                 title = "加载失败",

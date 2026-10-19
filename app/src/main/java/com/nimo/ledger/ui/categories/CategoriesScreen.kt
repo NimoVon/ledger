@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.DropdownMenu
@@ -56,6 +55,7 @@ import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.ui.components.LedgerListItem
 import com.nimo.ledger.ui.components.LedgerListItemDivider
 import com.nimo.ledger.ui.components.LedgerSectionHeader
+import com.nimo.ledger.ui.components.SkeletonList
 import kotlinx.coroutines.launch
 
 /** 「新建分类」按钮的文字：按钮文字与读屏名共用（F15 补语义，悬浮按钮的文字在无障碍树上读不出来） */
@@ -155,7 +155,7 @@ fun CategoriesScreen(
             .fillMaxSize()
             .padding(innerPadding)
         when {
-            state.isLoading -> Box(contentModifier, Alignment.Center) { CircularProgressIndicator() }
+            state.isLoading -> SkeletonList(modifier = contentModifier)
 
             state.errorMessage != null -> EmptyState(
                 title = "加载失败",

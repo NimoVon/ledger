@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -54,6 +53,7 @@ import com.nimo.ledger.ui.components.MonthSwitcher
 import com.nimo.ledger.ui.components.YearMonthPickerDialog
 import com.nimo.ledger.ui.components.stackAtLargeFont
 import com.nimo.ledger.util.Money
+import com.nimo.ledger.ui.components.SkeletonList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -151,12 +151,7 @@ fun BudgetsScreen(
                     tone = EmptyTone.ERROR,
                 )
 
-                state.isLoading -> Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center,
-                ) { CircularProgressIndicator() }
+                state.isLoading -> SkeletonList(modifier = Modifier.weight(1f))
 
                 state.isEmpty -> EmptyState(
                     title = "还没有支出分类",

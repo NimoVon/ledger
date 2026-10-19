@@ -47,11 +47,11 @@ fun MonthSummaryBar(summary: PeriodSummary, loading: Boolean) {
 
     if (stackSummaryCells(LocalDensity.current.fontScale)) {
         Column(modifier = barModifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            cells.forEach { SummaryCell(it, Modifier.fillMaxWidth()) }
+            cells.forEach { SummaryCell(it, loading = loading, modifier = Modifier.fillMaxWidth()) }
         }
     } else {
         Row(modifier = barModifier) {
-            cells.forEach { SummaryCell(it, Modifier.weight(1f)) }
+            cells.forEach { SummaryCell(it, loading = loading, modifier = Modifier.weight(1f)) }
         }
     }
 }
@@ -65,7 +65,7 @@ private data class SummaryCellData(
 )
 
 @Composable
-private fun SummaryCell(cell: SummaryCellData, modifier: Modifier = Modifier) {
+private fun SummaryCell(cell: SummaryCellData, loading: Boolean, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.semantics(mergeDescendants = true) {
             contentDescription = "${cell.label} ${cell.speech}"
@@ -76,11 +76,16 @@ private fun SummaryCell(cell: SummaryCellData, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            text = cell.amountText,
-            style = MaterialTheme.typography.titleMedium,
-            color = cell.color,
-            fontWeight = FontWeight.Medium,
-        )
+        if (loading) {
+            // 加载中给占位灰块而不是 "—"：先占住金额的位置，数据到达时行高不跳（G-9）
+            SkeletonBlock(height = 20.dp, width = 72.dp)
+        } else {
+            Text(
+                text = cell.amountText,
+                style = MaterialTheme.typography.titleMedium,
+                color = cell.color,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +48,7 @@ import com.nimo.ledger.ui.components.LedgerAmount
 import com.nimo.ledger.ui.components.LedgerSectionHeader
 import com.nimo.ledger.ui.DrillDownRequests
 import com.nimo.ledger.ui.components.MonthSummaryBar
+import com.nimo.ledger.ui.components.SkeletonList
 import com.nimo.ledger.ui.components.MonthSwitcher
 import com.nimo.ledger.ui.components.YearMonthPickerDialog
 import com.nimo.ledger.ui.components.stackAtLargeFont
@@ -115,7 +115,7 @@ fun TransactionsScreen(
 
         val contentModifier = Modifier.weight(1f)
         when {
-            state.isLoading -> Box(contentModifier, Alignment.Center) { CircularProgressIndicator() }
+            state.isLoading -> SkeletonList(modifier = contentModifier)
 
             state.errorMessage != null -> EmptyState(
                 title = "加载失败",
