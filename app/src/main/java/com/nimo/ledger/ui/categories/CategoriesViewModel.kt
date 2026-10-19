@@ -45,6 +45,8 @@ data class CategorySection(
     val kind: CategoryKind,
     val title: String,
     val rows: List<CategoryRow>,
+    /** C-4：已停用的分类单独放，界面上折叠成一行，不和在用的混排 */
+    val archivedRows: List<CategoryRow> = emptyList(),
 )
 
 /** 分类页状态（计划 4.4：至少覆盖加载、内容、空状态和可理解的错误） */
@@ -53,7 +55,7 @@ data class CategoriesUiState(
     val sections: List<CategorySection> = emptyList(),
     val errorMessage: String? = null,
 ) {
-    val isEmpty: Boolean get() = !isLoading && errorMessage == null && sections.all { it.rows.isEmpty() }
+    val isEmpty: Boolean get() = !isLoading && errorMessage == null && sections.all { it.rows.isEmpty() && it.archivedRows.isEmpty() }
 }
 
 /**
@@ -154,7 +156,12 @@ private fun buildSections(all: List<CategoryEntity>): List<CategorySection> =
                 canMoveDown = index < orphans.lastIndex,
             )
         }
-        CategorySection(kind = kind, title = kind.displayName() + "分类", rows = rows)
+        CategorySection(
+            kind = kind,
+            title = kind.displayName() + "分类",
+            rows = rows.filterNot { it.isArchived },
+            archivedRows = rows.filter { it.isArchived },
+        )
     }
 
 private fun CategoryEntity.toRow(depth: Int, canMoveUp: Boolean, canMoveDown: Boolean) = CategoryRow(

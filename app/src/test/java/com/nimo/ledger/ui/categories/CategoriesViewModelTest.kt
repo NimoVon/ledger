@@ -113,9 +113,11 @@ class CategoriesViewModelTest {
 
         repository.archiveCategory(food).getOrThrow()
 
-        val rows = loadedState().sections[0].rows
-        assertEquals(listOf("餐饮", "地铁"), rows.map { it.name })
-        assertTrue(rows.all { it.isArchived })
+        // C-4：已停用的分类不再和在用的混排，但必须还能展开找到（否则永远没法恢复）
+        val section = loadedState().sections[0]
+        assertEquals(emptyList<String>(), section.rows.map { it.name })
+        assertEquals(listOf("餐饮", "地铁"), section.archivedRows.map { it.name })
+        assertTrue(section.archivedRows.all { it.isArchived })
     }
 
     @Test

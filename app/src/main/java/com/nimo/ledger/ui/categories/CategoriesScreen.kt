@@ -12,7 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -24,10 +24,12 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,6 +37,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -47,6 +52,7 @@ import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.EmptyState
 import com.nimo.ledger.ui.components.EmptyTone
 import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
+import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.ui.components.LedgerListItem
 import com.nimo.ledger.ui.components.LedgerListItemDivider
 import com.nimo.ledger.ui.components.LedgerSectionHeader
@@ -56,7 +62,8 @@ import kotlinx.coroutines.launch
 private const val NEW_CATEGORY_LABEL = "新建分类"
 
 /** 「恢复默认分类」按钮（附.4）：顶栏动作，UI 测试按这个 tag 找它 */
-internal const val RESTORE_DEFAULTS_TEST_TAG = "categories-restore-defaults"
+internal const val RESTORE_CONFIRM_TEST_TAG = "categories-restore-confirm"
+const val RESTORE_DEFAULTS_TEST_TAG = "categories-restore-defaults"
 
 /**
  * 分类管理（F02）：支出 / 收入两套独立分类树，一级 / 二级单层父子，上下移排序，停用不删除。
@@ -78,6 +85,10 @@ fun CategoriesScreen(
     val scope = rememberCoroutineScope()
 
     var dialogTarget by remember { mutableStateOf<CategoryDialogTarget?>(null) }
+    var restoreMenuOpen by remember { mutableStateOf(false) }
+    // C-4：每个分组单独记「已停用」那一行是否展开
+    val archivedExpanded = remember { mutableStateMapOf<CategoryKind, Boolean>() }
+    var confirmRestore by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var dialogError by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -108,32 +119,36 @@ fun CategoriesScreen(
                     }
                 },
                 actions = {
-                    // 恢复默认分类（附.4）：加法操作（按名称补种缺失的预置分类，不覆盖已有），
-                    // 所以不做二次确认；补了 0 个也要说清楚，免得用户以为按钮坏了
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                viewModel.restoreDefaultCategories()
-                                    .onSuccess { count ->
-                                        snackbarHostState.showSnackbar(
-                                            if (count > 0) "已补种 $count 个默认分类" else "默认分类都在，无需补种",
-                                        )
-                                    }
-                                    .onFailure { snackbarHostState.showSnackbar(it.toCategoryMessage()) }
-                            }
-                        },
+                    // C-2：低频且带副作用的动作收进溢出菜单，并补二次确认
+                    IconButton(
+                        onClick = { restoreMenuOpen = true },
                         modifier = Modifier.testTag(RESTORE_DEFAULTS_TEST_TAG),
-                    ) { Text("恢复默认分类") }
+                    ) {
+                        Icon(imageVector = LedgerIcons.MoreVert, contentDescription = "更多操作")
+                    }
+                    DropdownMenu(
+                        expanded = restoreMenuOpen,
+                        onDismissRequest = { restoreMenuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("恢复默认分类") },
+                            onClick = {
+                                restoreMenuOpen = false
+                                confirmRestore = true
+                            },
+                        )
+                    }
                 },
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            // C-1 / A-1：页内动作与宿主「记一笔」区分开——长条按钮只留给主操作，这里用小号圆 FAB
+            SmallFloatingActionButton(
                 onClick = { openDialog(CategoryDialogTarget.Create) },
                 modifier = Modifier.semantics { contentDescription = NEW_CATEGORY_LABEL },
-                icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
-                text = { Text(NEW_CATEGORY_LABEL) },
-            )
+            ) {
+                Icon(imageVector = LedgerIcons.Add, contentDescription = null)
+            }
         },
     ) { innerPadding ->
         val contentModifier = Modifier
@@ -177,11 +192,64 @@ fun CategoriesScreen(
                             LedgerListItemDivider(hasLeading = true)
                         }
                     }
+                    // C-4：已停用的分类不再和在用混排，折叠成一行「已停用（N）」
+                    if (section.archivedRows.isNotEmpty()) {
+                        val expanded = archivedExpanded[section.kind] == true
+                        item(key = "archived-toggle-" + section.kind.name) {
+                            LedgerListItem(
+                                title = "已停用（${section.archivedRows.size}）",
+                                subtitle = if (expanded) "收起" else "展开",
+                                onClick = { archivedExpanded[section.kind] = !expanded },
+                            )
+                        }
+                        if (expanded) {
+                            itemsIndexed(section.archivedRows, key = { _, row -> row.id }) { index, row ->
+                                CategoryRowItem(
+                                    row = row,
+                                    onClick = { openDialog(CategoryDialogTarget.Edit(row)) },
+                                    onMove = { direction ->
+                                        scope.launch { viewModel.moveCategory(row.id, direction) }
+                                    },
+                                )
+                                if (index != section.archivedRows.lastIndex) {
+                                    LedgerListItemDivider(hasLeading = true)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
+    if (confirmRestore) {
+        // C-2：补种是加法操作，但从菜单里点进来之后仍然确认一次——不给人「一点就改数据」的入口
+        AlertDialog(
+            onDismissRequest = { confirmRestore = false },
+            title = { Text("恢复默认分类？") },
+            text = { Text("按名称补种缺失的预置分类；已有的分类不会被覆盖或删除。补了 0 个会提示「无需补种」。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmRestore = false
+                        scope.launch {
+                            viewModel.restoreDefaultCategories()
+                                .onSuccess { count ->
+                                    snackbarHostState.showSnackbar(
+                                        if (count > 0) "已补种 $count 个默认分类" else "默认分类都在，无需补种",
+                                    )
+                                }
+                                .onFailure { snackbarHostState.showSnackbar(it.toCategoryMessage()) }
+                        }
+                    },
+                    modifier = Modifier.testTag(RESTORE_CONFIRM_TEST_TAG),
+                ) { Text("恢复") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRestore = false }) { Text("取消") }
+            },
+        )
+    }
     val target = dialogTarget
     if (target != null) {
         val editing = (target as? CategoryDialogTarget.Edit)?.row
@@ -258,6 +326,8 @@ private fun CategoryRowItem(
     onMove: (MoveDirection) -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    // C-7：二级分类补一条 2dp 竖线——缩进之外再给一条层级线索（不依赖读屏）
+    val treeLineColor = MaterialTheme.colorScheme.outlineVariant
     LedgerListItem(
         title = row.name,
         subtitle = if (row.isArchived) "已停用" else null,
@@ -287,6 +357,20 @@ private fun CategoryRowItem(
         },
         onClick = onClick,
         // 二级分类缩进一级：缩进放在行外层，点击涟漪跟着缩进，不会盖住父级那行
-        modifier = Modifier.padding(start = if (row.depth == 0) 0.dp else 24.dp),
+        modifier = Modifier
+            .padding(start = if (row.depth == 0) 0.dp else 24.dp)
+            .then(
+                if (row.depth == 1) {
+                    Modifier.drawBehind {
+                        drawRect(
+                            color = treeLineColor,
+                            topLeft = Offset(x = -12.dp.toPx(), y = 0f),
+                            size = Size(width = 2.dp.toPx(), height = size.height),
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            ),
     )
 }

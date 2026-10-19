@@ -14,7 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -104,12 +104,13 @@ fun AccountsScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            // A-1：与宿主「记一笔」区分开——长条按钮只留给主操作，页内新建用小号圆 FAB
+            SmallFloatingActionButton(
                 onClick = { openDialog(null) },
                 modifier = Modifier.semantics { contentDescription = NEW_ACCOUNT_LABEL },
-                icon = { Icon(imageVector = LedgerIcons.Add, contentDescription = null) },
-                text = { Text(NEW_ACCOUNT_LABEL) },
-            )
+            ) {
+                Icon(imageVector = LedgerIcons.Add, contentDescription = null)
+            }
         },
     ) { innerPadding ->
         val contentModifier = Modifier
