@@ -99,6 +99,13 @@ internal const val RECORD_ACCOUNT_FIRST_TEST_TAG: String = "record-account-first
 internal const val RECORD_DATE_TEST_TAG: String = "record-date"
 internal const val RECORD_NOTE_TEST_TAG: String = "record-note"
 
+/** R-6：备注计数进入提醒色的门槛（与 TransactionValidator.MAX_NOTE_LENGTH 一起看） */
+internal const val NOTE_COUNTER_WARN_AT: Int = 180
+
+/** R-6：备注越接近上限越该提醒——纯函数，便于单测 */
+internal fun noteCounterNearLimit(length: Int): Boolean = length >= NOTE_COUNTER_WARN_AT
+
+
 /**
  * 分类 chip 区的最大高度（R-2）：约 3 行 chip（每行 40dp + 4dp 间距）。
  * 分类多到 20+ 时，账户/日期/备注不再被挤到屏幕外。
@@ -598,7 +605,15 @@ private fun RecordFormBody(
             singleLine = false,
             maxLines = 3,
             supportingText = {
-                Text("${state.form.note.length}/${TransactionValidator.MAX_NOTE_LENGTH}")
+                // R-6：接近上限（≥180/200）时把计数改成 tertiary，提前提醒而不是等输入被截断
+                Text(
+                    text = "${state.form.note.length}/${TransactionValidator.MAX_NOTE_LENGTH}",
+                    color = if (noteCounterNearLimit(state.form.note.length)) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        androidx.compose.ui.graphics.Color.Unspecified
+                    },
+                )
             },
             modifier = Modifier
                 .fillMaxWidth()
