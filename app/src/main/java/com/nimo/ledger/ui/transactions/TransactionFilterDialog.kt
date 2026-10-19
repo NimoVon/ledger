@@ -201,7 +201,7 @@ fun TransactionFilterDialog(
                         )
                     )
                 }
-            }) { Text("应用") }
+            }) { Text("确定") }
         },
         dismissButton = {
             Row {

@@ -199,7 +199,7 @@ internal fun ReportRangePickerBody(
             enabled = ready,
             modifier = Modifier.testTag(RANGE_APPLY_TEST_TAG),
         ) {
-            Text("应用")
+            Text("确定")
         }
     }
 

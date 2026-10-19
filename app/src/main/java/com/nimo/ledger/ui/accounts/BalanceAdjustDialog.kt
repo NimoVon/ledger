@@ -86,7 +86,7 @@ fun BalanceAdjustDialog(
                 onClick = {
                     (outcome as? BalanceAdjustOutcome.Valid)?.let { onConfirm(it.targetCents) }
                 },
-            ) { Text(if (saving) "保存中…" else "校准") }
+            ) { Text(if (saving) "保存中…" else "保存") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !saving) { Text("取消") }
