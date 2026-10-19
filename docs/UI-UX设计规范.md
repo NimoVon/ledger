@@ -615,7 +615,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | S-4 | P1 | 段头与明细页日段头同款（好资产）但实现重复 | 同 G-2 |
 | S-5 ✅ **已完成 2026-10-18（E-4 落地）** | P1 | 「本月洞察」的 5 行（日均支出、支出环比、收入环比、预算达成率两行）无视觉分组 | 用一张 surfaceContainerLow + 16dp 圆角卡片包住，行间 4dp 细分隔线（start = 16dp）。实装：`InsightSection` → `InsightCard`（`Surface` + `RoundedCornerShape(16.dp)` + `padding(horizontal = 16.dp)` + `testTag("reports-insight-card")`），新增 `InsightDivider`（上下各 4dp 空 + 1dp 线，线两端缩进 16dp），卡内行竖向内边距 10dp → 8dp；无总预算时卡片只有 3 行、不出现预算达成率。证据 `docs/测试报告.md` §31 |
 | S-6 | P2 | 趋势图恒为 160dp，自然年 12 个点的折线仍然偏密 | 保留 160dp；仅当 `ReportRange.CalendarYear` 且屏宽 < 360dp 时把 `CHART_HEIGHT` 提到 180dp（**需真机验证，标 P2**） |
-| S-7 | P2 | 「日均支出」没说按多少天算 | 加副标题 labelSmall / onSurfaceVariant「按本月已过 N 天算」；N **必须来自 StatsCalculator 的口径，页面不得自算** |
+| S-7 ✅ **已修 2026-10-19**（`DailyAverageRow` 下加「按已过 N 天算」，N 取 `ReportsUiState.elapsedDays` ← `StatsCalculator.elapsedDays`；文案用通用式而非「本月」，因为同一行在近 3 月 / 自然年区间也会出现，偏差见 `docs/测试报告.md` §46.6） | P2 | 「日均支出」没说按多少天算 | 加副标题 labelSmall / onSurfaceVariant「按本月已过 N 天算」；N **必须来自 StatsCalculator 的口径，页面不得自算** |
 | S-8 | P1 | 空月份只显示空态 + 趋势（好设计，保留） | 空态文案补指向动作：「点右下角「记一笔」，这里会给出收入、支出、结余与环比。」 |
 
 ### 8.5 预算页（B）—— app/src/main/java/com/nimo/ledger/ui/budgets/BudgetsScreen.kt
