@@ -299,9 +299,13 @@ internal fun DayHeader(group: TransactionDayGroup) {
             if (group.expenseCents > 0L) add("支出" to group.expenseCents)
             if (group.incomeCents > 0L) add("收入" to group.incomeCents)
         }
+        // T-6：日段头补「N 笔」——只有合计没有笔数，看不出这天记了几笔
+        val count = "${group.rows.size} 笔"
+        val showCount = group.rows.isNotEmpty()
         if (vertical) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 totals.forEach { (label, cents) -> DayTotalText(label, cents) }
+                if (showCount) DayCountText(count)
             }
         } else {
             Row(
@@ -309,15 +313,32 @@ internal fun DayHeader(group: TransactionDayGroup) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 totals.forEach { (label, cents) -> DayTotalText(label, cents) }
+                if (showCount && totals.isNotEmpty()) {
+                    Text(
+                        text = "·",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (showCount) DayCountText(count)
             }
         }
     }
-    val trailing: (@Composable () -> Unit)? = if (hasTotals) {
+    val trailing: (@Composable () -> Unit)? = if (hasTotals || group.rows.isNotEmpty()) {
         { Totals(vertical = stack) }
     } else {
         null
     }
     LedgerSectionHeader(title = group.label, stack = stack, trailing = trailing)
+}
+
+@Composable
+private fun DayCountText(count: String) {
+    Text(
+        text = count,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
