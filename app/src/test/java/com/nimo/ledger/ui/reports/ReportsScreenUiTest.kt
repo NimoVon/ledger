@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -111,7 +111,7 @@ class ReportsScreenUiTest {
 
         // 排行在环形图下面：先等首屏渲染出来，再让列表自己把那一行滚进视野
         awaitText("日均支出")
-        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("娱乐", substring = true))
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("娱乐", substring = true))
         // 合并后的语义树里，可点的整行自己就带上了子节点的文字
         composeRule
             .onNode(hasClickAction() and hasText("娱乐", substring = true))

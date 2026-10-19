@@ -8,7 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
-import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -151,7 +151,7 @@ class CategoryDonutUiTest {
         awaitText("日均支出")
 
         // 环形图在趋势折线下面：让列表自己把它滚进视野
-        val list = composeRule.onNode(hasScrollAction())
+        val list = composeRule.onNode(hasScrollToIndexAction())
         list.performScrollToNode(hasText("分类占比"))
         composeRule.onNodeWithText("分类占比").assertIsDisplayed()
 
@@ -177,7 +177,7 @@ class CategoryDonutUiTest {
         awaitText("日均支出")
 
         val hint = "本月没有支出。转账与余额调整不算收支，所以不会出现在这里。"
-        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(hint))
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(hint))
         composeRule.onNodeWithText(hint).assertIsDisplayed()
         composeRule.onAllNodesWithText("分类占比").assertCountEquals(0)
         composeRule.onAllNodes(hasContentDescription("支出分类占比", substring = true)).assertCountEquals(0)
@@ -209,7 +209,7 @@ class CategoryDonutUiTest {
         var drilled: TransactionFilter? = null
         showReports(onDrillDown = { drilled = it })
         awaitText("日均支出")
-        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(DONUT_TEST_TAG))
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasTestTag(DONUT_TEST_TAG))
 
         tapDonut(0.0)
         composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).assertIsDisplayed()
@@ -229,7 +229,7 @@ class CategoryDonutUiTest {
         seedTwoExpenses()
         showReports()
         awaitText("日均支出")
-        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag(DONUT_TEST_TAG))
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasTestTag(DONUT_TEST_TAG))
 
         tapDonut(0.0)
         composeRule.onNodeWithTag(DONUT_TOOLTIP_TEST_TAG).assertTextContains("娱乐")

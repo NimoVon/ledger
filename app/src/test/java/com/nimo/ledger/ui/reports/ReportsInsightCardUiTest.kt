@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -141,7 +141,7 @@ class ReportsInsightCardUiTest {
 
         awaitText("日均支出")
         composeRule
-            .onNode(hasScrollAction())
+            .onNode(hasScrollToIndexAction())
             .performScrollToNode(hasText("账户支出分布"))
 
         // 已经滚到「账户支出分布」这一屏，前面的「支出排行」段头仍应钉在内容区顶沿；

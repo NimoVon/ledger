@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollToNode
@@ -165,11 +165,11 @@ class PerScreenLargeFontUiTest {
         seedOneExpense()
         showAt200 { ReportsScreen(repository = repository) }
         composeRule.awaitUntil {
-            composeRule.onAllNodesWithText("分类占比", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodes(hasScrollToIndexAction()).fetchSemanticsNodes().isNotEmpty()
         }
 
         // 2.0 字号下洞察卡 + 趋势图更高，分类占比段头会掉到首屏外——先滚到它再量
-        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("点一块看明细"))
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("点一块看明细"))
         composeRule.waitForIdle()
 
         // 段头「分类占比」的 hint 是「点一块看明细」；1.0 时同一行右侧，2.0 时折到下一行

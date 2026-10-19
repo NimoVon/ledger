@@ -102,6 +102,32 @@ internal const val DAY_LABEL_MIN_SPACING_DP = 44f
 
 /** 金额气泡宽度 */
 private val DAY_TOOLTIP_WIDTH = 172.dp
+/** 气泡高度估计值：只用来把气泡抬到柱子上方，并在图表内夹紧；实际高度见 device 截图。 */
+internal val DAY_TOOLTIP_HEIGHT = 48.dp
+/** 气泡与柱顶之间留的缝。 */
+internal val DAY_TOOLTIP_GAP = 4.dp
+
+/**
+ * 气泡的纵向落点：贴在被点柱子的上方，且整块气泡始终留在绘图区内。
+ *
+ * @param plotHeight 绘图区总高（[CHART_HEIGHT]）
+ * @param inset 上下刻度留白（[PLOT_INSET]）
+ * @param bubbleHeight 气泡高度（[DAY_TOOLTIP_HEIGHT]）
+ * @param barFraction 被点那根柱子的高度比例 0..1（金额 / 纵轴上界）
+ */
+internal fun tooltipTopOffset(
+    plotHeight: Dp,
+    inset: Dp,
+    bubbleHeight: Dp,
+    barFraction: Float,
+): Dp {
+    val usable = (plotHeight - inset * 2).coerceAtLeast(0.dp)
+    val fraction = barFraction.coerceIn(0f, 1f)
+    val barTop = inset + usable * (1f - fraction)
+    val raw = barTop - bubbleHeight - DAY_TOOLTIP_GAP
+    val maxTop = (plotHeight - bubbleHeight).coerceAtLeast(0.dp)
+    return raw.coerceIn(0.dp, maxTop)
+}
 
 /**
  * 选中那一天的格子底色透明度。0.10 在深色主题下几乎看不出来（规范 §6.9 加固项 ②），
@@ -470,6 +496,14 @@ private fun DailyPlot(
                     selectedDay?.let { day ->
                         val index = daily.indexOfFirst { it.date == day }
                         if (index >= 0) {
+                            val peak = maxOf(daily[index].expenseCents, daily[index].incomeCents)
+                            val fraction = if (top > 0L) (peak.toDouble() / top.toDouble()).toFloat() else 0f
+                            val topOffset = tooltipTopOffset(
+                                plotHeight = CHART_HEIGHT,
+                                inset = PLOT_INSET,
+                                bubbleHeight = DAY_TOOLTIP_HEIGHT,
+                                barFraction = fraction,
+                            )
                             DayTooltip(
                                 total = daily[index],
                                 onClick = { onOpenDayDetail(day) },
@@ -480,7 +514,7 @@ private fun DailyPlot(
                                         val centerPx = cellWidthPx * index + cellWidthPx / 2f - scrollState.value
                                         val x = (centerPx - bubblePx / 2f)
                                             .coerceIn(0f, (viewportPx - bubblePx).coerceAtLeast(0f))
-                                        IntOffset(x.roundToInt(), 0)
+                                        IntOffset(x.roundToInt(), topOffset.roundToPx())
                                     },
                             )
                         }
