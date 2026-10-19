@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,7 +40,9 @@ import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.theme.TooltipShape
 import com.nimo.ledger.util.Money
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.sin
 
 /** 环形图的外径：中间留 [DONUT_HOLE] 放合计，图上不放文字，名字看下面的「支出排行」 */
 private val DONUT_SIZE = 180.dp
@@ -48,6 +52,9 @@ private val DONUT_STROKE = 26.dp
 
 /** 相邻扇区之间露出的底色缝：2dp（半径 77dp 时约 1.49°）。形状边界承载信息，不只靠颜色 */
 private val DONUT_SEAM = 2.dp
+
+/** 每块扇形的透明语义节点边长：只给 TalkBack 用，不参与绘制 */
+private val DONUT_SLICE_TARGET = 28.dp
 
 /** 环中间的洞（= 外径 − 两侧环宽）：合计文字就摆在这个宽度里 */
 private val DONUT_HOLE = DONUT_SIZE - DONUT_STROKE * 2
@@ -68,6 +75,9 @@ internal const val DONUT_TOOLTIP_CHEVRON_TEST_TAG = "report-donut-tooltip-chevro
 
 /** 无障碍描述的头一句（画布上没有可读文字）：读屏听到的是带数字的整句，测试用前缀匹配 */
 internal const val DONUT_DESCRIPTION = "本月支出分类占比"
+
+/** 每一块扇形各自一个可朗读、可激活的语义节点（E 项：逐扇区操作） */
+internal const val DONUT_SLICE_TEST_TAG = "report-donut-slice"
 
 /** 描述头里的「这是哪段范围的占比」：统计页传当前范围标签，别处默认单月口径 */
 private const val DONUT_DEFAULT_LABEL = "本月"
@@ -95,6 +105,10 @@ internal fun donutDescription(
     val rest = if (rows.size > 3) "，其余 ${rows.size - 3} 个分类" else ""
     return "$head，合计 ${Money.spokenAmount(totalCents)}：$top$rest"
 }
+
+/** 单块扇形的朗读/操作文案：分类名 + 占比 + 金额（数字口径与气泡一致） */
+internal fun donutSliceSpeech(row: CategoryBreakdownRow, label: String = DONUT_DEFAULT_LABEL): String =
+    "$label${row.name} ${ReportFormatting.percent(row.percent)} ${Money.spokenAmount(row.amountCents)}"
 
 /**
  * 一个扇形的起止角（度）：0 度在 12 点方向，顺时针为正。
@@ -211,6 +225,12 @@ internal fun CategoryDonutSection(
                 onSelect = { picked -> selectedIndex = if (picked == selectedIndex) null else picked },
             )
             DonutCenter(totalCents = totalCents)
+            DonutSliceTargets(
+                rows = rows,
+                totalCents = totalCents,
+                label = label,
+                onOpen = onCategoryClick,
+            )
         }
         selectedIndex?.let { index ->
             rows.getOrNull(index)?.let { row ->
@@ -286,6 +306,53 @@ private fun CategoryDonutCanvas(
  * （S-1 修法 ②：原来的「查看明细」文字就在右下角，正好被「记一笔」FAB 压住）。
  * 整块可点，点它才把"该分类 + 当前月份"下钻到明细页（F07 的同一条链路，由宿主跳转）。
  */
+/**
+ * 每一块扇形各挂一个透明语义节点（E 项）：TalkBack 可以逐块念出「餐饮 30.2% 774 元」，
+ * 双击直接下钻到该分类明细；不占触摸事件——手指点环仍走 Canvas 的「先气泡后下钻」。
+ *
+ * 位置取扇形中点在环带上的坐标：角度从 12 点顺时针，屏幕 y 向下，
+ * 所以标准角 = 角度 − 90°。
+ */
+@Composable
+private fun DonutSliceTargets(
+    rows: List<CategoryBreakdownRow>,
+    totalCents: Long,
+    label: String,
+    onOpen: (CategoryBreakdownRow) -> Unit,
+) {
+    if (rows.isEmpty() || totalCents <= 0L) return
+    val radius = DONUT_STROKE.let { (DONUT_SIZE - it) / 2 }
+    val arcs = donutArcs(
+        rows = rows,
+        totalCents = totalCents,
+        seamAngleDeg = 0f,
+    )
+    Box(modifier = Modifier.size(DONUT_SIZE)) {
+        rows.forEachIndexed { index, row ->
+            val midDeg = arcs[index].startAngleDeg + arcs[index].sweepAngleDeg / 2f
+            val rad = Math.toRadians((midDeg - 90f).toDouble())
+            val cx = radius + radius * cos(rad).toFloat()
+            val cy = radius + radius * sin(rad).toFloat()
+            Box(
+                modifier = Modifier
+                    .offset(
+                        x = cx - DONUT_SLICE_TARGET / 2,
+                        y = cy - DONUT_SLICE_TARGET / 2,
+                    )
+                    .size(DONUT_SLICE_TARGET)
+                    .testTag("$DONUT_SLICE_TEST_TAG-$index")
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = donutSliceSpeech(row)
+                        onClick(label = "查看明细") {
+                            onOpen(row)
+                            true
+                        }
+                    },
+            )
+        }
+    }
+}
+
 @Composable
 private fun DonutTooltip(row: CategoryBreakdownRow, onClick: () -> Unit) {
     Surface(

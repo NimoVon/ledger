@@ -11,6 +11,8 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -18,6 +20,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
@@ -41,6 +44,7 @@ import org.junit.Assert.assertEquals
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -183,6 +187,33 @@ class CategoryDonutUiTest {
         composeRule.onAllNodes(hasContentDescription("支出分类占比", substring = true)).assertCountEquals(0)
     }
 
+    /** E 项：每块扇形各有自己的语义节点，TalkBack 可逐块朗读、双击直接下钻该分类 */
+    @Test
+    fun eachSlice_isItsOwnNode_andActivatingItDrillsIntoThatCategory() {
+        val (foodId, _) = seedTwoExpenses()
+        var lastFilter: TransactionFilter? = null
+        showReports(onDrillDown = { lastFilter = it })
+        awaitText("日均支出")
+
+        val list = composeRule.onNode(hasScrollToIndexAction())
+        list.performScrollToNode(hasTestTag(DONUT_TEST_TAG))
+
+        // 两块扇形 = 两个独立节点，文案带分类名、占比与口语金额（数字口径同气泡）
+        composeRule.onAllNodes(hasTestTag("$DONUT_SLICE_TEST_TAG-0")).assertCountEquals(1)
+        composeRule.onAllNodes(hasTestTag("$DONUT_SLICE_TEST_TAG-1")).assertCountEquals(1)
+        val speech = composeRule.onNodeWithTag("$DONUT_SLICE_TEST_TAG-0")
+            .fetchSemanticsNode().config[SemanticsProperties.ContentDescription].joinToString(" ")
+
+        assertTrue("desc=$speech", speech.contains("娱乐"))
+        assertTrue("desc=$speech", speech.contains("75.0%"))
+        assertTrue("desc=$speech", speech.contains("600 元"))
+
+        // 激活 = 下钻该分类（不走触摸，语义 click）
+        composeRule.onNodeWithTag("$DONUT_SLICE_TEST_TAG-0")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitForIdle()
+        assertTrue(lastFilter?.categoryIds == setOf(foodId))
+    }
     /**
      * 在环形图上点一个方向：0° = 3 点方向（金额第一名那一块），225° = 10 点半方向（第二名那一块）。
      * 半径取环路中线（180dp 画布、26dp 环宽），坐标按测试密度换算成 px。
