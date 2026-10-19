@@ -587,7 +587,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | T-3 | P1 | 行点击热区是整行（好），但没有编辑暗示 | 保留整行点击，**不新增行内编辑按钮**（会缩小热区）；把「点行=编辑」写进首用提示；删除能力留在编辑页「删除这一笔」 |
 | T-4 | P1 | 金额右边缘参差 | 走 `LedgerAmount`（minWidth 96dp、类型色、带 +/- 符号） |
 | T-5 | P2 | 找一笔要点两下（F06 只有筛选面板） | 「筛选」左侧加 IconButton（`LedgerIcons.Search`，contentDescription「搜索」），直接开筛选面板并聚焦关键词输入 |
-| T-6 | P2 | 日段头只有合计，没有当日笔数 | DayHeader.trailing 补「N 笔」（labelSmall / onSurfaceVariant） |
+| T-6 ✅ **已修 2026-10-19**（段头 trailing 加「· N 笔」，N = 分组流水条数；大字竖排时单独一行，见 `docs/测试报告.md` §47） | P2 | 日段头只有合计，没有当日笔数 | DayHeader.trailing 补「N 笔」（labelSmall / onSurfaceVariant） |
 | T-7 | P3 | 批量操作 | **不做**（超范围）；仅记录：若未来加多选，必须复用 PendingTransactionDeletion 的撤销语义 |
 
 ### 8.3 记一笔 / 转账（R）
