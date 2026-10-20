@@ -1,5 +1,6 @@
 package com.nimo.ledger.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -21,8 +23,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -186,7 +190,10 @@ internal const val BRAND_MARK_TEST_TAG = "settings-brand-mark"
 
 /** 徽章尺寸：56dp 圆底 + 28dp 线条狗，比空态插画克制，不抢卡片内容 */
 private val BRAND_MARK_SIZE = 56.dp
-private val BRAND_MARK_ICON_SIZE = 28.dp
+private val BRAND_MARK_IMAGE_SIZE = 84.dp
+
+/** 桌面图标底色（取自 ic_launcher_background.xml：「前景位图背景方块均色 #79C9FC」） */
+private val BRAND_MARK_BACKGROUND = androidx.compose.ui.graphics.Color(0xFF79C9FC)
 
 /** 「关于」组：品牌徽章 + 组标题 + 卡片 + 开发者自检 + 版本行（ST-1 / ST-2 / P3-5 的完整落点） */
 @Composable
@@ -198,21 +205,23 @@ fun SettingsAboutGroup(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+            // 直接复用桌面图标资产（P3-5 改版）：前景 PNG 是自带浅蓝底的完整图标，
+            // 遮罩圆按 108dp 画布里 72dp 安全区裁切 —— 画 84dp 图、圆 56dp，狗头正好占满圆圈，
+            // 与系统桌面上的图标观感一致；不再手绘矢量（用户反馈线条狗不像）。
+            Box(
                 modifier = Modifier
                     .size(BRAND_MARK_SIZE)
+                    .clip(CircleShape)
+                    .background(BRAND_MARK_BACKGROUND)
                     .testTag(BRAND_MARK_TEST_TAG),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painter = painterResource(R.drawable.brand_dog_mark),
-                        contentDescription = "记账本",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(BRAND_MARK_ICON_SIZE),
-                    )
-                }
+                Image(
+                    painter = painterResource(R.drawable.ic_launcher_foreground),
+                    contentDescription = "记账本",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(BRAND_MARK_IMAGE_SIZE),
+                )
             }
         }
         Spacer(Modifier.height(BRAND_TO_TITLE_DP))
