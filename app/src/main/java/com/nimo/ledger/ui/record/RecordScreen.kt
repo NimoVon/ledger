@@ -326,11 +326,25 @@ fun RecordScreen(
                     )
 
                     // 转账（F04）与余额调整（P1）的编辑入口不在本页：硬套收支表单会写出半截数据
-                    RecordScreenState.UnsupportedType -> EmptyState(
-                        title = "这一笔不能在这里改",
-                        message = "转账与余额调整不进入收支统计，它们有各自的编辑入口。\n本页只处理支出与收入。",
-                        modifier = bodyModifier,
-                    )
+                    RecordScreenState.UnsupportedType -> {
+                        // 余额调整没有可编辑字段，但必须能删：删掉后账户余额由剩下的流水重算
+                        // （BalanceCalculator 从初始余额 + 流水推导，不存冗余余额）
+                        val adjustment = state.editingTransaction
+                            ?.takeIf { it.type == TransactionType.BALANCE_ADJUST }
+                        EmptyState(
+                            title = "这一笔不能在这里改",
+                            message = if (adjustment != null) {
+                                "余额调整不进入收支统计，也没有可编辑的字段。\n" +
+                                    "删掉它，账户余额会按剩下的流水重新算。"
+                            } else {
+                                "转账与余额调整不进入收支统计，它们有各自的编辑入口。\n" +
+                                    "本页只处理支出与收入。"
+                            },
+                            modifier = bodyModifier,
+                            actionLabel = if (adjustment != null) "删除这条余额调整" else null,
+                            onAction = if (adjustment != null) ({ viewModel.requestDelete() }) else null,
+                        )
+                    }
 
                     // 没有可用账户就无法记账：明确指路，不给一张填了也存不进去的表单。
                     // 编辑模式不算在内（见 RecordUiState.hasNoAccount）：否则这一笔的恢复入口也会被顶掉。
