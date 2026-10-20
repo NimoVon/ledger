@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import com.nimo.ledger.ui.components.fieldHasError
 import com.nimo.ledger.data.local.entity.AccountEntity
 import com.nimo.ledger.domain.model.AccountType
 import com.nimo.ledger.domain.validate.AccountValidationError
@@ -86,6 +87,7 @@ fun AccountEditDialog(
                     value = name,
                     onValueChange = { name = it; localError = null },
                     label = { Text("账户名称") },
+                    isError = fieldHasError(localError ?: errorMessage, "名称"),
                     singleLine = true,
                 )
                 Column {
@@ -108,6 +110,7 @@ fun AccountEditDialog(
                     value = amountText,
                     onValueChange = { amountText = Money.normalizeAmountInput(it); localError = null },
                     label = { Text("初始余额（分计入，可留空=0）") },
+                    isError = fieldHasError(localError ?: errorMessage, "余额"),
                     prefix = { Text("¥") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),

@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.nimo.ledger.ui.components.fieldHasError
 import com.nimo.ledger.domain.model.CategoryKind
 import com.nimo.ledger.domain.validate.CategoryDeletionBlocker
 import com.nimo.ledger.domain.validate.CategoryDeletionException
@@ -238,6 +239,7 @@ fun CategoryEditDialog(
                     value = name,
                     onValueChange = { name = it; localError = null },
                     label = { Text("分类名称") },
+            isError = fieldHasError(localError ?: errorMessage, "名称"),
                     singleLine = true,
                 )
                 // 图标（C-6 / F-3）：宫格点选为主，手动输入兜底

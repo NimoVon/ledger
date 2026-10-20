@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.nimo.ledger.ui.components.fieldHasError
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.domain.validate.BudgetValidationError
 import com.nimo.ledger.domain.validate.BudgetValidationException
@@ -83,6 +84,7 @@ fun BudgetEditDialog(
                             localError = null
                         },
                         label = { Text("预算金额") },
+                    isError = fieldHasError(localError ?: errorMessage, "金额"),
                         singleLine = true,
                         enabled = !saving,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
