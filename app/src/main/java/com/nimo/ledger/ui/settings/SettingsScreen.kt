@@ -25,6 +25,7 @@ import com.nimo.ledger.ui.components.FAB_BOTTOM_RESERVE
 import com.nimo.ledger.ui.components.LedgerListItem
 import com.nimo.ledger.ui.theme.ThemePreference
 import kotlinx.coroutines.launch
+import java.time.YearMonth
 
 /**
  * 设置页（计划 4.3 ui/settings）。
@@ -46,6 +47,25 @@ fun SettingsScreen(
     // 默认折叠（ST-1）；rememberSaveable 让旋转屏幕时不丢展开状态，切 tab 回来仍从折叠开始
     var developerExpanded by rememberSaveable { mutableStateOf(false) }
     var selfCheckLines by remember { mutableStateOf<List<String>?>(null) }
+    // §7.3 第 3 条：子页入口带状态副标题（账户数 / 分类数 / 本月是否已设总预算）
+    var accountCount by remember { mutableStateOf<Int?>(null) }
+    var categoryCount by remember { mutableStateOf<Int?>(null) }
+    var hasTotalBudget by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) {
+        launch {
+            container.repository.observeAccounts()
+                .collect { accountCount = it.size }
+        }
+        launch {
+            container.repository.observeAllCategories()
+                .collect { categoryCount = it.size }
+        }
+        launch {
+            val month = YearMonth.now().toString()
+            container.repository.observeBudgets(month)
+                .collect { budgets -> hasTotalBudget = budgets.any { it.categoryId == null } }
+        }
+    }
     LaunchedEffect(developerExpanded) {
         if (developerExpanded && selfCheckLines == null) {
             selfCheckLines = try {
@@ -76,16 +96,19 @@ fun SettingsScreen(
             // 卡片内的行用统一列表行默认 16dp 内边距，不再叠加页面边距
             LedgerListItem(
                 title = "账户管理",
+                subtitle = accountCount?.let(::accountsCountSubtitle),
                 chevron = true,
                 onClick = onOpenAccounts,
             )
             LedgerListItem(
                 title = "分类管理",
+                subtitle = categoryCount?.let(::categoriesCountSubtitle),
                 chevron = true,
                 onClick = onOpenCategories,
             )
             LedgerListItem(
                 title = "预算管理",
+                subtitle = hasTotalBudget?.let(::budgetMonthSubtitle),
                 chevron = true,
                 onClick = onOpenBudgets,
             )
@@ -131,3 +154,13 @@ fun SettingsScreen(
         Spacer(Modifier.height(FAB_BOTTOM_RESERVE))
     }
 }
+
+/** §7.3 第 3 条：账户入口副标题 —— 让它进子页前就知道规模 */
+internal fun accountsCountSubtitle(count: Int): String = "$count 个账户"
+
+/** §7.3 第 3 条：分类入口副标题（含已停用，和分类页一致） */
+internal fun categoriesCountSubtitle(count: Int): String = "$count 个分类"
+
+/** §7.3 第 3 条：预算入口副标题 —— 只回答「本月有没有设总预算」 */
+internal fun budgetMonthSubtitle(hasTotalBudget: Boolean): String =
+    if (hasTotalBudget) "本月已设总预算" else "本月未设总预算"
