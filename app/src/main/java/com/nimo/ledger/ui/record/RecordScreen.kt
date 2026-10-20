@@ -637,6 +637,12 @@ private fun RecordFormBody(
                 ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
+                Icon(
+                    imageVector = LedgerIcons.Delete,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
                 Text("删除这一笔")
             }
             Text(

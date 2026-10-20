@@ -109,29 +109,6 @@ object LedgerIcons {
     }
 
     /** 转账：两条反向的箭头（上排向右、下排向左） */
-    val Transfer: ImageVector = ledgerIcon("LedgerTransfer") {
-        path(
-            stroke = SolidColor(Color.Black),
-            strokeLineWidth = 2.2f,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round,
-        ) {
-            // 上排：向右的箭头
-            moveTo(5f, 9f)
-            lineTo(19f, 9f)
-            moveTo(16f, 6f)
-            lineTo(19f, 9f)
-            lineTo(16f, 12f)
-            // 下排：向左的箭头
-            moveTo(19f, 15f)
-            lineTo(5f, 15f)
-            moveTo(8f, 12f)
-            lineTo(5f, 15f)
-            lineTo(8f, 18f)
-        }
-    }
-
-    /** 上移（F02 分类排序）：向上的箭头 */
     val ArrowUp: ImageVector = ledgerIcon("LedgerArrowUp") {
         path(
             stroke = SolidColor(Color.Black),
@@ -168,18 +145,6 @@ object LedgerIcons {
     // 只做「一个弧/一条线能表达」的形状，避免在小尺寸（16dp）糊成一团。
 
     /** 编辑：铅笔（笔杆 + 笔尖分隔线） */
-    val Edit: ImageVector = strokeIcon("LedgerEdit") {
-        moveTo(5f, 19f)
-        lineTo(6f, 15f)
-        lineTo(15.5f, 5.5f)
-        lineTo(18.5f, 8.5f)
-        lineTo(9f, 18f)
-        close()
-        moveTo(6f, 15f)
-        lineTo(9f, 18f)
-    }
-
-    /** 更多：三个竖点（C-3 收敛后分类行的排序入口） */
     val MoreVert: ImageVector = ledgerIcon("LedgerMoreVert") {
         path(fill = SolidColor(Color.Black)) {
             vBar(12f, 5f, 7.5f, 2.4f)
@@ -206,21 +171,6 @@ object LedgerIcons {
     }
 
     /** 勾选：一个对勾 */
-    val Check: ImageVector = strokeIcon("LedgerCheck") {
-        moveTo(5f, 12.5f)
-        lineTo(10f, 17.5f)
-        lineTo(19f, 6.5f)
-    }
-
-    /** 关闭：两条交叉线 */
-    val Close: ImageVector = strokeIcon("LedgerClose") {
-        moveTo(6f, 6f)
-        lineTo(18f, 18f)
-        moveTo(18f, 6f)
-        lineTo(6f, 18f)
-    }
-
-    /** 日历：外框 + 两个挂环 + 日期分隔线 */
     val Calendar: ImageVector = strokeIcon("LedgerCalendar") {
         moveTo(4.5f, 6.5f)
         lineTo(19.5f, 6.5f)
@@ -317,21 +267,6 @@ object LedgerIcons {
     }
 
     /** 锁：锁体 + 锁梁 + 钥匙孔 */
-    val Lock: ImageVector = strokeIcon("LedgerLock") {
-        moveTo(5f, 11f)
-        lineTo(19f, 11f)
-        lineTo(19f, 20f)
-        lineTo(5f, 20f)
-        close()
-        moveTo(8f, 11f)
-        lineTo(8f, 8.5f)
-        arcTo(4f, 4f, 0f, isMoreThanHalf = false, isPositiveArc = true, x1 = 16f, y1 = 8.5f)
-        lineTo(16f, 11f)
-        moveTo(12f, 15f)
-        lineTo(12f, 15.2f)
-    }
-
-    /** 校准（F11 余额校准）：天平——横梁 + 立柱 + 底座 + 两个托盘 */
     val Scale: ImageVector = ledgerIcon("LedgerScale") {
         path(fill = SolidColor(Color.Black)) {
             hBar(3.5f, 20.5f, 6.5f, 1.8f)

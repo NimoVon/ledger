@@ -9,10 +9,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,6 +44,7 @@ import com.nimo.ledger.domain.backup.CsvImportCounts
 import com.nimo.ledger.domain.backup.CsvImportOutcome
 import com.nimo.ledger.domain.backup.CsvImportPreview
 import com.nimo.ledger.domain.backup.CsvRowProblem
+import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.transactions.PendingTransactionDeletion
 import java.io.IOException
 import java.time.Instant
@@ -199,24 +203,28 @@ fun BackupSettingsSection(
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         BackupRow(
+            icon = LedgerIcons.Download,
             title = "导出 JSON 完整备份",
             subtitle = "账户、分类、每笔交易、预算；以后可以用「导入 JSON」装回来",
             enabled = !busy,
         ) { explainExport = ExportKind.JSON }
 
         BackupRow(
+            icon = LedgerIcons.Download,
             title = "导出 CSV（4 个文件）",
             subtitle = "accounts / categories / transactions / budgets，金额为元，Excel 可直接打开",
             enabled = !busy,
         ) { explainExport = ExportKind.CSV }
 
         BackupRow(
+            icon = LedgerIcons.Upload,
             title = "导入 JSON（覆盖替换）",
             subtitle = "选中一个 JSON 备份：整机数据被它覆盖替换（不是追加）",
             enabled = !busy,
         ) { jsonImport.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
 
         BackupRow(
+            icon = LedgerIcons.Upload,
             title = "导入 CSV（增量合并）",
             subtitle = "选中放着 4 个 CSV 的文件夹：同 id 覆盖、新 id 追加，本机独有的数据不删",
             enabled = !busy,
@@ -425,19 +433,30 @@ private enum class ExportKind { JSON, CSV }
 
 @Composable
 private fun BackupRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = title, style = MaterialTheme.typography.bodyLarge)
-        Text(text = subtitle, style = MaterialTheme.typography.bodySmall)
+        Icon(
+            imageVector = icon,
+            contentDescription = null, // 装饰：行标题已经说清动作
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
+            Text(text = subtitle, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 

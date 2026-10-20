@@ -21,11 +21,8 @@ import org.junit.Test
 class LedgerIconsTest {
 
     private val newIcons: Map<String, ImageVector> = linkedMapOf(
-        "Edit" to LedgerIcons.Edit,
-        "Delete" to LedgerIcons.Delete,
-        "Check" to LedgerIcons.Check,
-        "Close" to LedgerIcons.Close,
-        "Calendar" to LedgerIcons.Calendar,
+       "Delete" to LedgerIcons.Delete,
+       "Calendar" to LedgerIcons.Calendar,
         "Search" to LedgerIcons.Search,
         "Wallet" to LedgerIcons.Wallet,
         "Card" to LedgerIcons.Card,
@@ -33,8 +30,7 @@ class LedgerIconsTest {
         "Info" to LedgerIcons.Info,
         "Download" to LedgerIcons.Download,
         "Upload" to LedgerIcons.Upload,
-        "Lock" to LedgerIcons.Lock,
-    )
+   )
 
     /** ImageVector.paths 是 internal，只能顺着公开的 root 走一遍把 VectorPath 收集出来 */
     private fun ImageVector.leafPaths(): List<VectorPath> = (0 until root.size).flatMap { root[it].leafPaths() }
@@ -46,8 +42,8 @@ class LedgerIconsTest {
     }
 
     @Test
-    fun thereAreThirteenNewIcons() {
-        assertEquals(13, newIcons.size)
+    fun thereAreNineNewIcons() {
+        assertEquals(9, newIcons.size)
     }
 
     @Test

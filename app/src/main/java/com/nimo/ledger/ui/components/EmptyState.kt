@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.nimo.ledger.ui.LedgerIcons
 import androidx.compose.runtime.Composable
 import com.nimo.ledger.R
 
@@ -102,6 +104,15 @@ fun EmptyState(
                 )
             }
             Spacer(Modifier.height(16.dp))
+        }
+        if (tone == EmptyTone.ERROR) {
+            Icon(
+                imageVector = LedgerIcons.Alert,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(28.dp),
+            )
+            Spacer(Modifier.height(8.dp))
         }
         Text(
             text = title,
