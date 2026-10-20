@@ -49,6 +49,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.nimo.ledger.domain.stats.DailyTotal
@@ -70,6 +72,26 @@ import kotlin.math.roundToInt
 
 /** 折线画布的高度：加载态用同一个高度占位，避免图出现时页面跳动 */
 private val CHART_HEIGHT = 160.dp
+
+/** 自然年 12 个点在窄屏上更密，抬高 20dp 让折线不糊成一条（S-6，规范 §12） */
+private val CHART_HEIGHT_CALENDAR_YEAR = 180.dp
+
+/** 窄屏门槛：与「360dp 以下按窄屏处理」的通用口径一致 */
+internal val NARROW_SCREEN = 360.dp
+
+/**
+ * 图表高度：自然年且屏宽 < [NARROW_SCREEN] 时用 180dp，其余保持 160dp。
+ * 纯函数，便于在 JVM 上锁住阈值，不必把设备改窄。
+ */
+internal fun trendChartHeight(range: ReportRange, screenWidth: Dp): Dp =
+    if (range is ReportRange.CalendarYear && screenWidth < NARROW_SCREEN) {
+        CHART_HEIGHT_CALENDAR_YEAR
+    } else {
+        CHART_HEIGHT
+    }
+
+/** 由 [MonthlySection] 提供，子组件不再各自读取倍数/宽度，保证纵轴刻度与绘图区严格同高 */
+private val LocalChartHeight = compositionLocalOf { CHART_HEIGHT }
 
 internal const val TREND_CHART_TEST_TAG = "report-trend-chart"
 
@@ -273,11 +295,13 @@ private fun DailySection(
 @Composable
 private fun MonthlySection(points: List<MonthlyTotal>, range: ReportRange, isLoading: Boolean) {
     val maxCents = points.maxOfOrNull { maxOf(it.incomeCents, it.expenseCents) } ?: 0L
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+    val height = trendChartHeight(range, maxWidth)
     when {
-        isLoading -> ChartPlaceholder()
+        isLoading -> CompositionLocalProvider(LocalChartHeight provides height) { ChartPlaceholder() }
         // 一段时间里一笔收支都没有：给一句话，而不是一条贴着 0 的直线
         maxCents <= 0L -> EmptyChartText("${range.label}还没有收支记录。")
-        else -> {
+        else -> CompositionLocalProvider(LocalChartHeight provides height) {
             TrendLegend(maxCents)
             Spacer(modifier = Modifier.height(8.dp))
             // 折线区与纵轴刻度并排：刻度文字要对上网格线，横轴月份要跟折线同宽（左边空出刻度栏）
@@ -297,6 +321,7 @@ private fun MonthlySection(points: List<MonthlyTotal>, range: ReportRange, isLoa
             }
         }
     }
+    }
 }
 
 /** 加载占位：与图表同高，避免数据到位时页面跳动 */
@@ -305,7 +330,7 @@ private fun ChartPlaceholder() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(CHART_HEIGHT),
+            .height(LocalChartHeight.current),
         contentAlignment = Alignment.Center,
     ) { CircularProgressIndicator(modifier = Modifier.size(24.dp)) }
 }
@@ -346,7 +371,7 @@ private fun DailyBars(
 
     BoxWithConstraints(
         modifier = modifier
-            .height(CHART_HEIGHT)
+            .height(LocalChartHeight.current)
             .testTag(DAILY_CHART_TEST_TAG)
             .semantics { contentDescription = dailyDescription(daily, rangeLabel) },
     ) {
@@ -406,7 +431,7 @@ private fun ChartYAxis(top: Long) {
     Layout(
         modifier = Modifier
             .width(Y_AXIS_WIDTH)
-            .height(CHART_HEIGHT)
+            .height(LocalChartHeight.current)
             .testTag(CHART_Y_AXIS_TEST_TAG),
         content = {
             values.forEach { value ->
@@ -499,7 +524,7 @@ private fun DailyPlot(
                             val peak = maxOf(daily[index].expenseCents, daily[index].incomeCents)
                             val fraction = if (top > 0L) (peak.toDouble() / top.toDouble()).toFloat() else 0f
                             val topOffset = tooltipTopOffset(
-                                plotHeight = CHART_HEIGHT,
+                                plotHeight = LocalChartHeight.current,
                                 inset = PLOT_INSET,
                                 bubbleHeight = DAY_TOOLTIP_HEIGHT,
                                 barFraction = fraction,
@@ -656,7 +681,7 @@ private fun TrendCanvas(
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(CHART_HEIGHT)
+            .height(LocalChartHeight.current)
             .testTag(TREND_CHART_TEST_TAG)
             .semantics { contentDescription = trendDescription(points, range) },
     ) {
@@ -729,3 +754,4 @@ internal fun niceCeiling(maxCents: Long): Long {
     }
     return scale * 10
 }
+
