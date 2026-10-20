@@ -584,7 +584,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | --- | --- | --- | --- |
 | T-1 ✅ **已实装（2026-10-20 审计）** | P1 | 首屏被 MonthSwitcher + MonthSummaryBar + FilterBar 三行吃掉约 180dp | FilterBar 单行化：左「筛选」OutlinedButton，右侧 chips **横向滚动**（Row(horizontalScroll) 或 LazyRow），只占一行；「清空」跟在 chips 行尾 |
 | T-2 ✅ **已实装（2026-10-20 审计）** | P1 | chips 现在是多行竖排文字列（Column 里每个 chip 一行 labelSmall） | 改成圆角 chip（AssistChip 或自绘 12dp 圆角 + surfaceContainerHigh 底），一行内横滚；无筛选条件时整条只剩「筛选」按钮 |
-| T-3 | P1 | 行点击热区是整行（好），但没有编辑暗示 | 保留整行点击，**不新增行内编辑按钮**（会缩小热区）；把「点行=编辑」写进首用提示；删除能力留在编辑页「删除这一笔」 |
+| T-3 ✅ **已修 2026-10-21**（首次进入给一次性提示「点任意一行可修改这一笔」，DataStore 记标记、不动 schema；见 `docs/测试报告.md` §61） | P1 | 行点击热区是整行（好），但没有编辑暗示 | 保留整行点击，**不新增行内编辑按钮**（会缩小热区）；把「点行=编辑」写进首用提示；删除能力留在编辑页「删除这一笔」 |
 | T-4 ✅ **已实装（2026-10-20 审计）** | P1 | 金额右边缘参差 | 走 `LedgerAmount`（minWidth 96dp、类型色、带 +/- 符号） |
 | T-5 ✅ **已修 2026-10-19**（筛选条左侧 🔍 读屏名「搜索」，打开面板并聚焦关键词框、自动弹键盘；2 例单测锁入口回调，真机 dump 证明焦点，见 `docs/测试报告.md` §49） | P2 | 找一笔要点两下（F06 只有筛选面板） | 「筛选」左侧加 IconButton（`LedgerIcons.Search`，contentDescription「搜索」），直接开筛选面板并聚焦关键词输入 |
 | T-6 ✅ **已修 2026-10-19**（段头 trailing 加「· N 笔」，N = 分组流水条数；大字竖排时单独一行，见 `docs/测试报告.md` §47） | P2 | 日段头只有合计，没有当日笔数 | DayHeader.trailing 补「N 笔」（labelSmall / onSurfaceVariant） |
