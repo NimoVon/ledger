@@ -117,7 +117,7 @@ data class ReportsUiState(
     /** 空态说明 */
     val emptyMessage: String
         get() = if (range.isSingleMonth) {
-            "记一笔之后，这里会给出收入、支出、结余与环比。"
+            "点右下角「记一笔」，这里会给出收入、支出、结余与环比。"
         } else {
             "换个范围看看，或者先记一笔。"
         }

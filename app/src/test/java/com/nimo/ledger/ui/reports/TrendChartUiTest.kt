@@ -219,7 +219,7 @@ class TrendChartUiTest {
         awaitText("本月还没有记录")
         composeRule.onNodeWithText("本月还没有记录").assertIsDisplayed()
         // 默认"本月"一段流水都没有：整页空态，不摆空图（趋势区此时不渲染），但顶部范围入口还在
-        composeRule.onNodeWithText("记一笔之后，这里会给出收入、支出、结余与环比。").assertIsDisplayed()
+        composeRule.onNodeWithText("点右下角「记一笔」，这里会给出收入、支出、结余与环比。").assertIsDisplayed()
         composeRule.onAllNodes(hasTestTag(DAILY_CHART_TEST_TAG)).assertCountEquals(0)
 
         val six = ReportRange.lastMonths(thisMonth(), 6)

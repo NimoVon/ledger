@@ -60,6 +60,9 @@ internal const val AMOUNT_FIELD_TAG = "transfer-amount"
 
 /** 余额不足提示的测试锚点（文案本身会随金额变化，用 tag 更稳） */
 internal const val INSUFFICIENT_BALANCE_TAG = "transfer-insufficient-balance"
+/** 转入后预估余额：只有「选了转入账户 + 金额可解析」时才给数，缺一不可（纯显示，不进统计） */
+internal fun transferAfterBalance(balanceCents: Long?, amountCents: Long?): Long? =
+    if (balanceCents == null || amountCents == null) null else balanceCents + amountCents
 
 /**
  * 账户 chip 的测试锚点。两个选择器里的账户名会重复出现（"CMB" 在转出和转入里各一份），
@@ -270,6 +273,16 @@ private fun TransferFormBody(
                 tagPrefix = TO_ACCOUNT_TAG_PREFIX,
                 onSelect = viewModel::setToAccount,
             )
+            transferAfterBalance(
+                balanceCents = state.form.toAccountId?.let { state.balances[it] },
+                amountCents = state.amountCents,
+            )?.let { after ->
+                Text(
+                    text = "转入后 " + Money.formatCurrency(after),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
