@@ -1,11 +1,14 @@
 package com.nimo.ledger.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.testTag
@@ -89,7 +93,7 @@ fun SettingsCard(
  * 主题三选一的一行（跟随系统 / 浅色 / 深色）。
  *
  * 抽出来是为了放进 [SettingsCard] 里统一内边距；整行可点，读屏器按单选项播报。
- * ST-4 的色块预览不在 E-7 范围内，这里只保证行结构与点击语义。
+ * ST-4：每行左侧 24dp 圆形色块预览（跟随系统=半深半浅、浅色=#F5FAFF、深色=#0E1418）。
  */
 @Composable
 fun ThemeOptionRow(
@@ -109,9 +113,68 @@ fun ThemeOptionRow(
             .padding(horizontal = ROW_HORIZONTAL_DP, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        ThemePreviewSwatch(option)
+        Spacer(Modifier.width(12.dp))
         RadioButton(selected = selected, onClick = null)
         Spacer(Modifier.width(8.dp))
         Text(text = option.label, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** ST-4 的三个预览色块 testTag（供组件测试定位） */
+internal const val THEME_PREVIEW_SYSTEM_TEST_TAG = "theme-preview-system"
+internal const val THEME_PREVIEW_LIGHT_TEST_TAG = "theme-preview-light"
+internal const val THEME_PREVIEW_DARK_TEST_TAG = "theme-preview-dark"
+
+private val THEME_SWATCH_SIZE = 24.dp
+
+/** 浅色主题的页面底色（§2.3）与深色主题的页面底色 */
+private val THEME_PREVIEW_LIGHT = Color(0xFFF5FAFF)
+private val THEME_PREVIEW_DARK = Color(0xFF0E1418)
+
+/** 色块本身不朗读（radio 的选中态已说明一切），所以是纯装饰 Box */
+@Composable
+private fun ThemePreviewSwatch(option: ThemePreference) {
+    val tag = when (option) {
+        ThemePreference.SYSTEM -> THEME_PREVIEW_SYSTEM_TEST_TAG
+        ThemePreference.LIGHT -> THEME_PREVIEW_LIGHT_TEST_TAG
+        ThemePreference.DARK -> THEME_PREVIEW_DARK_TEST_TAG
+    }
+    Box(
+        modifier = Modifier
+            .size(THEME_SWATCH_SIZE)
+            .clip(CircleShape)
+            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+            .testTag(tag),
+    ) {
+        when (option) {
+            ThemePreference.SYSTEM -> Row(Modifier.fillMaxSize()) {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(THEME_PREVIEW_DARK),
+                )
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(THEME_PREVIEW_LIGHT),
+                )
+            }
+
+            ThemePreference.LIGHT -> Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(THEME_PREVIEW_LIGHT),
+            )
+
+            ThemePreference.DARK -> Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(THEME_PREVIEW_DARK),
+            )
+        }
     }
 }
 
