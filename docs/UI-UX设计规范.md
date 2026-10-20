@@ -648,7 +648,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | ST-1 | **P0** | 「数据库自检（开发用）」直接展示给用户，与真实设置项混排 | 移入设置页最底部「关于」组并默认折叠（LedgerListItem 展开），标题「开发者选项（自检）」；或仅在 `BuildConfig.DEBUG` 时显示。**两种都给，需产品选一** |
 | ST-2 | P1 | 版本行「记账本 0.1.0 · 已完成 M1（数据层）」出现在页面中部，且含开发里程碑信息 | 移到「关于」组末行，文案改「记账本 0.1.0」（bodySmall / onSurfaceVariant）；里程碑信息不进用户界面 |
 | ST-3 | P0 | 「账户/分类/预算」三行用 `Text("›")` 字符箭头 | LedgerListItem(chevron = true)（同 G-1） |
-| ST-4 | P1 | 主题三选项（跟随系统/浅色/深色）无预览 | 每行左侧加 24dp 圆形小色块：跟随系统=半浅半深，浅色=#F5FAFF + outline 描边，深色=#0E1418 |
+| ST-4 ✅ **已修 2026-10-20**（见 `docs/测试报告.md` §54） | P1 | 主题三选项（跟随系统/浅色/深色）无预览 | 每行左侧 24dp 圆：跟随系统=左深右浅、浅色=#F5FAFF、深色=#0E1418，均 1dp outline；色块纯装饰不朗读，单测 1 例 |
 | ST-5 | P1 | 分组没有视觉边界，全靠 HorizontalDivider | 改 surfaceContainerLow 卡片 + 16dp 圆角；分组标题放卡片上方（titleSmall / onSurfaceVariant）；卡片间距 24dp |
 | ST-6 | P1 | 「导入与导出」说明文字很长 | 内容保留（合规与隐私需要）；长说明放进每行 subtitle，或行尾 Info 图标点开说明对话框 |
 | ST-7 | P2 | 设置页搜索 | **不做**（项太少） |
