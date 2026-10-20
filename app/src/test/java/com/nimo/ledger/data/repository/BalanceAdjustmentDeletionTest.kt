@@ -83,7 +83,26 @@ class BalanceAdjustmentDeletionTest {
         assertTrue(firstRow.note.orEmpty().contains("实际 ¥1,500.00"))
     }
 
-    private fun balanceOf(accountId: Long): Long = runBlocking {
+
+    @Test
+    fun deletingTheFirstTwoInARow_rollsBothDiffsIntoTheThird() {
+        val accountId = runBlocking {
+            repository.createAccount("支付宝", AccountType.ALIPAY, 100_000L).getOrThrow()
+        }
+        val first = runBlocking { repository.adjustBalanceTo(accountId, 150_000L).getOrThrow() }
+        val second = runBlocking { repository.adjustBalanceTo(accountId, 180_000L).getOrThrow() }
+        val third = runBlocking { repository.adjustBalanceTo(accountId, 200_000L).getOrThrow() }
+
+        runBlocking { repository.deleteBalanceAdjustment(repository.getTransaction(first)!!) }
+        runBlocking { repository.deleteBalanceAdjustment(repository.getTransaction(second)!!) }
+
+        // 第 1、2 笔的差额都并进第 3 笔：100_000 → 200_000 = +100_000
+        val survivor = runBlocking { repository.getTransaction(third) }!!
+        assertEquals(100_000L, survivor.amount)
+        assertEquals(200_000L, balanceOf(accountId))
+        assertTrue(survivor.note.orEmpty().contains("账面 ¥1,000.00"))
+        assertTrue(survivor.note.orEmpty().contains("实际 ¥2,000.00"))
+    }    private fun balanceOf(accountId: Long): Long = runBlocking {
         val accounts = repository.observeAccounts().first()
         val transactions = repository.observeAllTransactions().first()
         BalanceCalculator.computeBalances(
