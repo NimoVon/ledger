@@ -215,7 +215,7 @@ tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
                 minimum = "0.85".toBigDecimal()
             }
         }
-        // 总体下限：防止用低覆盖新代码稀释核心分层（实测 75.2%，下限 60%）
+        // 总体下限：防止用低覆盖新代码稀释核心分层（实测 75.0%，下限 60%）
         rule {
             element = "BUNDLE"
             limit {

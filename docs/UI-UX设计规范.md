@@ -541,7 +541,7 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 1. **账户页/分类页的 FAB 与宿主 FAB 撞名（P0）**：宿主 LedgerApp 的 FAB 是「记一笔」，AccountsScreen 与 CategoriesScreen 各自的 ExtendedFAB 是「新建账户 / 新建分类」。语义不同却同款视觉，且 docs/测试报告.md §8 已记录「朗读与对话框标题同串、无法分离」。方案见 A-1 / C-1 / AA-1。
 2. ~~**统计页下钻返回要保留滚动位置（P1）**~~：点环形图/排行行 → 明细 → 返回，统计页应停在原位置而非回到顶部。**2026-10-17 已实现并真机验证**：下钻改为压在统计页之上的 `transactions/drill` 目的地（不再 `popUpTo`），返回时统计页的 `LazyListState` 由 Compose 保留，真机走查从「支出排行」位置进入、返回后仍停在排行榜而不是回到顶部（见 `docs/测试报告.md` §19.4 第 2 项）。
-3. **设置页三行内联入口 → 子页卡片（P1）**：账户管理/分类管理/预算管理现在是一行文字加箭头字符。改成 LedgerListItem（chevron = true），右侧补一行副标题（账户数 / 分类数 / 本月是否已设总预算），让用户进子页前就看见状态。**是否需要计数取决于 repository 有无现成 count 查询，标待确认，不默认实施。**
+3. **设置页三行内联入口 → 子页卡片（P1）**：账户管理/分类管理/预算管理现在是一行文字加箭头字符。改成 LedgerListItem（chevron = true），右侧补一行副标题（账户数 / 分类数 / 本月是否已设总预算），让用户进子页前就看见状态。**2026-10-20 已实施**：计数全部走既有 `observe*` Flow（不新增 DAO 查询、不加 schema），副标题「2 个账户 / 18 个分类 / 本月未设总预算」，纯函数 3 例 + 真机取证，见 `docs/测试报告.md` §55。
 
 ### 7.4 转场（2026-10-17 已实装，`ui/LedgerNavMotion.kt`）
 
