@@ -582,10 +582,10 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 | ID | 优先级 | 问题 | 改法 |
 | --- | --- | --- | --- |
-| T-1 | P1 | 首屏被 MonthSwitcher + MonthSummaryBar + FilterBar 三行吃掉约 180dp | FilterBar 单行化：左「筛选」OutlinedButton，右侧 chips **横向滚动**（Row(horizontalScroll) 或 LazyRow），只占一行；「清空」跟在 chips 行尾 |
-| T-2 | P1 | chips 现在是多行竖排文字列（Column 里每个 chip 一行 labelSmall） | 改成圆角 chip（AssistChip 或自绘 12dp 圆角 + surfaceContainerHigh 底），一行内横滚；无筛选条件时整条只剩「筛选」按钮 |
+| T-1 ✅ **已实装（2026-10-20 审计）** | P1 | 首屏被 MonthSwitcher + MonthSummaryBar + FilterBar 三行吃掉约 180dp | FilterBar 单行化：左「筛选」OutlinedButton，右侧 chips **横向滚动**（Row(horizontalScroll) 或 LazyRow），只占一行；「清空」跟在 chips 行尾 |
+| T-2 ✅ **已实装（2026-10-20 审计）** | P1 | chips 现在是多行竖排文字列（Column 里每个 chip 一行 labelSmall） | 改成圆角 chip（AssistChip 或自绘 12dp 圆角 + surfaceContainerHigh 底），一行内横滚；无筛选条件时整条只剩「筛选」按钮 |
 | T-3 | P1 | 行点击热区是整行（好），但没有编辑暗示 | 保留整行点击，**不新增行内编辑按钮**（会缩小热区）；把「点行=编辑」写进首用提示；删除能力留在编辑页「删除这一笔」 |
-| T-4 | P1 | 金额右边缘参差 | 走 `LedgerAmount`（minWidth 96dp、类型色、带 +/- 符号） |
+| T-4 ✅ **已实装（2026-10-20 审计）** | P1 | 金额右边缘参差 | 走 `LedgerAmount`（minWidth 96dp、类型色、带 +/- 符号） |
 | T-5 ✅ **已修 2026-10-19**（筛选条左侧 🔍 读屏名「搜索」，打开面板并聚焦关键词框、自动弹键盘；2 例单测锁入口回调，真机 dump 证明焦点，见 `docs/测试报告.md` §49） | P2 | 找一笔要点两下（F06 只有筛选面板） | 「筛选」左侧加 IconButton（`LedgerIcons.Search`，contentDescription「搜索」），直接开筛选面板并聚焦关键词输入 |
 | T-6 ✅ **已修 2026-10-19**（段头 trailing 加「· N 笔」，N = 分组流水条数；大字竖排时单独一行，见 `docs/测试报告.md` §47） | P2 | 日段头只有合计，没有当日笔数 | DayHeader.trailing 补「N 笔」（labelSmall / onSurfaceVariant） |
 | T-7 | P3 | 批量操作 | **不做**（超范围）；仅记录：若未来加多选，必须复用 PendingTransactionDeletion 的撤销语义 |
@@ -596,13 +596,13 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 | ID | 优先级 | 问题 | 改法 |
 | --- | --- | --- | --- |
-| R-1 | P1 | 表单各字段间距均匀 16dp，「金额」这个主角与备注视觉权重相同 | 金额框保持 headlineSmall；上方 8dp、下方 20dp，拉开段落；金额框聚焦时边框 primary（M3 默认已满足） |
-| R-2 | P1 | 分类 chip 用 FlowRow，分类多时把账户/日期/备注挤出屏幕 | 分类区加 `heightIn(max = 168.dp)` + verticalScroll（约 3 行可见）；进页面时若选中项在可视区外，自动滚到可见 |
+| R-1 ✅ **已实装（2026-10-20 审计）** | P1 | 表单各字段间距均匀 16dp，「金额」这个主角与备注视觉权重相同 | 金额框保持 headlineSmall；上方 8dp、下方 20dp，拉开段落；金额框聚焦时边框 primary（M3 默认已满足） |
+| R-2 ✅ **已实装（2026-10-20 审计）** | P1 | 分类 chip 用 FlowRow，分类多时把账户/日期/备注挤出屏幕 | 分类区加 `heightIn(max = 168.dp)` + verticalScroll（约 3 行可见）；进页面时若选中项在可视区外，自动滚到可见 |
 | R-3 | P2 | 每次记一笔都要重选分类与账户 | 默认选中「上次使用的分类 + 账户」（ViewModel 层记忆，不写库、不加 schema）；**是否算扩范围需产品确认**，故标 P2 |
-| R-4 | P1 | 保存按钮在 TopAppBar 右上，大屏单手难够到 | 保留 TopAppBar「保存」，另在表单底部加全宽主按钮「保存」（Button，height 52dp）；两处同一动作、同一 disabled 逻辑（saving 时都显示「保存中…」）。这是「冷启动 3 次点击」的最稳保障 |
-| R-5 | P1 | 「删除这一笔」与保存按钮同屏时易误触 | 与保存按钮之间加 Spacer(24.dp) + 上方 HorizontalDivider；文字用 error 色但**不加底色**，避免与主按钮抢视觉 |
+| R-4 ✅ **已实装（2026-10-20 审计）** | P1 | 保存按钮在 TopAppBar 右上，大屏单手难够到 | 保留 TopAppBar「保存」，另在表单底部加全宽主按钮「保存」（Button，height 52dp）；两处同一动作、同一 disabled 逻辑（saving 时都显示「保存中…」）。这是「冷启动 3 次点击」的最稳保障 |
+| R-5 ✅ **已实装（2026-10-20 审计）** | P1 | 「删除这一笔」与保存按钮同屏时易误触 | 与保存按钮之间加 Spacer(24.dp) + 上方 HorizontalDivider；文字用 error 色但**不加底色**，避免与主按钮抢视觉 |
 | R-6 ✅ **已修 2026-10-19**（计数 ≥180/200 时改 `tertiary` 提醒；判定抽成 `noteCounterNearLimit`，3 例单测覆盖边界，见 `docs/测试报告.md` §48） | P2 | 备注没有常用词 | 不做建议列表；只把 supportingText「N/200」在接近上限（≥180）时改 tertiary 色 |
-| R-7 | P1 | 金额输入没有直观复核 | 金额框下 12dp 处加一行 bodySmall / onSurfaceVariant，显示 `Money.formatCurrency(parsedCents)`（仅解析成功时显示），减少输错位数 |
+| R-7 ✅ **已实装（2026-10-20 审计）** | P1 | 金额输入没有直观复核 | 金额框下 12dp 处加一行 bodySmall / onSurfaceVariant，显示 `Money.formatCurrency(parsedCents)`（仅解析成功时显示），减少输错位数 |
 | R-8 | P1 | 转账两个账户 chip 没有余额方向提示 | 转出账户下已有「当前余额 ¥x」（保留）；转入账户下补「转入后 ¥x」预估值（纯显示，不进统计） |
 
 ### 8.4 统计页（S）—— app/src/main/java/com/nimo/ledger/ui/reports/ReportsScreen.kt
@@ -611,8 +611,8 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | --- | --- | --- | --- |
 | S-1 | **P0** | docs/测试报告.md §10 第 (9) 条：DayTooltip / DonutTooltip 落在屏幕下沿时被 FAB 遮挡，「查看明细」点不到 | 两条独立修法，建议都做：① 气泡出现时自动滚动，使气泡底边位于 FAB 顶边之上（内容区底边减 72dp，`FAB_BOTTOM_RESERVE = 88.dp` 已定义）；② 「查看明细」文案从右下角移到标题行左侧或改成行尾 ChevronRight 图标，避开与 FAB 的右下重叠区 —— **✅ 2026-10-17 两条都做**：① 实测气泡底边 2495 + 88dp = 内容区底边 2825、比 FAB 顶边 2555 高 16dp；② 两个气泡的标题行改为行尾 18dp ChevronRight（`contentDescription` 仍为「查看明细」）。证据 `docs/测试报告.md` §24 |
 | S-2 ✅ **已完成 2026-10-18（E-4 落地）** | P1 | 5 个 SectionHeader 让页面很长，找「支出排行」要滑很久 | 段头改 `stickyHeader`（LazyColumn 原生支持）；hint 保留。实装：`ReportsScreen` 加 `@OptIn(ExperimentalFoundationApi::class)`，5 处段头（insight / trend / donut / breakdown / accounts）由 `item(key = "…-header")` 换成 `stickyHeader(key = …)`；空范围分支只有趋势段头，仍用 `item`。证据 `docs/测试报告.md` §31 |
-| S-3 | P1 | 环形图 3 色浅色底不达图形阈值 | 同 G-8（2dp 缝） |
-| S-4 | P1 | 段头与明细页日段头同款（好资产）但实现重复 | 同 G-2 |
+| S-3 ✅ **已实装（2026-10-20 审计）** | P1 | 环形图 3 色浅色底不达图形阈值 | 同 G-8（2dp 缝） |
+| S-4 ✅ **已实装（2026-10-20 审计）** | P1 | 段头与明细页日段头同款（好资产）但实现重复 | 同 G-2 |
 | S-5 ✅ **已完成 2026-10-18（E-4 落地）** | P1 | 「本月洞察」的 5 行（日均支出、支出环比、收入环比、预算达成率两行）无视觉分组 | 用一张 surfaceContainerLow + 16dp 圆角卡片包住，行间 4dp 细分隔线（start = 16dp）。实装：`InsightSection` → `InsightCard`（`Surface` + `RoundedCornerShape(16.dp)` + `padding(horizontal = 16.dp)` + `testTag("reports-insight-card")`），新增 `InsightDivider`（上下各 4dp 空 + 1dp 线，线两端缩进 16dp），卡内行竖向内边距 10dp → 8dp；无总预算时卡片只有 3 行、不出现预算达成率。证据 `docs/测试报告.md` §31 |
 | S-6 ✅ **已修 2026-10-20**（自然年且屏宽 < 360dp 时 180dp，其余 160dp；纯函数 + 组件两层测试，真机 density override 未能触发该分支，见 `docs/测试报告.md` §52） | P2 | 趋势图恒为 160dp，自然年 12 个点的折线仍然偏密 | 保留 160dp；仅当 `ReportRange.CalendarYear` 且屏宽 < 360dp 时把 `CHART_HEIGHT` 提到 180dp（**需真机验证，标 P2**） |
 | S-7 ✅ **已修 2026-10-19**（`DailyAverageRow` 下加「按已过 N 天算」，N 取 `ReportsUiState.elapsedDays` ← `StatsCalculator.elapsedDays`；文案用通用式而非「本月」，因为同一行在近 3 月 / 自然年区间也会出现，偏差见 `docs/测试报告.md` §46.6） | P2 | 「日均支出」没说按多少天算 | 加副标题 labelSmall / onSurfaceVariant「按本月已过 N 天算」；N **必须来自 StatsCalculator 的口径，页面不得自算** |
@@ -623,9 +623,9 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 | ID | 优先级 | 问题 | 改法 |
 | --- | --- | --- | --- |
 | B-1 ✅ **已修 2026-10-19** | P1 | TotalBudgetCard 与 CategoryBudgetRowItem 结构几乎一致却各写一份 | 抽成 `BudgetLine(title, titleStyle, amountCents, amountStyle, amountColor, spentCents, status, unsetHint, startPadding, trailing)`：总预算 = titleMedium、无行尾箭头；分类行 = bodyLarge + 行尾箭头 + 按 depth 缩进。见 `docs/测试报告.md` §45 |
-| B-2 | P0 | 进度条无超支可视化：fraction > 1 只是全红到底，看不出超了多少 | `LedgerProgressBar(overMarker = true)`：100% 处画 2dp 刻度，超出部分用 60% 高度填充 |
-| B-3 | P1 | 「已用 ¥x / ¥y」+ 状态标签在窄屏/大字号下会挤 | fontScale ≥1.5 或宽度不足时改两行竖排 |
-| B-4 | P1 | 预算页的 MonthSwitcher 标签不可点（与明细/统计不一致） | 传 `onLabelClick` 打开 YearMonthPickerDialog（组件已通用，成本约 1 行）；**2026-10-18 已修，见 `docs/测试报告.md` §29** |
+| B-2 ✅ **已实装（2026-10-20 审计）** | P0 | 进度条无超支可视化：fraction > 1 只是全红到底，看不出超了多少 | `LedgerProgressBar(overMarker = true)`：100% 处画 2dp 刻度，超出部分用 60% 高度填充 |
+| B-3 ✅ **已实装（2026-10-20 审计）** | P1 | 「已用 ¥x / ¥y」+ 状态标签在窄屏/大字号下会挤 | fontScale ≥1.5 或宽度不足时改两行竖排 |
+| B-4 ✅ **已实装（2026-10-20 审计）** | P1 | 预算页的 MonthSwitcher 标签不可点（与明细/统计不一致） | 传 `onLabelClick` 打开 YearMonthPickerDialog（组件已通用，成本约 1 行）；**2026-10-18 已修，见 `docs/测试报告.md` §29** |
 | B-5 ✅ **已修 2026-10-19** | P1 | 分类预算行没有编辑入口暗示 | 行尾 `LedgerIcons.ChevronRight`（18dp / onSurfaceVariant），整行仍可点；**不给行内删除**（误触风险），删除留在编辑对话框。见 §45 |
 | B-6 ✅ **已修 2026-10-19** | P2 | 未设预算的分类混在列表里 | 列表顺序仍是分类树；顶部加 `FilterChip` 全部 / 已设 / 未设，默认「全部」、选择不持久化；筛选结果为空时给「这个筛选下没有分类。」。见 §45 |
 | B-7 ✅ **已修 2026-10-19** | P1 | 页脚「预算只看支出…」口径说明是好资产 | 保留文案；前面加 `LedgerIcons.Info`（14dp / onSurfaceVariant），与文字同一 `Row`。见 §45 |
@@ -645,12 +645,12 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 | ID | 优先级 | 问题 | 改法 |
 | --- | --- | --- | --- |
-| ST-1 | **P0** | 「数据库自检（开发用）」直接展示给用户，与真实设置项混排 | 移入设置页最底部「关于」组并默认折叠（LedgerListItem 展开），标题「开发者选项（自检）」；或仅在 `BuildConfig.DEBUG` 时显示。**两种都给，需产品选一** |
-| ST-2 | P1 | 版本行「记账本 0.1.0 · 已完成 M1（数据层）」出现在页面中部，且含开发里程碑信息 | 移到「关于」组末行，文案改「记账本 0.1.0」（bodySmall / onSurfaceVariant）；里程碑信息不进用户界面 |
-| ST-3 | P0 | 「账户/分类/预算」三行用 `Text("›")` 字符箭头 | LedgerListItem(chevron = true)（同 G-1） |
+| ST-1 ✅ **已实装（2026-10-20 审计）** | **P0** | 「数据库自检（开发用）」直接展示给用户，与真实设置项混排 | 移入设置页最底部「关于」组并默认折叠（LedgerListItem 展开），标题「开发者选项（自检）」；或仅在 `BuildConfig.DEBUG` 时显示。**两种都给，需产品选一** |
+| ST-2 ✅ **已实装（2026-10-20 审计）** | P1 | 版本行「记账本 0.1.0 · 已完成 M1（数据层）」出现在页面中部，且含开发里程碑信息 | 移到「关于」组末行，文案改「记账本 0.1.0」（bodySmall / onSurfaceVariant）；里程碑信息不进用户界面 |
+| ST-3 ✅ **已实装（2026-10-20 审计）** | P0 | 「账户/分类/预算」三行用 `Text("›")` 字符箭头 | LedgerListItem(chevron = true)（同 G-1） |
 | ST-4 ✅ **已修 2026-10-20**（见 `docs/测试报告.md` §54） | P1 | 主题三选项（跟随系统/浅色/深色）无预览 | 每行左侧 24dp 圆：跟随系统=左深右浅、浅色=#F5FAFF、深色=#0E1418，均 1dp outline；色块纯装饰不朗读，单测 1 例 |
-| ST-5 | P1 | 分组没有视觉边界，全靠 HorizontalDivider | 改 surfaceContainerLow 卡片 + 16dp 圆角；分组标题放卡片上方（titleSmall / onSurfaceVariant）；卡片间距 24dp |
-| ST-6 | P1 | 「导入与导出」说明文字很长 | 内容保留（合规与隐私需要）；长说明放进每行 subtitle，或行尾 Info 图标点开说明对话框 |
+| ST-5 ✅ **已实装（2026-10-20 审计）** | P1 | 分组没有视觉边界，全靠 HorizontalDivider | 改 surfaceContainerLow 卡片 + 16dp 圆角；分组标题放卡片上方（titleSmall / onSurfaceVariant）；卡片间距 24dp |
+| ST-6 ✅ **已实装（2026-10-20 审计）** | P1 | 「导入与导出」说明文字很长 | 内容保留（合规与隐私需要）；长说明放进每行 subtitle，或行尾 Info 图标点开说明对话框 |
 | ST-7 | P2 | 设置页搜索 | **不做**（项太少） |
 
 ### 8.8 分类页（C）—— app/src/main/java/com/nimo/ledger/ui/categories/CategoriesScreen.kt
@@ -669,18 +669,18 @@ LedgerApp（app/src/main/java/com/nimo/ledger/ui/LedgerApp.kt）
 
 | ID | 优先级 | 问题 | 改法 |
 | --- | --- | --- | --- |
-| D-1 | P0 | `YearMonthPickerDialog` 的年/月格高 40dp < 44dp 触控目标（F15 违规） | PickerCell height 40dp → **44dp**（shapes.small 12dp 圆角不变）；4 列在 360dp 屏下仍成立 |
-| D-2 | P1 | 删除类确认文案各写一遍 | 统一模板：标题「删除…？」+ 正文说明后果 + 若走 Snackbar 撤销则补一句可撤销 |
-| D-3 | P1 | 编辑对话框没有字段级错误定位 | 错误仍显示在内容之后（§6.5），同时给出错字段 `isError = true` 并在 supportingText 显示同一条消息 |
-| D-4 | P1 | 筛选对话框 420dp 限高 + 滚动（已正确，注释记录了真机缺陷） | 保留，并把「先限高再挂滚动」推广为规范（§6.5） |
+| D-1 ✅ **已实装（2026-10-20 审计）** | P0 | `YearMonthPickerDialog` 的年/月格高 40dp < 44dp 触控目标（F15 违规） | PickerCell height 40dp → **44dp**（shapes.small 12dp 圆角不变）；4 列在 360dp 屏下仍成立 |
+| D-2 ✅ **已实装（2026-10-20 审计）** | P1 | 删除类确认文案各写一遍 | 统一模板：标题「删除…？」+ 正文说明后果 + 若走 Snackbar 撤销则补一句可撤销 |
+| D-3 ❌ **未做（2026-10-20 审计）** | P1 | 编辑对话框没有字段级错误定位 | 错误仍显示在内容之后（§6.5），同时给出错字段 `isError = true` 并在 supportingText 显示同一条消息 |
+| D-4 ✅ **已实装（2026-10-20 审计）** | P1 | 筛选对话框 420dp 限高 + 滚动（已正确，注释记录了真机缺陷） | 保留，并把「先限高再挂滚动」推广为规范（§6.5） |
 | D-5 ✅ **已修 2026-10-19**（余额校准「校准」→「保存」、筛选与统计范围「应用」→「确定」；无自动化测试，Robolectric 下带输入框的 AlertDialog 永不 idle，真机截图见 `docs/测试报告.md` §50） | P2 | 按钮文案「确定/取消」与「保存/取消」混用 | 统一：有持久化效果用「保存」，纯选择用「确定」，都配「取消」 |
 
 ### 8.10 无障碍与合规（AA）
 
 | ID | 优先级 | 问题 | 改法 |
 | --- | --- | --- | --- |
-| AA-1 | **P0** | 账户/分类页 FAB 朗读与对话框标题同串，无法分离（docs/测试报告.md §8 已知缺口） | 唯一文本分离：FAB contentDescription = 「新建账户」/「新建分类」；对话框标题由「新建账户」改为「账户信息」/「分类信息」（新建与编辑共用同一标题，不重复动词）。**两种取一，写进实现注释防回归** |
-| AA-2 | P0 | PickerCell 40dp | 同 D-1 |
+| AA-1 ✅ **已实装（2026-10-20 审计）** | **P0** | 账户/分类页 FAB 朗读与对话框标题同串，无法分离（docs/测试报告.md §8 已知缺口） | 唯一文本分离：FAB contentDescription = 「新建账户」/「新建分类」；对话框标题由「新建账户」改为「账户信息」/「分类信息」（新建与编辑共用同一标题，不重复动词）。**两种取一，写进实现注释防回归** |
+| AA-2 ✅ **已实装（2026-10-20 审计）** | P0 | PickerCell 40dp | 同 D-1 |
 | AA-3 ✅ **已修 2026-10-18** | P1 | 装饰性图标未统一 contentDescription = null | 底栏图标与环比箭头已置 null；箭头携带的方向折进 `ReportFormatting.changeSpeech`（「上升 较上月 12.5%」），见 `docs/测试报告.md` §34 |
 | AA-4 ✅ **已修 2026-10-18** | P1 | 图表语义已做（`DONUT_DESCRIPTION` / `dailyDescription` / `dayDescription` / `trendDescription`），柱状图每格是独立可点 Box | 保留；相邻格子朗读**不会**被合并成长句：格子靠自身 `clickable` 形成合并边界、容器不 `mergeDescendants`，合并语义树里逐日各一个节点；`TrendChartUiTest` 已锁住，证据见 `docs/测试报告.md` §37 |
 | AA-5 ✅ **已修 2026-10-18**（图表 / 环形图描述已于同日收口，见 §38） | P1 | 金额朗读：TalkBack 会逐字读「¥」与小数点 | `Money.spokenAmount()`（元 / 角 / 分中文口语，无 ¥、无千分位、无小数点）+ `LedgerAmount` / `MonthSummaryBar` / 明细日汇总挂 `contentDescription`；证据见 `docs/测试报告.md` §33 |
