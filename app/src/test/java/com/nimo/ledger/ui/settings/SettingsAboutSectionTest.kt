@@ -9,6 +9,8 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
@@ -64,7 +66,9 @@ class SettingsAboutSectionTest {
     fun versionLine_isTheLastRowWithoutMilestoneText() {
         content(expanded = false, lines = selfCheckLines, onToggle = {})
 
-        composeRule.onNodeWithText("记账本 0.1.0").assertIsDisplayed()
+        composeRule.onNodeWithText("记账本 · 0.1.0").assertIsDisplayed()
+        // 版本行进页脚（不再占卡片一行）
+        composeRule.onNodeWithTag(BRAND_MARK_TEST_TAG, useUnmergedTree = true).assertIsDisplayed()
         // ST-2：里程碑信息（M1 数据层）不进用户界面
         composeRule.onAllNodesWithText("已完成 M1（数据层）", substring = true).assertCountEquals(0)
     }
@@ -98,6 +102,16 @@ class SettingsAboutSectionTest {
         content(expanded = true, lines = null, onToggle = {})
 
         composeRule.onNodeWithText("自检运行中…").assertIsDisplayed()
+    }
+
+    @Test
+    fun brandMark_isOnTheAboutGroup_andSpeaksItsName() {
+        content(expanded = false, lines = null, onToggle = {})
+
+        // P3-5：品牌徽章是标识不是装饰，读屏要念「记账本」（§5.2）
+        composeRule.onNodeWithContentDescription("记账本", useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag(BRAND_MARK_TEST_TAG, useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test

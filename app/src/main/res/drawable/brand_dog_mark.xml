@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  品牌标识（P3-5 / 规范 §5.2 可选动作）：线条版小狗，24x24 视口、纯描边，靠 Compose 的 Icon tint 上色。
+  刻意不重画原 PNG（§5.2 规定不新增、不重绘、不改名 ic_launcher_foreground.png），这里是一枚新的、
+  只用于「关于」的品牌徽章；几何只有圆头、两只耳朵、两只眼睛、鼻子与领巾，保证 16dp 下也不糊。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 头 -->
+    <path
+        android:pathData="M12,6.4 a5.6,5.6 0 1,0 0,11.2 a5.6,5.6 0 1,0 0,-11.2"
+        android:strokeColor="#000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+
+    <!-- 左耳 -->
+    <path
+        android:pathData="M7.6,6.9 C6.4,4.9 7.6,3.6 9.4,4.7"
+        android:strokeColor="#000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+
+    <!-- 右耳 -->
+    <path
+        android:pathData="M16.4,6.9 C17.6,4.9 16.4,3.6 14.6,4.7"
+        android:strokeColor="#000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+
+    <!-- 眼睛（两个实心小圆） -->
+    <path
+        android:pathData="M10.1,11.2 a0.75,0.75 0 1,0 0.02,0"
+        android:fillColor="#000000" />
+    <path
+        android:pathData="M13.9,11.2 a0.75,0.75 0 1,0 0.02,0"
+        android:fillColor="#000000" />
+
+    <!-- 鼻子 -->
+    <path
+        android:pathData="M12,12.9 a0.9,0.9 0 1,0 0.02,0"
+        android:fillColor="#000000" />
+
+    <!-- 领巾 -->
+    <path
+        android:pathData="M8.8,17.2 C10.2,18.4 13.8,18.4 15.2,17.2"
+        android:strokeColor="#000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+</vector>

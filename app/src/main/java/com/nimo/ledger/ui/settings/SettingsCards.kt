@@ -1,5 +1,6 @@
 package com.nimo.ledger.ui.settings
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -20,8 +22,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.nimo.ledger.R
 import com.nimo.ledger.ui.LedgerIcons
 import com.nimo.ledger.ui.components.LedgerListItem
 import com.nimo.ledger.ui.components.LedgerListItemDivider
@@ -46,6 +51,9 @@ private val TITLE_TO_CARD_DP = 8.dp
 
 /** 卡片内行内水平留白（与 [LedgerListItem] 默认值一致） */
 private val ROW_HORIZONTAL_DP = 16.dp
+
+/** 徽章与「关于」组标题之间 16dp（§5.2：插画与标题必须有 16dp 间距） */
+private val BRAND_TO_TITLE_DP = 16.dp
 
 /** 分组标题：放卡片上方，titleSmall / onSurfaceVariant（ST-5） */
 @Composable
@@ -115,7 +123,6 @@ fun ThemeOptionRow(
  */
 @Composable
 fun SettingsAboutSection(
-    version: String,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
     selfCheckLines: List<String>?,
@@ -156,17 +163,7 @@ fun SettingsAboutSection(
             }
         }
         LedgerListItemDivider(hasLeading = false)
-        Text(
-            text = version,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(
-                start = ROW_HORIZONTAL_DP,
-                end = ROW_HORIZONTAL_DP,
-                top = 12.dp,
-                bottom = 12.dp,
-            ),
-        )
+
     }
 }
 
@@ -184,10 +181,14 @@ fun SettingsGroup(
     }
 }
 
-/** ST-2 指定的版本行文案：只留版本号，里程碑（M1 数据层）不进用户界面 */
-const val ABOUT_VERSION = "记账本 0.1.0"
+/** 品牌徽章（P3-5）：只在「关于」组出现，读屏念「记账本」——它是品牌标识，不是装饰 */
+internal const val BRAND_MARK_TEST_TAG = "settings-brand-mark"
 
-/** 「关于」组：组标题 + 卡片 + 开发者自检 + 版本行（ST-1 / ST-2 的完整落点） */
+/** 徽章尺寸：56dp 圆底 + 28dp 线条狗，比空态插画克制，不抢卡片内容 */
+private val BRAND_MARK_SIZE = 56.dp
+private val BRAND_MARK_ICON_SIZE = 28.dp
+
+/** 「关于」组：品牌徽章 + 组标题 + 卡片 + 开发者自检 + 版本行（ST-1 / ST-2 / P3-5 的完整落点） */
 @Composable
 fun SettingsAboutGroup(
     expanded: Boolean,
@@ -195,12 +196,49 @@ fun SettingsAboutGroup(
     selfCheckLines: List<String>?,
     modifier: Modifier = Modifier,
 ) {
-    SettingsGroup(title = "关于", modifier = modifier) {
-        SettingsAboutSection(
-            version = ABOUT_VERSION,
-            expanded = expanded,
-            onToggleExpanded = onToggleExpanded,
-            selfCheckLines = selfCheckLines,
-        )
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier
+                    .size(BRAND_MARK_SIZE)
+                    .testTag(BRAND_MARK_TEST_TAG),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.brand_dog_mark),
+                        contentDescription = "记账本",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(BRAND_MARK_ICON_SIZE),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(BRAND_TO_TITLE_DP))
+        SettingsGroup(title = "关于", modifier = modifier) {
+            SettingsAboutSection(
+                expanded = expanded,
+                onToggleExpanded = onToggleExpanded,
+                selfCheckLines = selfCheckLines,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        SettingsVersionLine()
     }
+}
+
+/** 版本行移出卡片（§7.4：版本是页脚说明，不是卡片里的一项设置） */
+private const val ABOUT_VERSION_TEXT = "记账本 · 0.1.0"
+
+@Composable
+private fun SettingsVersionLine() {
+    Text(
+        text = ABOUT_VERSION_TEXT,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ROW_HORIZONTAL_DP, vertical = 12.dp),
+    )
 }
