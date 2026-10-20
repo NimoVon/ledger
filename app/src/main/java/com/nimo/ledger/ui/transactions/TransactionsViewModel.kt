@@ -20,6 +20,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -84,7 +85,27 @@ class TransactionsViewModel(
      * 默认 null 表示"这个入口没有下钻来源"（测试与旧调用点因此不必都接上）。
      */
     private val drillDown: DrillDownRequests? = null,
+    /** T-3：一次性「点行=编辑」提示的持久标记；null 表示这个入口不显示提示（测试与旧调用点不受影响） */
+    private val rowTapHintStore: RowTapHintStore? = null,
 ) : ViewModel() {
+
+    /** T-3：首启且本机有流水时才为 true；点「知道了」后由页面调用 [dismissRowTapHint] 收起 */
+    private val rowTapHint = MutableStateFlow(false)
+    val showRowTapHint: StateFlow<Boolean> = rowTapHint.asStateFlow()
+
+    init {
+        rowTapHintStore?.let { store ->
+            viewModelScope.launch {
+                rowTapHint.value = !store.hasShown()
+            }
+        }
+    }
+
+    /** 收起一次性提示，并把标记落 DataStore（跨进程不再出现） */
+    fun dismissRowTapHint() {
+        rowTapHint.value = false
+        rowTapHintStore?.let { store -> viewModelScope.launch { store.markShown() } }
+    }
 
     /** 当前查看的月份：切换只改这个值 */
     private val month = MutableStateFlow(YearMonth.from(today()))
@@ -297,12 +318,14 @@ class TransactionsViewModel(
             repository: LedgerRepository,
             pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
             drillDown: DrillDownRequests? = null,
+            rowTapHintStore: RowTapHintStore? = null,
         ): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 TransactionsViewModel(
                     repository,
                     pendingDeletionIds = pendingDeletionIds,
                     drillDown = drillDown,
+                    rowTapHintStore = rowTapHintStore,
                 )
             }
         }

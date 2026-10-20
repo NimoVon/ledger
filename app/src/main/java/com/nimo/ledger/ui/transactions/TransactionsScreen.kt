@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -30,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -80,9 +82,17 @@ fun TransactionsScreen(
     pendingDeletionIds: Flow<Set<Long>> = flowOf(emptySet()),
     drillDown: DrillDownRequests? = null,
 ) {
+    val appContext = LocalContext.current.applicationContext
+    val rowTapHintStore = remember(appContext) { RowTapHintStore.from(appContext) }
     val viewModel: TransactionsViewModel =
-        viewModel(factory = TransactionsViewModel.factory(repository, pendingDeletionIds, drillDown))
+        viewModel(
+            factory = TransactionsViewModel.factory(
+                repository, pendingDeletionIds, drillDown, rowTapHintStore,
+            ),
+        )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // T-3：首启且本机有流水时，列表顶部出现一次性「点行=编辑」提示
+    val showRowTapHint by viewModel.showRowTapHint.collectAsStateWithLifecycle()
     var showFilterDialog by remember { mutableStateOf(false) }
     // 从搜索图标进来时让关键词框直接拿焦点（T-5）；点「筛选」按钮则为 false。
     var focusFilterKeyword by remember { mutableStateOf(false) }
@@ -143,6 +153,11 @@ fun TransactionsScreen(
                 modifier = contentModifier,
                 contentPadding = PaddingValues(bottom = FAB_BOTTOM_RESERVE),
             ) {
+                if (showRowTapHint && state.groups.isNotEmpty()) {
+                    item(key = "row-tap-hint") {
+                        RowTapHintRow(onDismiss = { viewModel.dismissRowTapHint() })
+                    }
+                }
                 state.groups.forEach { group ->
                     item(key = "day-" + group.date) { DayHeader(group) }
                     items(items = group.rows, key = { it.id }) { row ->
@@ -418,5 +433,33 @@ private fun TransactionRowItem(row: TransactionRow, onClick: () -> Unit) {
         }
         // 金额列统一走 LedgerAmount（规范 §6.3 / G-5）：96dp 起对齐、颜色与符号一处维护
         LedgerAmount(cents = row.amountCents, type = row.type, showSign = true)
+    }
+}
+
+/** T-3 一次性提示的测试标记 */
+const val ROW_TAP_HINT_TEST_TAG = "transactions-row-tap-hint"
+
+@Composable
+private fun RowTapHintRow(onDismiss: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag(ROW_TAP_HINT_TEST_TAG),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "点任意一行可修改这一笔",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDismiss) { Text("知道了") }
+        }
     }
 }
