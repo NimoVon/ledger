@@ -137,7 +137,7 @@ class PendingTransactionDeletion(
     /** 必须在 [mutex] 内调用：落库并摘掉这一笔（提示条随之关闭，撤销窗口同时结束） */
     private suspend fun commitLocked(id: Long) {
         val current = sessions[id] ?: return
-        repository.deleteTransaction(current.entity)
+        repository.deleteBalanceAdjustment(current.entity)
         sessions.remove(id)
         publishLocked()
     }

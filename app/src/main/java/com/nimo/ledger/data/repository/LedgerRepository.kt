@@ -389,6 +389,55 @@ class LedgerRepository(private val db: AppDatabase) {
         txDao.delete(entity)
     }
 
+    /**
+     * 删除一笔余额校准。**与普通流水不同**：校准的差额是相对当时账面算的，
+     * 删掉前一条会让后一条的"账面 → 实际"链条失去依据（最新一条写着实际 ¥X，账户余额却变成别的数）。
+     *
+     * 做法：删掉目标行后，若同一账户后面还有更晚的校准，把被删的差额**并入紧跟的那一条**
+     * （金额 += 被删差额，备注里的账面随之重算）。这样每一行都是"上一笔之后的账面 → 实际"，
+     * 且"最后一条校准的实际"恒等于账户余额。删除最新一条时无需改任何行。
+     */
+    suspend fun deleteBalanceAdjustment(entity: TransactionEntity): Unit =
+        withContext(Dispatchers.IO) {
+            if (entity.type != TransactionType.BALANCE_ADJUST) {
+                deleteTransaction(entity)
+                return@withContext
+            }
+            db.withTransaction {
+                val all = txDao.listAll()
+                val later = all.asSequence()
+                    .filter {
+                        it.accountId == entity.accountId &&
+                            it.type == TransactionType.BALANCE_ADJUST &&
+                            it.id != entity.id &&
+                            (it.occurredOn > entity.occurredOn ||
+                                (it.occurredOn == entity.occurredOn && it.id > entity.id))
+                    }
+                    .minWithOrNull(compareBy({ it.occurredOn }, { it.id }))
+
+                txDao.delete(entity)
+                if (later == null) return@withTransaction
+
+                val merged = later.copy(amount = later.amount + entity.amount)
+                // 账面 = 这一行之前所有流水推导出的余额（铁律 2：不存冗余余额）
+                val before = BalanceCalculator.computeBalances(
+                    accounts = accountDao.listAll().map { it.toBalanceInput() },
+                    records = all.filter {
+                        it.id != entity.id &&
+                            (it.occurredOn < later.occurredOn ||
+                                (it.occurredOn == later.occurredOn && it.id < later.id))
+                    }.mapNotNull { it.toRecordOrNull() },
+                )[entity.accountId] ?: 0L
+                val actual = before + merged.amount
+                txDao.update(
+                    merged.copy(
+                        note = "余额校准：账面 " + Money.formatCurrency(before) +
+                            " → 实际 " + Money.formatCurrency(actual),
+                    ),
+                )
+            }
+        }
+
     // ---- 余额校准（F11）----
 
     /**
